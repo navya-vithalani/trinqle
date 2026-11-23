@@ -1,5 +1,6 @@
 import React from 'react'
 import { Sparkles, FileText, PlusCircle, Clock } from 'lucide-react'
+import catSvg from '../../characters/white-cat/character.svg'
 
 export const HomeScreen: React.FC = () => {
   return (
@@ -31,7 +32,7 @@ export const HomeScreen: React.FC = () => {
       <div className="sticker-card p-6 flex flex-col items-center justify-center min-h-[180px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]">
         <div className="w-24 h-24 mb-2 flex items-center justify-center rounded-full bg-[var(--color-line)]/50">
           <img
-            src="/src/characters/white-cat/character.svg"
+            src={catSvg}
             alt="Piqsie the Cat"
             className="w-20 h-20 object-contain hover:scale-105 transition-transform"
           />

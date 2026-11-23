@@ -42,6 +42,14 @@
     --dur-fast: 150ms;
     --dur-med: 300ms;
     --dur-slow: 600ms;
+
+    /* Home tab styling variables (extensible per theme) */
+    --tab-home-lift: 0px;
+    --tab-home-bg: transparent;
+    --tab-home-active-bg: var(--color-bg);
+    --tab-home-color: var(--color-accent);
+    --tab-home-radius: 9999px;
+    --tab-home-shadow: none;
   }
 
   * {
