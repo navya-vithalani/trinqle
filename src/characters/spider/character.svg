@@ -1,0 +1,58 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Cute Jumping Spider (Octopod) -->
+  <!-- Left Legs (4) -->
+  <g stroke="#373142" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path id="leg-1" d="M68 95 Q38 75 22 88" />
+    <path id="leg-2" d="M62 108 Q28 98 18 116" />
+    <path id="leg-3" d="M64 122 Q32 124 22 144" />
+    <path id="leg-4" d="M68 136 Q42 152 32 170" />
+  </g>
+
+  <!-- Right Legs (4) -->
+  <g stroke="#373142" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path id="leg-5" d="M132 95 Q162 75 178 88" />
+    <path id="leg-6" d="M138 108 Q172 98 182 116" />
+    <path id="leg-7" d="M136 122 Q168 124 178 144" />
+    <path id="leg-8" d="M132 136 Q158 152 168 170" />
+  </g>
+
+  <!-- Abdomen / Body -->
+  <g id="body" data-origin="50% 100%">
+    <ellipse cx="100" cy="142" rx="42" ry="34" fill="#4d445c" stroke="#373142" stroke-width="3.5" />
+    <!-- Cute velvety pattern spots -->
+    <circle cx="86" cy="138" r="6" fill="#8f7da8" opacity="0.6" />
+    <circle cx="114" cy="138" r="6" fill="#8f7da8" opacity="0.6" />
+    <circle cx="100" cy="154" r="8" fill="#8f7da8" opacity="0.6" />
+  </g>
+
+  <!-- Head / Cephalothorax -->
+  <g id="head" data-origin="50% 90%">
+    <circle cx="100" cy="92" r="38" fill="#5c526e" stroke="#373142" stroke-width="3.5" />
+
+    <!-- Rosy cheek fluffs -->
+    <ellipse cx="74" cy="104" rx="7" ry="5" fill="#f09bb5" opacity="0.7" />
+    <ellipse cx="126" cy="104" rx="7" ry="5" fill="#f09bb5" opacity="0.7" />
+
+    <!-- Two giant curious front eyes -->
+    <g id="eye-left" data-origin="50% 50%">
+      <circle cx="84" cy="88" r="13" fill="#1f1b26" />
+      <circle cx="81" cy="85" r="4.5" fill="#ffffff" />
+      <circle cx="88" cy="92" r="2" fill="#ffffff" />
+    </g>
+
+    <g id="eye-right" data-origin="50% 50%">
+      <circle cx="116" cy="88" r="13" fill="#1f1b26" />
+      <circle cx="113" cy="85" r="4.5" fill="#ffffff" />
+      <circle cx="120" cy="92" r="2" fill="#ffffff" />
+    </g>
+
+    <!-- Two smaller secondary outer spider eyes -->
+    <circle cx="68" cy="78" r="4.5" fill="#1f1b26" />
+    <circle cx="67" cy="76" r="1.5" fill="#ffffff" />
+    <circle cx="132" cy="78" r="4.5" fill="#1f1b26" />
+    <circle cx="131" cy="76" r="1.5" fill="#ffffff" />
+
+    <!-- Cute little spider chelicerae fangs / mouth -->
+    <path id="mouth" d="M94 108 Q100 114 106 108" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+{
+  "id": "spider",
+  "name": "Jumpy spider",
+  "description": "An eight-legged curious jumping spider that loves watching you write.",
+  "author": "Trinqle Studio",
+  "version": "1.0.0",
+  "limbs": 8
+}

@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Moon, Sun, Trash2, Download, Upload, AlertCircle, Sparkles } from 'lucide-react'
+import {
+  Moon,
+  Sun,
+  Trash2,
+  Download,
+  Upload,
+  AlertCircle,
+  Sparkles,
+  Database,
+  RefreshCw,
+} from 'lucide-react'
 import {
   themeRegistry,
   loadThemePreference,
@@ -13,6 +23,8 @@ import {
 import { deleteAllData } from '../../data/reset'
 import { exportFormPack } from '../../data/formPack/exporter'
 import { ImportDialog } from '../dialogs/ImportDialog'
+import { generateDemoData } from '../../tools/demoData'
+import { db } from '../../data/db'
 
 export const ProfileScreen: React.FC = () => {
   const [selectedThemeId, setSelectedThemeId] = useState('cutesy')
@@ -22,6 +34,7 @@ export const ProfileScreen: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -71,6 +84,21 @@ export const ProfileScreen: React.FC = () => {
     }
   }
 
+  const handleGenerateDemoData = async () => {
+    setIsGeneratingDemo(true)
+    try {
+      const stats = await generateDemoData(db)
+      showToast(
+        `Generated ${stats.chaptersCount} chapters, ${stats.daysCount} days, ${stats.cyclesCount} cycles!`
+      )
+      setTimeout(() => window.location.reload(), 1200)
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to generate demo data')
+    } finally {
+      setIsGeneratingDemo(false)
+    }
+  }
+
   const handleDeleteAll = async () => {
     try {
       await deleteAllData(deleteConfirmation)
@@ -99,7 +127,7 @@ export const ProfileScreen: React.FC = () => {
           Theme and mode selections persist across reload. No emojis are used anywhere.
         </p>
 
-        {/* Light / Dark selector (Archive removed per spec) */}
+        {/* Light / Dark selector */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <button
             type="button"
@@ -163,7 +191,7 @@ export const ProfileScreen: React.FC = () => {
           Piqsie's visual look changes; the persona and friendly presence stay identical.
         </p>
 
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        <div className="grid grid-cols-3 gap-2 pt-1">
           {CHARACTERS.map((char) => {
             const isSelected = selectedCharacterId === char.id
             return (
@@ -171,23 +199,43 @@ export const ProfileScreen: React.FC = () => {
                 key={char.id}
                 type="button"
                 onClick={() => handleCharacterChange(char.id)}
-                className={`flex flex-col items-center p-3 rounded-[var(--radius-m)] border-2 transition-all ${
+                className={`flex flex-col items-center p-2.5 rounded-[var(--radius-m)] border-2 transition-all ${
                   isSelected
                     ? 'border-[var(--color-accent)] bg-[var(--color-bg)] shadow-xs'
                     : 'border-[var(--color-line)] bg-[var(--color-surface)] hover:border-[var(--color-ink-soft)]'
                 }`}
               >
-                <img src={char.svg} alt={char.name} className="w-14 h-14 object-contain mb-1.5" />
-                <span className="text-xs font-semibold text-[var(--color-ink)]">
+                <img src={char.svg} alt={char.name} className="w-12 h-12 object-contain mb-1.5" />
+                <span className="text-xs font-semibold text-[var(--color-ink)] text-center line-clamp-1">
                   {char.name}
                 </span>
-                <span className="text-[10px] text-[var(--color-ink-soft)] text-center line-clamp-1">
-                  {char.description}
+                <span className="text-[9px] text-[var(--color-ink-soft)] text-center">
+                  {char.limbs} limbs
                 </span>
               </button>
             )
           })}
         </div>
+      </div>
+
+      {/* Developer / Demo Data Tools */}
+      <div className="sticker-card p-4 space-y-3 border-indigo-200 bg-indigo-50/25">
+        <div className="flex items-center space-x-2 text-xs font-bold text-indigo-900">
+          <Database size={16} className="text-indigo-600" />
+          <span>Demo Data Generator</span>
+        </div>
+        <p className="text-xs text-[var(--color-ink-soft)]">
+          Deterministically seeds 75 days of realistic journal history: 2 closed chapters with reflections & photos, 1 open chapter, regular menstrual cycles, and planted lifestyle correlations.
+        </p>
+        <button
+          type="button"
+          disabled={isGeneratingDemo}
+          onClick={handleGenerateDemoData}
+          className="w-full py-2.5 px-4 rounded-[var(--radius-pill)] bg-indigo-600 text-white font-bold text-xs sticker-button flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95"
+        >
+          <RefreshCw size={14} className={isGeneratingDemo ? 'animate-spin' : ''} />
+          <span>{isGeneratingDemo ? 'Seeding Data...' : 'Generate 75-Day Demo Data'}</span>
+        </button>
       </div>
 
       {/* Form Pack Management */}

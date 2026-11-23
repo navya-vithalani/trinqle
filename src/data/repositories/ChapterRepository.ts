@@ -1,8 +1,15 @@
 import type { TrinqleDB } from '../db'
 import { db as defaultDb } from '../db'
-import type { Chapter, FrozenChapter } from '../types'
+import type {
+  Chapter,
+  FrozenChapter,
+  ChapterAnswer,
+  CustomPrompt,
+  AnswerValue,
+} from '../types'
 import { generateUUIDv7 } from '../../core/ids'
 import { addDays } from '../../core/logicalDay'
+import { isPlannedEndDateValid } from '../../core/chapters'
 
 export class ChapterRepository {
   constructor(private db: TrinqleDB = defaultDb) {}
@@ -20,7 +27,6 @@ export class ChapterRepository {
   }
 
   async getChapterForDate(date: string): Promise<Chapter | undefined> {
-    // A chapter covers startDate .. (endDate || plannedEndDate)
     const chapters = await this.getAllChapters()
     return chapters.find((ch) => {
       const start = ch.startDate
@@ -69,11 +75,89 @@ export class ChapterRepository {
     return chapter
   }
 
+  async updatePlannedEndDate(chapterId: string, plannedEndDate: string): Promise<Chapter> {
+    const chapter = await this.getChapterById(chapterId)
+    if (!chapter) throw new Error(`Chapter ${chapterId} not found`)
+    if (chapter.status === 'closed') throw new Error('Chapter is closed and write-protected')
+
+    if (!isPlannedEndDateValid(chapter.startDate, plannedEndDate)) {
+      throw new Error('Planned end date must be between 20 and 45 days from start date')
+    }
+
+    const updated: Chapter = {
+      ...chapter,
+      plannedEndDate,
+      updatedAt: Date.now(),
+    }
+    await this.db.chapters.put(updated)
+    return updated
+  }
+
+  async addCustomPrompt(chapterId: string, prompt: CustomPrompt): Promise<Chapter> {
+    const chapter = await this.getChapterById(chapterId)
+    if (!chapter) throw new Error(`Chapter ${chapterId} not found`)
+    if (chapter.status === 'closed') throw new Error('Chapter is closed and write-protected')
+
+    const currentPrompts = chapter.customPrompts || []
+    const updated: Chapter = {
+      ...chapter,
+      customPrompts: [...currentPrompts, prompt],
+      updatedAt: Date.now(),
+    }
+    await this.db.chapters.put(updated)
+    return updated
+  }
+
+  async saveChapterAnswer(
+    chapterId: string,
+    promptId: string,
+    value: AnswerValue
+  ): Promise<ChapterAnswer> {
+    await this.assertChapterIsOpen(chapterId)
+    const now = Date.now()
+
+    const existing = await this.db.chapterAnswers
+      .where('[chapterId+promptId]')
+      .equals([chapterId, promptId])
+      .first()
+
+    if (existing) {
+      const updated: ChapterAnswer = {
+        ...existing,
+        value,
+        updatedAt: now,
+      }
+      await this.db.chapterAnswers.put(updated)
+      return updated
+    }
+
+    const newRecord: ChapterAnswer = {
+      id: generateUUIDv7(now),
+      chapterId,
+      promptId,
+      value,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await this.db.chapterAnswers.put(newRecord)
+    return newRecord
+  }
+
+  async getChapterAnswers(chapterId: string): Promise<ChapterAnswer[]> {
+    return this.db.chapterAnswers
+      .where('chapterId')
+      .equals(chapterId)
+      .filter((ca) => !ca.deletedAt)
+      .toArray()
+  }
+
   async closeChapter(
     chapterId: string,
     frozen: FrozenChapter,
     title?: string,
-    summary?: string
+    summary?: string,
+    photos?: Blob[],
+    endDate?: string
   ): Promise<Chapter> {
     const chapter = await this.getChapterById(chapterId)
     if (!chapter) throw new Error(`Chapter ${chapterId} not found`)
@@ -85,6 +169,8 @@ export class ChapterRepository {
       title: title || chapter.title,
       summary: summary || chapter.summary,
       status: 'closed',
+      endDate: endDate || chapter.plannedEndDate,
+      photos: photos || chapter.photos,
       frozen,
       closedAt: now,
       updatedAt: now,
@@ -92,5 +178,76 @@ export class ChapterRepository {
 
     await this.db.chapters.put(updated)
     return updated
+  }
+
+  /**
+   * Helper that builds the complete FrozenChapter payload from current DB state
+   * and closes the chapter, then auto-creates the next chapter starting the next day.
+   */
+  async closeChapterWithCeremony(params: {
+    chapterId: string
+    title?: string
+    summary?: string
+    photos?: Blob[]
+    endDate: string
+  }): Promise<{ closedChapter: Chapter; nextChapter: Chapter }> {
+    const chapter = await this.getChapterById(params.chapterId)
+    if (!chapter) throw new Error(`Chapter ${params.chapterId} not found`)
+
+    // 1. Gather all days belonging to this chapter
+    const days = await this.db.days
+      .where('chapterId')
+      .equals(chapter.id)
+      .filter((d) => !d.deletedAt)
+      .toArray()
+
+    const quickCount = days.filter((d) => d.mode === 'quick').length
+    const fullCount = days.filter((d) => d.mode === 'full').length
+    const memorableCount = days.filter((d) => d.memorability > 0).length
+
+    // 2. Gather form snapshot
+    const sections = await this.db.sections.filter((s) => !s.deletedAt).toArray()
+    const questions = await this.db.questions.filter((q) => !q.deletedAt).toArray()
+    const parts = await this.db.parts.filter((p) => !p.deletedAt).toArray()
+    const libraries = await this.db.libraries.filter((l) => !l.deletedAt).toArray()
+
+    const frozen: FrozenChapter = {
+      formSnapshot: {
+        sections,
+        questions,
+        parts,
+        libraries,
+      },
+      dashboard: [],
+      insights: [],
+      themeId: chapter.themeId,
+      characterId: chapter.characterId,
+      metadata: {
+        daysFilled: days.length,
+        quickCount,
+        fullCount,
+        memorableCount,
+      },
+    }
+
+    // 3. Close current chapter
+    const closedChapter = await this.closeChapter(
+      chapter.id,
+      frozen,
+      params.title,
+      params.summary,
+      params.photos,
+      params.endDate
+    )
+
+    // 4. Auto-create next chapter starting the day after previous chapter's end date
+    const nextStartDate = addDays(params.endDate, 1)
+    const nextChapter = await this.createChapter({
+      startDate: nextStartDate,
+      themeId: chapter.themeId,
+      characterId: chapter.characterId,
+    })
+
+    return { closedChapter, nextChapter }
   }
 }

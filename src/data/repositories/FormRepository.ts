@@ -30,6 +30,15 @@ export class FormRepository {
     return date ? filterActiveItems(all, date) : all
   }
 
+  async getSnapshot(date?: string): Promise<{ sections: Section[]; questions: Question[]; parts: Part[] }> {
+    const [sections, questions, parts] = await Promise.all([
+      this.getSections(date),
+      this.getQuestions(date),
+      this.getParts(date),
+    ])
+    return { sections, questions, parts }
+  }
+
   async saveSection(section: Section): Promise<void> {
     await this.db.sections.put(section)
   }

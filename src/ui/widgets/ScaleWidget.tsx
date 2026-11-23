@@ -8,6 +8,7 @@ interface ScaleWidgetProps {
   config?: ScaleConfig
   onChange: (val: number) => void
   disabled?: boolean
+  required?: boolean
 }
 
 export const ScaleWidget: React.FC<ScaleWidgetProps> = ({
@@ -22,13 +23,14 @@ export const ScaleWidget: React.FC<ScaleWidgetProps> = ({
   const step = config?.step ?? 0.5
   const display = config?.display ?? 'slider'
   const currentVal = value ?? min
+  const pct = Math.max(0, Math.min(100, ((currentVal - min) / (max - min)) * 100))
 
   if (display === 'stars') {
     const starCount = Math.min(Math.round(max - min), 10)
     return (
       <div className="py-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[var(--color-ink)]">{label}</span>
+          <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
           <span className="text-xs font-bold text-[var(--color-accent)]">
             {value !== undefined ? `${value} / ${max}` : 'Not rated'}
           </span>
@@ -62,28 +64,33 @@ export const ScaleWidget: React.FC<ScaleWidgetProps> = ({
     )
   }
 
-  // Slider display
+  // Slider display with flowing gradient fill from left to pointer
   return (
-    <div className="py-2.5 space-y-1.5">
+    <div className="py-2.5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[var(--color-ink)]">{label}</span>
-        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)]">
+        <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)]">
           {value !== undefined ? value.toFixed(1) : `${min.toFixed(1)}`}
         </span>
       </div>
       <div className="flex items-center space-x-3 pt-1">
-        <span className="text-xs font-medium text-[var(--color-ink-soft)]">{min}</span>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={currentVal}
-          disabled={disabled}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="flex-1 accent-[var(--color-accent)] h-2 bg-[var(--color-bg)] rounded-lg appearance-none cursor-pointer"
-        />
-        <span className="text-xs font-medium text-[var(--color-ink-soft)]">{max}</span>
+        <span className="text-xs font-bold text-[var(--color-ink-soft)]">{min}</span>
+        <div className="relative flex-1 flex items-center">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={currentVal}
+            disabled={disabled}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            style={{
+              background: `linear-gradient(to right, var(--color-accent2) 0%, var(--color-accent) ${pct}%, var(--color-line) ${pct}%, var(--color-line) 100%)`,
+            }}
+            className="w-full h-3 rounded-full appearance-none cursor-pointer accent-[var(--color-accent)] border border-[var(--color-line)]"
+          />
+        </div>
+        <span className="text-xs font-bold text-[var(--color-ink-soft)]">{max}</span>
       </div>
     </div>
   )

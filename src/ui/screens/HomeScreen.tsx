@@ -1,31 +1,74 @@
 import React, { useState, useEffect } from 'react'
-import { Sparkles, FileText, Clock, Check, AlertCircle, Eye } from 'lucide-react'
+import {
+  Sparkles,
+  FileText,
+  Clock,
+  Check,
+  AlertCircle,
+  Eye,
+  BookOpen,
+  ShieldAlert,
+  X,
+} from 'lucide-react'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { ImportDialog } from '../dialogs/ImportDialog'
-import { ChapterRepository, DayRepository } from '../../data/repositories'
+import {
+  ChapterRepository,
+  DayRepository,
+  CycleRepository,
+  FormRepository,
+} from '../../data/repositories'
 import { importFormPack } from '../../data/formPack/importer'
 import starterPackRaw from '../../content/starter-form-pack.json'
-import { getCharacter, loadCharacterPreference } from '../../characters/registry'
+import { loadCharacterPreference } from '../../characters/registry'
 import {
   logicalDate,
   isWindowOpen,
   addDays,
   DEFAULT_WINDOW,
 } from '../../core/logicalDay'
-import type { FormPack, Chapter, Day } from '../../data/types'
+import {
+  isChapterHardLocked,
+  isPreCloseDue,
+  getChapterProgress,
+} from '../../core/chapters'
+import { buildGreetingContext, evaluateGreetings } from '../../core/greetings'
+import { CharacterStage } from '../components/CharacterStage'
+import { HeatmapCalendar } from '../components/HeatmapCalendar'
+import { CycleCard } from '../components/CycleCard'
+import { EndDateModal } from '../components/EndDateModal'
+import { ReflectionsSheet } from './ReflectionsSheet'
+import { ChapterGate } from './ChapterGate'
+import type { FormPack, Chapter, Day, Cycle } from '../../data/types'
 
 export const HomeScreen: React.FC = () => {
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [todayDay, setTodayDay] = useState<Day | null>(null)
+  const [chapterDays, setChapterDays] = useState<Day[]>([])
   const [missingDays, setMissingDays] = useState<string[]>([])
+  const [cycles, setCycles] = useState<Cycle[]>([])
+  const [activeCycle, setActiveCycle] = useState<Cycle | undefined>(undefined)
+  const [reflectionsAnsweredCount, setReflectionsAnsweredCount] = useState(0)
+  const [reflectionsTotalCount, setReflectionsTotalCount] = useState(0)
+
+  // Modals & Sheets
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalDate, setModalDate] = useState<string>('')
   const [isImportOpen, setIsImportOpen] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
+  const [isReflectionsOpen, setIsReflectionsOpen] = useState(false)
+  const [isChapterGateOpen, setIsChapterGateOpen] = useState(false)
+  const [preCloseDismissed, setPreCloseDismissed] = useState(false)
+
+  // Greetings & Character
+  const [greetingText, setGreetingText] = useState<string>('')
   const [activeCharacterId, setActiveCharacterId] = useState<string>('white-cat')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const chapterRepo = new ChapterRepository()
   const dayRepo = new DayRepository()
+  const cycleRepo = new CycleRepository()
+  const formRepo = new FormRepository()
 
   const now = new Date()
   const todayStr = logicalDate(now, undefined, DEFAULT_WINDOW.endHour)
@@ -39,6 +82,7 @@ export const HomeScreen: React.FC = () => {
   const loadState = async () => {
     setActiveCharacterId(loadCharacterPreference())
 
+    // 1. Get or initialize open chapter
     let chapter = await chapterRepo.getOpenChapter()
     if (!chapter) {
       chapter = await chapterRepo.createChapter({
@@ -48,9 +92,23 @@ export const HomeScreen: React.FC = () => {
     }
     setActiveChapter(chapter)
 
+    // Check hard-lock
+    if (isChapterHardLocked(chapter, todayStr)) {
+      setIsChapterGateOpen(true)
+    }
+
+    // 2. Load today day
     const entry = await dayRepo.getDay(todayStr)
     setTodayDay(entry && !entry.deletedAt ? entry : null)
 
+    // 3. Load all days for this chapter
+    const allDaysInChapter = await dayRepo.getDaysInDateRange(
+      chapter.startDate,
+      chapter.plannedEndDate
+    )
+    setChapterDays(allDaysInChapter)
+
+    // 4. Missing past days for backfill banner
     const missing: string[] = []
     for (let i = 1; i <= 3; i++) {
       const pastDate = addDays(todayStr, -i)
@@ -62,6 +120,39 @@ export const HomeScreen: React.FC = () => {
       }
     }
     setMissingDays(missing)
+
+    // 5. Menstrual Cycles
+    const allCycles = await cycleRepo.getAllCycles()
+    setCycles(allCycles)
+    const currentActiveCycle = await cycleRepo.getActiveCycle()
+    setActiveCycle(currentActiveCycle)
+
+    // 6. Reflections Count
+    const snapshot = await formRepo.getSnapshot(chapter.startDate)
+    const chapterEndSecs = new Set(
+      snapshot.sections.filter((s) => s.scope === 'chapterEnd').map((s) => s.id)
+    )
+    const reflQuestions = snapshot.questions.filter((q) => chapterEndSecs.has(q.sectionId))
+    const reflQIds = new Set(reflQuestions.map((q) => q.id))
+    const reflParts = snapshot.parts.filter((p) => reflQIds.has(p.questionId))
+    const customPrompts = chapter.customPrompts || []
+    const totalPrompts = reflParts.length + customPrompts.length
+    setReflectionsTotalCount(totalPrompts)
+
+    const answers = await chapterRepo.getChapterAnswers(chapter.id)
+    const answered = answers.filter(
+      (a) => a.value !== undefined && a.value !== null && a.value !== ''
+    ).length
+    setReflectionsAnsweredCount(answered)
+
+    // 7. Greetings Engine
+    try {
+      const { context, dateStr } = await buildGreetingContext(now)
+      const greeting = evaluateGreetings(context, dateStr)
+      setGreetingText(greeting.text)
+    } catch {
+      setGreetingText('Welcome back.')
+    }
   }
 
   useEffect(() => {
@@ -83,17 +174,35 @@ export const HomeScreen: React.FC = () => {
     setIsModalOpen(true)
   }
 
-  const currentCharacter = getCharacter(activeCharacterId)
-
-  let chapterDaysLeft = 28
-  let chapterDayNumber = 1
-  if (activeChapter) {
-    const start = new Date(activeChapter.startDate).getTime()
-    const end = new Date(activeChapter.plannedEndDate).getTime()
-    const current = new Date(todayStr).getTime()
-    chapterDayNumber = Math.max(1, Math.round((current - start) / 86400000) + 1)
-    chapterDaysLeft = Math.max(0, Math.round((end - current) / 86400000))
+  const handleStartCycle = async (date: string) => {
+    await cycleRepo.startCycle(date)
+    showToast('Cycle started')
+    loadState()
   }
+
+  const handleEndCycle = async (cycleId: string, date: string) => {
+    await cycleRepo.endCycle(cycleId, date)
+    showToast('Cycle ended')
+    loadState()
+  }
+
+  const handleSavePlannedEndDate = async (newDate: string) => {
+    if (!activeChapter) return
+    const updated = await chapterRepo.updatePlannedEndDate(activeChapter.id, newDate)
+    setActiveChapter(updated)
+    showToast('Chapter end date updated!')
+    loadState()
+  }
+
+  const progress = activeChapter
+    ? getChapterProgress(activeChapter, todayStr)
+    : { currentDayNumber: 1, totalDays: 28, daysRemaining: 27 }
+
+  const showPreClose =
+    activeChapter &&
+    isPreCloseDue(activeChapter, todayStr) &&
+    !preCloseDismissed &&
+    !isChapterGateOpen
 
   return (
     <div className="space-y-4 pb-20">
@@ -107,15 +216,82 @@ export const HomeScreen: React.FC = () => {
       {/* Chapter Countdown / Top Bar */}
       {activeChapter && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-surface)] rounded-[var(--radius-m)] border-2 border-[var(--color-line)] text-xs font-medium text-[var(--color-ink-soft)]">
-          <span className="font-semibold text-[var(--color-ink)]">
-            {activeChapter.title || 'Chapter 1'}
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-[var(--color-ink)]">
+              {activeChapter.title || 'Chapter 1'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsEndDateModalOpen(true)}
+              className="text-[10px] text-[var(--color-accent)] font-semibold underline underline-offset-2 active:scale-95"
+            >
+              Adjust
+            </button>
+          </div>
+
+          <span>
+            Day {progress.currentDayNumber} of {progress.totalDays}
           </span>
-          <span>Day {chapterDayNumber} of 28</span>
-          <span className="text-[var(--color-accent)] font-semibold">
-            {chapterDaysLeft} days left
-          </span>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[var(--color-accent)] font-semibold">
+              {progress.daysRemaining} days left
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsChapterGateOpen(true)}
+              className="text-[10px] bg-[var(--color-bg)] border border-[var(--color-line)] px-2 py-0.5 rounded text-[var(--color-ink)] font-semibold active:scale-95"
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Pre-close Dismissible Banner (T-2 days) */}
+      {showPreClose && (
+        <div className="p-3.5 bg-amber-50 rounded-[var(--radius-m)] border-2 border-amber-300 flex items-start justify-between text-xs text-amber-900 shadow-sm animate-in fade-in duration-150">
+          <div className="flex items-start space-x-2.5">
+            <ShieldAlert size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">This chapter wraps up soon.</p>
+              <p className="text-[11px] text-amber-800">
+                You have {progress.daysRemaining} days remaining. Review your reflections and prepare photos for the ceremony.
+              </p>
+              <div className="flex items-center space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsReflectionsOpen(true)}
+                  className="px-2.5 py-1 rounded-full bg-amber-600 text-white font-semibold text-[11px] active:scale-95"
+                >
+                  Review Reflections
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsChapterGateOpen(true)}
+                  className="px-2.5 py-1 rounded-full bg-amber-100 border border-amber-400 text-amber-900 font-semibold text-[11px] active:scale-95"
+                >
+                  Close Early
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPreCloseDismissed(true)}
+            className="p-1 text-amber-700 hover:text-amber-900 active:scale-90"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Character Stage with Live Greeting */}
+      <CharacterStage
+        characterId={activeCharacterId}
+        greetingText={greetingText}
+      />
 
       {/* Tonight's Form Card */}
       <div className="sticker-card p-4 space-y-3">
@@ -196,24 +372,50 @@ export const HomeScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Character Stage */}
-      <div className="sticker-card p-6 flex flex-col items-center justify-center min-h-[180px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)]">
-        <div className="w-24 h-24 mb-2 flex items-center justify-center rounded-full bg-[var(--color-line)]/50">
-          <img
-            src={currentCharacter.svg}
-            alt={currentCharacter.name}
-            className="w-20 h-20 object-contain hover:scale-105 transition-transform"
-          />
+      {/* Chapter Reflections Row */}
+      {activeChapter && (
+        <div
+          onClick={() => setIsReflectionsOpen(true)}
+          className="sticker-card p-3.5 flex items-center justify-between cursor-pointer hover:border-[var(--color-accent)] transition-all active:scale-98"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex items-center justify-center shrink-0">
+              <BookOpen size={16} />
+            </div>
+            <div>
+              <h4 className="font-bold text-xs text-[var(--color-ink)]">
+                Chapter Reflections
+              </h4>
+              <p className="text-[11px] text-[var(--color-ink-soft)]">
+                {reflectionsAnsweredCount} of {reflectionsTotalCount || 7} prompts answered
+              </p>
+            </div>
+          </div>
+
+          <span className="text-xs font-semibold text-[var(--color-accent)]">
+            Open &rarr;
+          </span>
         </div>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-[var(--color-ink)]">
-            Piqsie ({currentCharacter.name})
-          </p>
-          <p className="text-xs text-[var(--color-ink-soft)]">
-            {currentCharacter.description}
-          </p>
-        </div>
-      </div>
+      )}
+
+      {/* Open Chapter Fill Heatmap */}
+      {activeChapter && (
+        <HeatmapCalendar
+          chapter={activeChapter}
+          days={chapterDays}
+          todayLogicalDate={todayStr}
+          onSelectDate={openFormForDate}
+        />
+      )}
+
+      {/* Menstrual Cycle Card */}
+      <CycleCard
+        cycles={cycles}
+        activeCycle={activeCycle}
+        todayLogicalDate={todayStr}
+        onStartCycle={handleStartCycle}
+        onEndCycle={handleEndCycle}
+      />
 
       {/* Form Pack Setup */}
       <div className="sticker-card p-5 space-y-4">
@@ -255,6 +457,43 @@ export const HomeScreen: React.FC = () => {
           onClose={() => setIsModalOpen(false)}
           onSaved={() => {
             showToast('Night saved successfully!')
+            loadState()
+          }}
+        />
+      )}
+
+      {/* End Date Adjustment Modal */}
+      {isEndDateModalOpen && activeChapter && (
+        <EndDateModal
+          isOpen={isEndDateModalOpen}
+          chapter={activeChapter}
+          onClose={() => setIsEndDateModalOpen(false)}
+          onSave={handleSavePlannedEndDate}
+        />
+      )}
+
+      {/* Reflections Sheet */}
+      {isReflectionsOpen && activeChapter && (
+        <ReflectionsSheet
+          isOpen={isReflectionsOpen}
+          chapter={activeChapter}
+          onClose={() => {
+            setIsReflectionsOpen(false)
+            loadState()
+          }}
+        />
+      )}
+
+      {/* Chapter Closing Ceremony Gate */}
+      {isChapterGateOpen && activeChapter && (
+        <ChapterGate
+          isOpen={isChapterGateOpen}
+          chapter={activeChapter}
+          todayLogicalDate={todayStr}
+          onChapterClosed={(next) => {
+            setIsChapterGateOpen(false)
+            setActiveChapter(next)
+            showToast(`Chapter closed! Welcome to ${next.title || 'Next Chapter'}`)
             loadState()
           }}
         />

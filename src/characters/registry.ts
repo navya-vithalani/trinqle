@@ -1,11 +1,13 @@
 import catSvg from './white-cat/character.svg'
 import cookieSvg from './cookie-man/character.svg'
+import spiderSvg from './spider/character.svg'
 
 export interface CharacterItem {
   id: string
   name: string
   svg: string
   description: string
+  limbs?: number
 }
 
 export const CHARACTERS: CharacterItem[] = [
@@ -14,12 +16,21 @@ export const CHARACTERS: CharacterItem[] = [
     name: 'White fluffy cat',
     svg: catSvg,
     description: 'Soft white cat that stretches and watches',
+    limbs: 2,
   },
   {
     id: 'cookie-man',
     name: 'Ginger cookie man',
     svg: cookieSvg,
     description: 'Sweet baked cookie man with stubby arms and legs',
+    limbs: 4,
+  },
+  {
+    id: 'spider',
+    name: 'Jumpy spider',
+    svg: spiderSvg,
+    description: 'An eight-legged curious jumping spider that loves watching you write',
+    limbs: 8,
   },
 ]
 

@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { X, ChevronLeft, ChevronRight, AlertTriangle, Sparkles, Smile, Star, Plus, Trash2 } from 'lucide-react'
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  Sparkles,
+  Smile,
+  Star,
+  Plus,
+  Trash2,
+  Droplet,
+  FolderOpen,
+} from 'lucide-react'
 import type {
   Section,
   Question,
@@ -10,8 +22,13 @@ import type {
   EntryMode,
   Memorability,
   AnswerLink,
+  Cycle,
 } from '../../data/types'
-import { FormRepository, DayRepository } from '../../data/repositories'
+import {
+  FormRepository,
+  DayRepository,
+  CycleRepository,
+} from '../../data/repositories'
 import {
   checkCompleteness,
   checkOverlappingTimeRanges,
@@ -46,7 +63,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   onSaved,
 }) => {
   const [step, setStep] = useState<'header' | 'questions'>('header')
-  const [mode, setMode] = useState<EntryMode>('quick')
+  // Default to full mode per request
+  const [mode, setMode] = useState<EntryMode>('full')
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [expandedMore, setExpandedMore] = useState(false)
 
@@ -63,6 +81,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   const [questions, setQuestions] = useState<Question[]>([])
   const [parts, setParts] = useState<Part[]>([])
 
+  // Cycle state
+  const [activeCycle, setActiveCycle] = useState<Cycle | null>(null)
+
   // Answers state: partId -> instance -> AnswerValue
   const [answersMap, setAnswersMap] = useState<Record<string, Record<number, AnswerValue>>>({})
   const [repeatingSessions, setRepeatingSessions] = useState<Record<string, number[]>>({}) // questionId -> instance numbers
@@ -74,25 +95,44 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   const formRepo = useMemo(() => new FormRepository(), [])
   const dayRepo = useMemo(() => new DayRepository(), [])
+  const cycleRepo = useMemo(() => new CycleRepository(), [])
 
   // 1. Load schema and existing entry or draft
   useEffect(() => {
     if (!isOpen) return
 
     async function loadData() {
-      const [allSecs, allQs, allParts] = await Promise.all([
+      const [allSecs, allQs, allParts, cycle] = await Promise.all([
         formRepo.getSections(date),
         formRepo.getQuestions(date),
         formRepo.getParts(date),
+        cycleRepo.getActiveCycle(),
       ])
 
-      setSections(allSecs)
-      setQuestions(allQs)
+      // Filter sections:
+      // - chapterEnd sections are strictly for chapter wrap-up and NEVER in nightly form!
+      // - weekly section is only included if today is Sunday (weekday 0)
+      const [y, m, d] = date.split('-').map(Number)
+      const dayOfWeek = new Date(y, m - 1, d).getDay()
+
+      const nightlySections = allSecs.filter((s) => {
+        if (s.scope === 'chapterEnd') return false
+        if (s.scope === 'weekly' && dayOfWeek !== 0) return false
+        return true
+      })
+
+      // Filter questions belonging to active nightly sections
+      const nightlySectionIds = new Set(nightlySections.map((s) => s.id))
+      const nightlyQuestions = allQs.filter((q) => nightlySectionIds.has(q.sectionId))
+
+      setSections(nightlySections)
+      setQuestions(nightlyQuestions)
       setParts(allParts)
+      setActiveCycle(cycle || null)
 
       // Initialize default session 0 for repeating questions
       const initSessions: Record<string, number[]> = {}
-      allQs.forEach((q) => {
+      nightlyQuestions.forEach((q) => {
         if (q.repeats) initSessions[q.id] = [0]
       })
 
@@ -108,7 +148,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         setMode(existingDay.mode)
         setExpandedMore(existingDay.expandedMore)
 
-        // Load existing answers
         const existingAnswers = await dayRepo.getAnswersForDate(date)
         const loadedAnswers: Record<string, Record<number, AnswerValue>> = {}
         const loadedSessions: Record<string, Set<number>> = {}
@@ -128,7 +167,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         })
         setRepeatingSessions((prev) => ({ ...prev, ...sessionsRecord }))
       } else {
-        // Check for local draft
         setIsEditing(false)
         const draftKey = `trinqle_draft_${date}`
         const savedDraft = localStorage.getItem(draftKey)
@@ -140,14 +178,13 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
             setStickerId(parsed.stickerId)
             setOverallRating(parsed.overallRating ?? 7.5)
             setMemorability(parsed.memorability ?? 0)
-            setMode(parsed.mode || 'quick')
+            setMode(parsed.mode || 'full')
             setAnswersMap(parsed.answers || {})
             if (parsed.sessions) setRepeatingSessions(parsed.sessions)
           } catch {
             // invalid draft
           }
         } else {
-          // Defaults
           setAnswersMap({})
           setRepeatingSessions(initSessions)
           setStep('header')
@@ -156,7 +193,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     }
 
     loadData()
-  }, [isOpen, date, formRepo, dayRepo])
+  }, [isOpen, date, formRepo, dayRepo, cycleRepo])
 
   // 2. Draft autosaving
   useEffect(() => {
@@ -177,7 +214,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   if (!isOpen) return null
 
-  // Flatten answers map into Answer[] for the form engine
+  // Flatten answers map into Answer[]
   const currentAnswerArray: Answer[] = []
   Object.entries(answersMap).forEach(([partId, instMap]) => {
     const part = parts.find((p) => p.id === partId)
@@ -198,8 +235,14 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   })
 
   // Completeness check
-  const snapshot = { questions, parts }
-  const completeness = checkCompleteness(snapshot, date, mode, currentAnswerArray, false)
+  const snapshot = { sections, questions, parts }
+  const completeness = checkCompleteness(
+    snapshot,
+    date,
+    mode,
+    currentAnswerArray,
+    !!activeCycle
+  )
 
   const handleAnswerChange = (partId: string, instance: number, value: AnswerValue) => {
     setAnswersMap((prev) => {
@@ -223,7 +266,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       return { ...prev, [questionId]: list.length > 0 ? list : [0] }
     })
 
-    // Remove answers for this instance
     const qParts = parts.filter((p) => p.questionId === questionId)
     setAnswersMap((prev) => {
       const nextMap = { ...prev }
@@ -238,10 +280,21 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     })
   }
 
+  const handleToggleCycle = async () => {
+    if (activeCycle) {
+      // End period
+      await cycleRepo.endCycle(activeCycle.id, date)
+      setActiveCycle(null)
+    } else {
+      // Start period
+      const newCycle = await cycleRepo.startCycle(date)
+      setActiveCycle(newCycle)
+    }
+  }
+
   const handleSave = async () => {
     if (!completeness.complete) return
 
-    // Convert answersMap into final Answer[] and AnswerLink[]
     const finalAnswers: Answer[] = []
     const finalLinks: AnswerLink[] = []
     const now = Date.now()
@@ -252,7 +305,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
       Object.entries(instMap).forEach(([instStr, val]) => {
         const instance = parseInt(instStr, 10)
-        // Skip untouched extras or empty values
         if (val === undefined || val === null || val === '') return
 
         const answerId = generateUUIDv7(now)
@@ -267,7 +319,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           updatedAt: now,
         })
 
-        // If library kind, create AnswerLink rows
         if (part.kind === 'library' && (typeof val === 'string' || Array.isArray(val))) {
           const config = part.config as { libraryId?: string }
           const libId = config.libraryId || ''
@@ -279,7 +330,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               answerId,
               date,
               libraryId: libId,
-              itemId: name, // stores item identifier/name
+              itemId: name,
               createdAt: now,
               updatedAt: now,
             })
@@ -305,21 +356,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     }
 
     await dayRepo.saveDay(dayRecord, finalAnswers, finalLinks)
-
-    // Clear draft
     localStorage.removeItem(`trinqle_draft_${date}`)
-
     onSaved()
     onClose()
   }
 
-  // Active section questions for full mode
   const currentSection = sections[currentSectionIndex]
   const currentSectionQuestions = questions.filter(
     (q) => q.sectionId === currentSection?.id
   )
 
-  // Core questions for quick mode
   const quickQuestions = questions.filter((q) => {
     const qParts = parts.filter((p) => p.questionId === q.id)
     if (expandedMore) return true
@@ -329,8 +375,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   const selectedSticker = stickerId ? getStickerById(stickerId) : undefined
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/50 backdrop-blur-xs">
-      <div className="w-full max-w-md mx-auto h-[92vh] bg-[var(--color-surface)] rounded-t-[var(--radius-l)] border-t-2 border-x-2 border-[var(--color-line)] flex flex-col overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs">
+      {/* 4-sided bordered floating modal sheet */}
+      <div className="w-full max-w-md max-h-[92vh] bg-[var(--color-surface)] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[var(--color-line)] bg-[var(--color-bg)]">
           <div className="flex items-center space-x-2">
@@ -375,17 +422,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               <div className="bg-[var(--color-bg)] p-1 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] grid grid-cols-2 gap-1">
                 <button
                   type="button"
-                  onClick={() => setMode('quick')}
-                  className={`py-2 text-xs font-semibold rounded-[var(--radius-pill)] transition-all ${
-                    mode === 'quick'
-                      ? 'bg-[var(--color-accent)] text-white shadow-xs'
-                      : 'text-[var(--color-ink-soft)]'
-                  }`}
-                >
-                  Quick mode (~2 min)
-                </button>
-                <button
-                  type="button"
                   onClick={() => setMode('full')}
                   className={`py-2 text-xs font-semibold rounded-[var(--radius-pill)] transition-all ${
                     mode === 'full'
@@ -393,7 +429,18 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                       : 'text-[var(--color-ink-soft)]'
                   }`}
                 >
-                  Full mode (~10 min)
+                  Full mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('quick')}
+                  className={`py-2 text-xs font-semibold rounded-[var(--radius-pill)] transition-all ${
+                    mode === 'quick'
+                      ? 'bg-[var(--color-accent)] text-white shadow-xs'
+                      : 'text-[var(--color-ink-soft)]'
+                  }`}
+                >
+                  Quick mode
                 </button>
               </div>
 
@@ -428,7 +475,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
               {/* Sticker, Rating & Memorability */}
               <div className="sticker-card p-4 space-y-4">
-                {/* Sticker Picker Row */}
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-semibold text-[var(--color-ink)] block">
@@ -455,7 +501,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   </button>
                 </div>
 
-                {/* Overall Rating Slider */}
+                {/* Overall Rating Slider with flowing gradient */}
                 <ScaleWidget
                   label="Overall day rating"
                   value={overallRating}
@@ -463,17 +509,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   onChange={setOverallRating}
                 />
 
-                {/* Memorability */}
+                {/* Memorability chips (Star is glowing standalone star icon) */}
                 <div className="space-y-1.5 pt-1">
                   <span className="text-xs font-semibold text-[var(--color-ink)] block">
                     Memorability
                   </span>
-                  <div className="grid grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-4 gap-1.5 items-center">
                     {[
                       { val: 0 as Memorability, label: 'Normal' },
                       { val: 1 as Memorability, label: 'Notable' },
                       { val: 2 as Memorability, label: 'Outstanding' },
-                      { val: 3 as Memorability, label: 'Star', isStar: true },
                     ].map((m) => {
                       const isSelected = memorability === m.val
                       return (
@@ -481,17 +526,33 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           key={m.val}
                           type="button"
                           onClick={() => setMemorability(m.val)}
-                          className={`flex items-center justify-center space-x-1 py-1.5 px-1 rounded-[var(--radius-pill)] text-[11px] font-semibold border-2 transition-all ${
+                          className={`flex items-center justify-center py-2 px-1 rounded-[var(--radius-pill)] text-[11px] font-semibold border-2 transition-all ${
                             isSelected
                               ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white shadow-xs'
                               : 'border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink-soft)]'
                           }`}
                         >
-                          {m.isStar && <Star size={11} className="fill-current" />}
                           <span>{m.label}</span>
                         </button>
                       )
                     })}
+
+                    {/* Glowing standalone star chip */}
+                    <button
+                      type="button"
+                      onClick={() => setMemorability(3)}
+                      className={`flex items-center justify-center py-2 px-1 rounded-[var(--radius-pill)] border-2 transition-all ${
+                        memorability === 3
+                          ? 'border-[var(--color-star)] bg-[var(--color-star)] text-white shadow-[0_0_12px_rgba(255,184,77,0.8)] scale-105'
+                          : 'border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-star)]'
+                      }`}
+                      aria-label="Star day"
+                    >
+                      <Star
+                        size={18}
+                        className={memorability === 3 ? 'fill-white text-white drop-shadow' : 'fill-current'}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -508,9 +569,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           ) : (
             /* STEP 2: QUESTIONS */
             <div className="space-y-4">
-              {/* Full mode section progress bar */}
+              {/* Full mode prominent section heading and progress bar */}
               {mode === 'full' && sections.length > 0 && (
-                <div className="space-y-1.5 pb-2">
+                <div className="space-y-2 pb-2">
                   <div className="flex items-center space-x-1">
                     {sections.map((sec, idx) => (
                       <div
@@ -526,12 +587,17 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                       />
                     ))}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)]">
-                    <span className="font-bold text-[var(--color-ink)]">
-                      {currentSection?.name}
-                    </span>
-                    <span>
-                      Section {currentSectionIndex + 1} of {sections.length}
+
+                  {/* Prominent Section Heading */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center space-x-2">
+                      <FolderOpen size={18} className="text-[var(--color-accent)]" />
+                      <h3 className="text-base font-extrabold tracking-tight text-[var(--color-ink)]">
+                        {currentSection?.name}
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-semibold text-[var(--color-ink-soft)] px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)]">
+                      {currentSectionIndex + 1} of {sections.length}
                     </span>
                   </div>
                 </div>
@@ -542,14 +608,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 {(mode === 'full' ? currentSectionQuestions : quickQuestions).map((q) => {
                   const qParts = parts.filter((p) => p.questionId === q.id)
                   const gatePart = qParts.find((p) => p.gate)
-                  const gateValue = answersMap[gatePart?.id || '']?.[0] ?? false
-                  const isGateOn = !!gateValue
+                  const gateValue = answersMap[gatePart?.id || '']?.[0]
+                  const isGateOn = gateValue === true
 
                   const sessions = q.repeats
                     ? repeatingSessions[q.id] || [0]
                     : [0]
 
-                  // Check overlapping time ranges for this question
+                  const isCycleQuestion = q.special === 'cycle'
+
+                  // Check overlapping time ranges
                   const timeParts = qParts.filter((p) => p.kind === 'timerange')
                   const timeAnswers = timeParts.flatMap((p) => {
                     return sessions.map((inst) => answersMap[p.id]?.[inst]).filter(Boolean) as {
@@ -560,17 +628,107 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   })
                   const hasOverlap = checkOverlappingTimeRanges(timeAnswers)
 
+                  // Special Period / Cycle block styling
+                  if (isCycleQuestion) {
+                    return (
+                      <div
+                        key={q.id}
+                        className="p-4 rounded-[var(--radius-l)] border-2 border-rose-200 bg-rose-50/50 space-y-3 shadow-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Droplet size={18} className="text-rose-500 fill-rose-500" />
+                            <h4 className="font-bold text-sm text-rose-950">
+                              {q.label}
+                            </h4>
+                          </div>
+                          {activeCycle && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-200 text-rose-800">
+                              Period active
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Start / End Period Button */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={handleToggleCycle}
+                            className={`w-full py-2 px-3 rounded-[var(--radius-pill)] font-bold text-xs shadow-xs transition-transform active:scale-95 ${
+                              activeCycle
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-rose-500 text-white'
+                            }`}
+                          >
+                            {activeCycle ? 'End period today' : 'Start period today'}
+                          </button>
+                        </div>
+
+                        {/* Daily period symptoms & flow if active */}
+                        {activeCycle && (
+                          <div className="space-y-2 pt-2 border-t border-rose-200">
+                            {qParts.map((p) => {
+                              const val = answersMap[p.id]?.[0]
+                              return (
+                                <div key={p.id}>
+                                  {p.kind === 'scale' && (
+                                    <ScaleWidget
+                                      label={p.label}
+                                      value={val as number}
+                                      config={p.config as any}
+                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                    />
+                                  )}
+                                  {p.kind === 'library' && (
+                                    <LibraryWidget
+                                      label={p.label}
+                                      value={val as any}
+                                      config={p.config as any}
+                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                    />
+                                  )}
+                                  {p.kind === 'text' && (
+                                    <TextWidget
+                                      label={p.label}
+                                      value={(val as string) ?? ''}
+                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                    />
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  const hasCorePart = qParts.some((p) => p.level === 'core')
+
                   return (
-                    <div key={q.id} className="sticker-card p-4 space-y-3">
+                    <div
+                      key={q.id}
+                      className={`sticker-card p-4 space-y-3 ${
+                        hasCorePart ? 'border-l-4 border-l-[var(--color-accent)]' : ''
+                      }`}
+                    >
                       <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm text-[var(--color-ink)]">
-                          {q.label}
-                        </h4>
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-bold text-sm text-[var(--color-ink)]">
+                            {q.label}
+                          </h4>
+                          {hasCorePart && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] tracking-wider uppercase">
+                              Core
+                            </span>
+                          )}
+                        </div>
+
                         {q.repeats && isGateOn && (
                           <button
                             type="button"
                             onClick={() => addSession(q.id)}
-                            className="flex items-center space-x-1 px-2 py-0.5 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)]"
+                            className="flex items-center space-x-1 px-2.5 py-0.5 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)] active:scale-95"
                           >
                             <Plus size={10} />
                             <span>Add session</span>
@@ -589,8 +747,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                       {gatePart && (
                         <YesNoWidget
                           label={gatePart.label}
-                          value={isGateOn}
-                          onChange={(val) => handleAnswerChange(gatePart.id, 0, val)}
+                          value={typeof gateValue === 'boolean' ? gateValue : undefined}
+                          required={gatePart.level === 'core'}
+                          onChange={(val) => handleAnswerChange(gatePart.id, 0, val ?? false)}
                         />
                       )}
 
@@ -625,23 +784,30 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                 .map((p) => {
                                   const val = answersMap[p.id]?.[instance]
                                   const isMissing = completeness.missingPartIds.includes(p.id)
+                                  const isCore = p.level === 'core'
 
                                   return (
                                     <div
                                       key={p.id}
-                                      className={isMissing ? 'rounded-lg p-1 bg-red-50/80 border border-red-300' : ''}
+                                      className={`space-y-1 ${
+                                        isMissing
+                                          ? 'rounded-lg p-2 bg-red-50 border border-red-300'
+                                          : ''
+                                      }`}
                                     >
                                       {p.kind === 'yesno' && (
                                         <YesNoWidget
                                           label={p.label}
-                                          value={(val as boolean) ?? false}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          value={typeof val === 'boolean' ? val : undefined}
+                                          required={isCore}
+                                          onChange={(v) => handleAnswerChange(p.id, instance, v ?? false)}
                                         />
                                       )}
                                       {p.kind === 'scale' && (
                                         <ScaleWidget
                                           label={p.label}
                                           value={val as number}
+                                          required={isCore}
                                           config={p.config as any}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
@@ -718,7 +884,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     setStep('header')
                   }
                 }}
-                className="py-2.5 px-4 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs text-[var(--color-ink)] flex items-center space-x-1"
+                className="py-2.5 px-4 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs text-[var(--color-ink)] flex items-center space-x-1 active:scale-95"
               >
                 <ChevronLeft size={16} />
                 <span>Back</span>

@@ -124,7 +124,7 @@ describe('Form Engine (Phase 2)', () => {
   it('evaluates conditional visibility (showWhen and schedule)', () => {
     // q_conditional depends on p_study_did being truthy
     const noAnswers: Answer[] = []
-    expect(isQuestionVisible(mockQuestions[2], noAnswers, '2026-10-15', false)).toBe(false)
+    expect(isQuestionVisible(mockQuestions[2], snapshot, noAnswers, '2026-10-15', false)).toBe(false)
 
     const studyDoneAnswers: Answer[] = [
       {
@@ -138,12 +138,12 @@ describe('Form Engine (Phase 2)', () => {
         updatedAt: 0,
       },
     ]
-    expect(isQuestionVisible(mockQuestions[2], studyDoneAnswers, '2026-10-15', false)).toBe(true)
+    expect(isQuestionVisible(mockQuestions[2], snapshot, studyDoneAnswers, '2026-10-15', false)).toBe(true)
 
     // Schedule check: 2026-10-15 is Thursday (weekday 4). Weekend reflection is only 0 (Sun) and 6 (Sat)
-    expect(isQuestionVisible(mockQuestions[3], [], '2026-10-15', false)).toBe(false)
+    expect(isQuestionVisible(mockQuestions[3], snapshot, [], '2026-10-15', false)).toBe(false)
     // 2026-10-18 is Sunday (weekday 0)
-    expect(isQuestionVisible(mockQuestions[3], [], '2026-10-18', false)).toBe(true)
+    expect(isQuestionVisible(mockQuestions[3], snapshot, [], '2026-10-18', false)).toBe(true)
   })
 
   it('filters visible questions in Quick mode vs Full mode', () => {

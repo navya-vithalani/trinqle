@@ -1,4 +1,5 @@
 import type {
+  Section,
   Question,
   Part,
   Answer,
@@ -9,6 +10,7 @@ import type {
 } from '../data/types'
 
 export interface FormSnapshot {
+  sections?: Section[]
   questions: Question[]
   parts: Part[]
 }
@@ -18,20 +20,30 @@ export interface FormSnapshot {
  */
 export function isQuestionVisible(
   q: Question,
+  snapshot: FormSnapshot,
   answers: Answer[],
   date: string,
   cycleActive: boolean
 ): boolean {
-  // 1. Cycle-specific question (e.g. Period question)
-  if (q.special === 'cycle') {
-    // If question is scheduled only while period active, or general cycle question
-    if (q.schedule?.weekdays === undefined) {
-      // visible anytime, but UI presents start/end period conditionally
-      return true
+  // Find question's section to verify scope
+  const section = snapshot.sections?.find((s) => s.id === q.sectionId)
+  if (section) {
+    // 1. Chapter reflection section is NEVER part of the nightly form
+    if (section.scope === 'chapterEnd') {
+      return false
+    }
+
+    // 2. Weekly review only appears on Sundays (day 0)
+    if (section.scope === 'weekly') {
+      const [y, m, d] = date.split('-').map(Number)
+      const dayOfWeek = new Date(y, m - 1, d).getDay()
+      if (dayOfWeek !== 0) {
+        return false
+      }
     }
   }
 
-  // 2. Schedule rules: weekdays (0 = Sunday .. 6 = Saturday)
+  // 3. Question-level schedule: weekdays (0 = Sunday .. 6 = Saturday)
   if (q.schedule?.weekdays && q.schedule.weekdays.length > 0) {
     const [y, m, d] = date.split('-').map(Number)
     const dayOfWeek = new Date(y, m - 1, d).getDay()
@@ -40,7 +52,12 @@ export function isQuestionVisible(
     }
   }
 
-  // 3. Conditional visibility (showWhen)
+  // 4. Chapter end question schedule
+  if (q.schedule?.chapterEnd) {
+    return false
+  }
+
+  // 5. Conditional visibility (showWhen)
   if (q.showWhen) {
     const rule: ShowWhenRule = q.showWhen
 
@@ -49,7 +66,6 @@ export function isQuestionVisible(
     }
 
     if (rule.partId) {
-      // Find the answer for this part (instance 0)
       const ans = answers.find((a) => a.partId === rule.partId && a.instance === 0)
       const val = ans ? ans.value : null
 
@@ -68,7 +84,6 @@ export function isQuestionVisible(
 
 /**
  * Returns the list of visible questions for a date and entry mode.
- * In Quick mode: shows questions that have at least one core part (unless expandedMore is true).
  */
 export function visibleQuestions(
   snapshot: FormSnapshot,
@@ -79,14 +94,11 @@ export function visibleQuestions(
   expandedMore = false
 ): Question[] {
   return snapshot.questions.filter((q) => {
-    // 1. Is question visible by schedule / showWhen?
-    if (!isQuestionVisible(q, answers, date, cycleActive)) {
+    if (!isQuestionVisible(q, snapshot, answers, date, cycleActive)) {
       return false
     }
 
-    // 2. Mode filter:
     if (mode === 'quick' && !expandedMore) {
-      // Must contain at least one active core part
       const qParts = snapshot.parts.filter((p) => p.questionId === q.id)
       const hasCorePart = qParts.some((p) => p.level === 'core')
       if (!hasCorePart) return false
@@ -98,11 +110,9 @@ export function visibleQuestions(
 
 /**
  * Checks whether a part has a complete/valid answer.
- * Core yesno parts start at false and count as answered.
  */
 export function isPartAnswered(part: Part, value: AnswerValue | undefined): boolean {
   if (part.kind === 'yesno') {
-    // false or true counts as answered
     return typeof value === 'boolean'
   }
 
@@ -140,11 +150,10 @@ export interface CompletenessResult {
 
 /**
  * Completeness rule (PRD F4 & TRD 5):
- * - A night saves only when every required core part is answered.
- * - Core yes/no toggles start visibly at "No" and count as answered.
+ * - Core parts required.
+ * - Core yes/no gates must be answered (true or false). Leaving unselected (undefined) is missing.
  * - Core parts under a gate are required ONLY when the gate is true.
  * - A repeating question with its gate on needs at least one session where all core parts are filled.
- * - Untouched extras are missing.
  */
 export function checkCompleteness(
   snapshot: FormSnapshot,
@@ -161,19 +170,16 @@ export function checkCompleteness(
     const gatePart = qParts.find((p) => p.gate)
 
     if (gatePart) {
-      // Find gate value (instance 0)
       const gateAns = answers.find((a) => a.partId === gatePart.id && a.instance === 0)
-      const isGateOn = gateAns ? !!gateAns.value : false
+      const isGateAnswered = gateAns && typeof gateAns.value === 'boolean'
+      const isGateOn = gateAns ? gateAns.value === true : false
 
-      // If gate is core, gate itself must be answered (defaults to false so answered)
-      if (gatePart.level === 'core') {
-        const hasGateVal = answers.some((a) => a.partId === gatePart.id)
-        if (!hasGateVal) {
-          missingPartIds.push(gatePart.id)
-        }
+      // Gate must be answered if it is core
+      if (gatePart.level === 'core' && !isGateAnswered) {
+        missingPartIds.push(gatePart.id)
       }
 
-      // If gate is false, sibling parts are skipped and NOT required!
+      // If gate is not turned on (false or unanswered), sibling parts are skipped
       if (!isGateOn) {
         continue
       }
@@ -182,7 +188,6 @@ export function checkCompleteness(
       const siblingCoreParts = qParts.filter((p) => !p.gate && p.level === 'core')
 
       if (q.repeats) {
-        // Need at least one complete session
         const instances = Array.from(
           new Set(
             answers
@@ -192,18 +197,16 @@ export function checkCompleteness(
         )
 
         if (instances.length === 0) {
-          // No sessions added yet
           siblingCoreParts.forEach((p) => missingPartIds.push(p.id))
         } else {
-          // At least one session must have all sibling core parts answered
-          const hasAtLeastOneCompleteSession = instances.some((inst) => {
+          const hasCompleteSession = instances.some((inst) => {
             return siblingCoreParts.every((p) => {
               const ans = answers.find((a) => a.partId === p.id && a.instance === inst)
               return isPartAnswered(p, ans?.value)
             })
           })
 
-          if (!hasAtLeastOneCompleteSession) {
+          if (!hasCompleteSession) {
             siblingCoreParts.forEach((p) => {
               const anyAnswered = answers.some((a) => a.partId === p.id)
               if (!anyAnswered) missingPartIds.push(p.id)
@@ -211,7 +214,6 @@ export function checkCompleteness(
           }
         }
       } else {
-        // Non-repeating gated question
         for (const p of siblingCoreParts) {
           const ans = answers.find((a) => a.partId === p.id && a.instance === 0)
           if (!isPartAnswered(p, ans?.value)) {
@@ -220,7 +222,6 @@ export function checkCompleteness(
         }
       }
     } else {
-      // Ungated question
       const coreParts = qParts.filter((p) => p.level === 'core')
 
       if (q.repeats) {
@@ -233,7 +234,6 @@ export function checkCompleteness(
         )
 
         if (instances.length === 0) {
-          // If repeating question has core parts, requires at least one session
           if (coreParts.length > 0) {
             coreParts.forEach((p) => missingPartIds.push(p.id))
           }
@@ -272,7 +272,6 @@ export function checkOverlappingTimeRanges(
 ): boolean {
   if (timeAnswers.length <= 1) return false
 
-  // Convert each to [startMin, endMin]
   const intervals = timeAnswers.map((t) => {
     const [sh, sm] = t.start.split(':').map(Number)
     const [eh, em] = t.end.split(':').map(Number)
@@ -284,7 +283,6 @@ export function checkOverlappingTimeRanges(
     return { startMin, endMin }
   })
 
-  // Compare each pair
   for (let i = 0; i < intervals.length; i++) {
     for (let j = i + 1; j < intervals.length; j++) {
       const a = intervals[i]
