@@ -1,15 +1,46 @@
-import { describe, it, expect } from 'vitest'
-import { cutesyTheme } from '../themes/cutesy'
-import { getTheme, themeRegistry } from '../themes/registry'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { clayTheme } from '../themes/clay'
+import {
+  getTheme,
+  themeRegistry,
+  saveThemePreference,
+  loadThemePreference,
+} from '../themes/registry'
+
+// Mock localStorage for Node test environment
+const mockStore: Record<string, string> = {}
+if (typeof globalThis.localStorage === 'undefined') {
+  globalThis.localStorage = {
+    getItem: (key: string) => mockStore[key] ?? null,
+    setItem: (key: string, value: string) => {
+      mockStore[key] = String(value)
+    },
+    removeItem: (key: string) => {
+      delete mockStore[key]
+    },
+    clear: () => {
+      Object.keys(mockStore).forEach((k) => delete mockStore[k])
+    },
+    key: (i: number) => Object.keys(mockStore)[i] ?? null,
+    length: 0,
+  } as unknown as Storage
+}
 
 describe('Theme System', () => {
-  it('registers the cutesy theme correctly', () => {
-    expect(themeRegistry['cutesy']).toBeDefined()
-    expect(getTheme('cutesy').name).toBe('Cutesy')
+  beforeEach(() => {
+    localStorage.clear()
   })
 
-  it('provides complete light, dark, and archive tokens', () => {
-    const theme = cutesyTheme
+  it('registers both cutesy and baked clay themes correctly', () => {
+    expect(themeRegistry['cutesy']).toBeDefined()
+    expect(getTheme('cutesy').name).toBe('Cutesy')
+
+    expect(themeRegistry['clay']).toBeDefined()
+    expect(getTheme('clay').name).toBe('Baked Clay')
+  })
+
+  it('provides complete light, dark, and archive tokens for baked clay theme', () => {
+    const theme = clayTheme
 
     // Check light colors
     expect(theme.tokens.light.color.bg).toMatch(/^#[0-9a-fA-F]{6}$/)
@@ -26,14 +57,21 @@ describe('Theme System', () => {
     expect(theme.archive.color.accent).toBeDefined()
 
     // Shapes & Depths
-    expect(theme.tokens.light.shape.radiusL).toBe('24px')
+    expect(theme.tokens.light.shape.radiusL).toBe('26px')
     expect(theme.tokens.light.shape.radiusPill).toBe('9999px')
     expect(theme.tokens.light.depth.shadowCard).toBeDefined()
     expect(theme.tokens.light.depth.shadowButton).toBeDefined()
   })
 
+  it('persists theme and dark mode preferences across reloads', () => {
+    expect(loadThemePreference()).toEqual({ themeId: 'cutesy', isDark: false })
+
+    saveThemePreference('clay', true)
+    expect(loadThemePreference()).toEqual({ themeId: 'clay', isDark: true })
+  })
+
   it('maps all required semantic icon keys without emojis', () => {
-    const iconSet = cutesyTheme.iconSet
+    const iconSet = clayTheme.iconSet
     expect(iconSet.home).toBe('Home')
     expect(iconSet.dashboard).toBe('LayoutDashboard')
     expect(iconSet.insights).toBe('Sparkles')

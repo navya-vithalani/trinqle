@@ -42,10 +42,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab }) => {
               onClick={() => onSelectTab(item.id)}
               className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] min-w-[44px] transition-transform duration-150"
               style={{
-                color: isHome
-                  ? 'var(--tab-home-color, var(--color-accent))'
-                  : isActive
-                    ? 'var(--color-accent)'
+                color: isActive
+                  ? isHome
+                    ? 'var(--tab-home-active-color, var(--color-accent))'
+                    : 'var(--color-accent)'
+                  : isHome
+                    ? 'var(--tab-home-inactive-color, var(--color-ink-soft))'
                     : 'var(--color-ink-soft)',
                 transform: isHome
                   ? 'translateY(var(--tab-home-lift, 0px))'

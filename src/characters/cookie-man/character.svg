@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
+  <!-- Gingerbread Cookie Man -->
+  <g id="cookie-man" stroke="#8a5328" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Stubby left leg -->
+    <path id="leg-left" d="M72 170 L72 215 A 15 15 0 0 0 100 215 L100 170 Z" fill="#c7834e"/>
+    <!-- Stubby right leg -->
+    <path id="leg-right" d="M100 170 L100 215 A 15 15 0 0 0 128 215 L128 170 Z" fill="#c7834e"/>
+
+    <!-- Stubby left arm -->
+    <path id="arm-left" d="M60 110 L28 135 A 14 14 0 0 0 46 155 L68 135 Z" fill="#c7834e"/>
+    <!-- Stubby right arm -->
+    <path id="arm-right" d="M140 110 L172 135 A 14 14 0 0 1 154 155 L132 135 Z" fill="#c7834e"/>
+
+    <!-- Body torso -->
+    <path id="body" d="M60 100 Q56 170 100 170 Q144 170 140 100 Z" fill="#c7834e"/>
+
+    <!-- Head -->
+    <circle id="head" cx="100" cy="65" r="42" fill="#c7834e"/>
+  </g>
+
+  <!-- White icing squiggles -->
+  <g stroke="#ffffff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head icing wave -->
+    <path d="M82 35 Q90 30 100 35 Q110 40 118 35"/>
+    <!-- Left wrist icing -->
+    <path d="M30 138 Q36 144 42 150"/>
+    <!-- Right wrist icing -->
+    <path d="M170 138 Q164 144 158 150"/>
+    <!-- Left ankle icing -->
+    <path d="M75 202 Q86 206 97 202"/>
+    <!-- Right ankle icing -->
+    <path d="M103 202 Q114 206 125 202"/>
+  </g>
+
+  <!-- Face details -->
+  <!-- Eyes -->
+  <circle id="eye-left" cx="87" cy="62" r="4.5" fill="#462b1a"/>
+  <circle id="eye-right" cx="113" cy="62" r="4.5" fill="#462b1a"/>
+
+  <!-- Baked rosy cheeks -->
+  <circle cx="78" cy="74" r="7" fill="#e89e7d" opacity="0.8"/>
+  <circle cx="122" cy="74" r="7" fill="#e89e7d" opacity="0.8"/>
+
+  <!-- Icing smile -->
+  <path id="mouth" d="M88 78 Q100 90 112 78" stroke="#ffffff" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Candy buttons -->
+  <circle cx="100" cy="120" r="6" fill="#e06745" stroke="#b3492b" stroke-width="2"/>
+  <circle cx="100" cy="142" r="6" fill="#6ba867" stroke="#487845" stroke-width="2"/>
+</svg>

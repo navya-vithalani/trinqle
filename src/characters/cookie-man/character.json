@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "id": "cookie-man",
+  "name": "Ginger cookie man",
+  "svg": "character.svg",
+  "view": "front",
+  "roles": {
+    "body": ["body"],
+    "head": ["head"],
+    "eyes": ["eye-left", "eye-right"],
+    "mouth": ["mouth"],
+    "limbs": [
+      { "role": "arm", "layers": ["arm-left", "arm-right"], "gait": "biped" },
+      { "role": "leg", "layers": ["leg-left", "leg-right"], "gait": "biped" }
+    ]
+  },
+  "clips": {
+    "idle": ["blink", "breathe", "look-around"],
+    "actions": ["bounce", "spin", "dance", "sleep", "sit", "waddle"],
+    "overrides": { "walk": { "fallback": "waddle" } }
+  },
+  "reactions": {
+    "tap": ["bounce", "spin", "waddle"],
+    "saved": "bounce",
+    "locked": "sleep",
+    "chapterClosed": "dance"
+  }
+}

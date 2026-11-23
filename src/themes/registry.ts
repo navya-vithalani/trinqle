@@ -1,12 +1,43 @@
 import { cutesyTheme } from './cutesy'
+import { clayTheme } from './clay'
 import type { Theme, ThemeTokens } from './types'
 
 export const themeRegistry: Record<string, Theme> = {
   cutesy: cutesyTheme,
+  clay: clayTheme,
 }
+
+const STORAGE_THEME_KEY = 'trinqle_theme_id'
+const STORAGE_DARK_KEY = 'trinqle_dark_mode'
 
 export function getTheme(themeId: string = 'cutesy'): Theme {
   return themeRegistry[themeId] || cutesyTheme
+}
+
+export function getAllThemes(): Theme[] {
+  return Object.values(themeRegistry)
+}
+
+export function loadThemePreference(): { themeId: string; isDark: boolean } {
+  try {
+    const savedTheme = localStorage.getItem(STORAGE_THEME_KEY) || 'cutesy'
+    const savedDark = localStorage.getItem(STORAGE_DARK_KEY) === 'true'
+    return {
+      themeId: themeRegistry[savedTheme] ? savedTheme : 'cutesy',
+      isDark: savedDark,
+    }
+  } catch {
+    return { themeId: 'cutesy', isDark: false }
+  }
+}
+
+export function saveThemePreference(themeId: string, isDark: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_THEME_KEY, themeId)
+    localStorage.setItem(STORAGE_DARK_KEY, String(isDark))
+  } catch {
+    // Ignore localStorage errors
+  }
 }
 
 export function applyThemeTokens(tokens: ThemeTokens, isDark: boolean = false): void {
@@ -69,4 +100,11 @@ export function applyThemeTokens(tokens: ThemeTokens, isDark: boolean = false): 
   } else {
     document.documentElement.classList.remove('dark')
   }
+}
+
+export function applyThemeById(themeId: string, isDark: boolean): void {
+  const theme = getTheme(themeId)
+  const tokens = isDark ? theme.tokens.dark : theme.tokens.light
+  applyThemeTokens(tokens, isDark)
+  saveThemePreference(themeId, isDark)
 }
