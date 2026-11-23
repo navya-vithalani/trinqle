@@ -9,6 +9,7 @@ import {
   Sparkles,
   Database,
   RefreshCw,
+  Sliders,
 } from 'lucide-react'
 import {
   themeRegistry,
@@ -23,6 +24,7 @@ import {
 import { deleteAllData } from '../../data/reset'
 import { exportFormPack } from '../../data/formPack/exporter'
 import { ImportDialog } from '../dialogs/ImportDialog'
+import { FormEditorScreen } from '../editor/FormEditorScreen'
 import { generateDemoData } from '../../tools/demoData'
 import { db } from '../../data/db'
 
@@ -34,6 +36,7 @@ export const ProfileScreen: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -238,6 +241,27 @@ export const ProfileScreen: React.FC = () => {
         </button>
       </div>
 
+      {/* Journal Form Designer */}
+      <div className="sticker-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-[var(--color-ink)]">Journal form editor</h2>
+          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+            Phase 4
+          </span>
+        </div>
+        <p className="text-xs text-[var(--color-ink-soft)]">
+          Customize sections, questions, and parts. Full-screen editor with Excel-style tabs, 1-tap core/extra toggling, library management, and effective dating.
+        </p>
+        <button
+          type="button"
+          onClick={() => setIsFormEditorOpen(true)}
+          className="w-full py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button flex items-center justify-center space-x-2 active:scale-95"
+        >
+          <Sliders size={15} />
+          <span>Open Form & Question Editor</span>
+        </button>
+      </div>
+
       {/* Form Pack Management */}
       <div className="sticker-card p-4 space-y-3">
         <h2 className="text-base font-bold text-[var(--color-ink)]">Form pack</h2>
@@ -354,6 +378,14 @@ export const ProfileScreen: React.FC = () => {
           isOpen={isImportOpen}
           onClose={() => setIsImportOpen(false)}
           onSuccess={() => showToast('Form pack imported!')}
+        />
+      )}
+
+      {/* Form Editor Screen */}
+      {isFormEditorOpen && (
+        <FormEditorScreen
+          isOpen={isFormEditorOpen}
+          onClose={() => setIsFormEditorOpen(false)}
         />
       )}
     </div>

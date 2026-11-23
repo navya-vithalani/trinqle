@@ -10,6 +10,10 @@ export class LibraryRepository {
     return this.db.libraries.filter((l) => !l.deletedAt && !l.retired).toArray()
   }
 
+  async getAllLibraries(): Promise<Library[]> {
+    return this.db.libraries.filter((l) => !l.deletedAt).toArray()
+  }
+
   async getLibraryById(id: string): Promise<Library | undefined> {
     return this.db.libraries.get(id)
   }
@@ -19,6 +23,14 @@ export class LibraryRepository {
       .where('libraryId')
       .equals(libraryId)
       .filter((i) => !i.deletedAt && !i.retired)
+      .toArray()
+  }
+
+  async getAllItems(libraryId: string): Promise<Item[]> {
+    return this.db.items
+      .where('libraryId')
+      .equals(libraryId)
+      .filter((i) => !i.deletedAt)
       .toArray()
   }
 
@@ -34,6 +46,28 @@ export class LibraryRepository {
     return lib
   }
 
+  async renameLibrary(libraryId: string, newName: string): Promise<void> {
+    const lib = await this.db.libraries.get(libraryId)
+    if (lib) {
+      await this.db.libraries.put({
+        ...lib,
+        name: newName,
+        updatedAt: Date.now(),
+      })
+    }
+  }
+
+  async retireLibrary(libraryId: string): Promise<void> {
+    const lib = await this.db.libraries.get(libraryId)
+    if (lib) {
+      await this.db.libraries.put({
+        ...lib,
+        retired: true,
+        updatedAt: Date.now(),
+      })
+    }
+  }
+
   async createItem(libraryId: string, name: string, id?: string): Promise<Item> {
     const now = Date.now()
     const item: Item = {
@@ -45,6 +79,17 @@ export class LibraryRepository {
     }
     await this.db.items.put(item)
     return item
+  }
+
+  async renameItem(itemId: string, newName: string): Promise<void> {
+    const item = await this.db.items.get(itemId)
+    if (item) {
+      await this.db.items.put({
+        ...item,
+        name: newName,
+        updatedAt: Date.now(),
+      })
+    }
   }
 
   /**

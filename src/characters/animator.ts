@@ -3,7 +3,7 @@ export type AnimationClip =
   | 'jump'
   | 'dance'
   | 'bounce'
-  | 'wave'
+  | 'somersault'
   | 'sleep'
   | 'waddle'
 
@@ -48,20 +48,23 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
     return list
   }
 
-  // 1. Idle Breathing & Subtle Bob
+  // 1. Lively Idle: Breathing + Stage Waddling & Moving around
   const startIdle = () => {
     if (reducedMotion || isDestroyed) return
 
-    const body = getEl('#body') || getEl('#cookie-man') || container
-    if (body && body.animate) {
-      idleAnimation = body.animate(
+    const whole = container
+    if (whole && 'animate' in whole) {
+      idleAnimation = whole.animate(
         [
-          { transform: 'translateY(0px) scaleY(1)' },
-          { transform: 'translateY(-2px) scaleY(1.025)' },
-          { transform: 'translateY(0px) scaleY(1)' },
+          { transform: 'translateX(0px) translateY(0px) rotate(0deg) scale(1, 1)' },
+          { transform: 'translateX(-8px) translateY(-3px) rotate(-3deg) scale(0.98, 1.02)' },
+          { transform: 'translateX(-3px) translateY(0px) rotate(1deg) scale(1, 1)' },
+          { transform: 'translateX(8px) translateY(-3px) rotate(3deg) scale(0.98, 1.02)' },
+          { transform: 'translateX(3px) translateY(0px) rotate(-1deg) scale(1, 1)' },
+          { transform: 'translateX(0px) translateY(0px) rotate(0deg) scale(1, 1)' },
         ],
         {
-          duration: 3200,
+          duration: 4800,
           iterations: Infinity,
           easing: 'ease-in-out',
         }
@@ -156,6 +159,27 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
         break
       }
 
+      case 'somersault': {
+        // High acrobatic leap + full 360-degree excited spin!
+        if (whole.animate) {
+          currentActionAnimation = whole.animate(
+            [
+              { transform: 'translateY(0px) rotate(0deg) scale(1, 1)' },
+              { transform: 'translateY(6px) rotate(-15deg) scale(1.15, 0.85)' },
+              { transform: 'translateY(-36px) rotate(180deg) scale(0.9, 1.1)' },
+              { transform: 'translateY(-20px) rotate(300deg) scale(1, 1)' },
+              { transform: 'translateY(4px) rotate(360deg) scale(1.15, 0.85)' },
+              { transform: 'translateY(0px) rotate(360deg) scale(1, 1)' },
+            ],
+            {
+              duration: 850,
+              easing: 'cubic-bezier(0.2, 0.8, 0.3, 1.2)',
+            }
+          )
+        }
+        break
+      }
+
       case 'dance': {
         if (whole.animate) {
           currentActionAnimation = whole.animate(
@@ -195,40 +219,18 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
         break
       }
 
-      case 'wave': {
-        const waveLimb = limbs[0]
-        if (waveLimb && 'animate' in waveLimb) {
-          currentActionAnimation = waveLimb.animate(
-            [
-              { transform: 'rotate(0deg)', transformOrigin: 'bottom center' },
-              { transform: 'rotate(-25deg)', transformOrigin: 'bottom center' },
-              { transform: 'rotate(20deg)', transformOrigin: 'bottom center' },
-              { transform: 'rotate(-25deg)', transformOrigin: 'bottom center' },
-              { transform: 'rotate(0deg)', transformOrigin: 'bottom center' },
-            ],
-            {
-              duration: 750,
-              easing: 'ease-in-out',
-            }
-          )
-        } else {
-          playClip('bounce')
-        }
-        break
-      }
-
       case 'waddle': {
         if (whole.animate) {
           currentActionAnimation = whole.animate(
             [
               { transform: 'rotate(0deg) translateX(0px)' },
+              { transform: 'rotate(-6deg) translateX(-10px)' },
+              { transform: 'rotate(6deg) translateX(10px)' },
               { transform: 'rotate(-5deg) translateX(-6px)' },
-              { transform: 'rotate(5deg) translateX(6px)' },
-              { transform: 'rotate(-4deg) translateX(-4px)' },
               { transform: 'rotate(0deg) translateX(0px)' },
             ],
             {
-              duration: 900,
+              duration: 950,
               easing: 'ease-in-out',
             }
           )
@@ -273,7 +275,7 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
     }
   }
 
-  // 3. Interactive Tap Reaction (single tap -> jump or wave; 3 rapid taps -> dance)
+  // 3. Interactive Tap Reaction (single tap -> jump or somersault; 3 rapid taps -> dance)
   const handleTap = () => {
     if (reducedMotion || isDestroyed) return
     const now = Date.now()
@@ -286,8 +288,8 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
       tapTimestamps = []
       playClip('dance')
     } else {
-      // Single or double tap -> jump or wave
-      const pick = Math.random() > 0.5 ? 'jump' : 'wave'
+      // Single tap -> jump or somersault
+      const pick = Math.random() > 0.5 ? 'somersault' : 'jump'
       playClip(pick)
     }
   }
@@ -295,10 +297,10 @@ export function initCharacterAnimator(container: HTMLElement | SVGElement): Anim
   // 4. Background stage scheduler picking spontaneous action clips
   const scheduleRandomAction = () => {
     if (isDestroyed) return
-    const delay = 6000 + Math.random() * 8000
+    const delay = 5000 + Math.random() * 7000
     randomActionTimer = window.setTimeout(() => {
       if (!currentActionAnimation) {
-        const pool: AnimationClip[] = ['bounce', 'waddle', 'wave']
+        const pool: AnimationClip[] = ['bounce', 'waddle', 'somersault']
         const chosen = pool[Math.floor(Math.random() * pool.length)]
         playClip(chosen)
       }

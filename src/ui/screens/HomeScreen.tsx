@@ -9,9 +9,11 @@ import {
   BookOpen,
   ShieldAlert,
   X,
+  Sliders,
 } from 'lucide-react'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { ImportDialog } from '../dialogs/ImportDialog'
+import { FormEditorScreen } from '../editor/FormEditorScreen'
 import {
   ChapterRepository,
   DayRepository,
@@ -58,6 +60,7 @@ export const HomeScreen: React.FC = () => {
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isReflectionsOpen, setIsReflectionsOpen] = useState(false)
   const [isChapterGateOpen, setIsChapterGateOpen] = useState(false)
+  const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [preCloseDismissed, setPreCloseDismissed] = useState(false)
 
   // Greetings & Character
@@ -438,6 +441,15 @@ export const HomeScreen: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => setIsFormEditorOpen(true)}
+            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)] font-medium text-sm active:scale-95"
+          >
+            <Sliders size={16} className="text-[var(--color-accent)]" />
+            <span>Customize form in Editor</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsImportOpen(true)}
             className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)] font-medium text-sm"
           >
@@ -506,6 +518,17 @@ export const HomeScreen: React.FC = () => {
           onClose={() => setIsImportOpen(false)}
           onSuccess={() => {
             showToast('Form pack imported!')
+            loadState()
+          }}
+        />
+      )}
+
+      {/* Form Editor Screen */}
+      {isFormEditorOpen && (
+        <FormEditorScreen
+          isOpen={isFormEditorOpen}
+          onClose={() => {
+            setIsFormEditorOpen(false)
             loadState()
           }}
         />

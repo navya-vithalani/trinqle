@@ -1,10 +1,12 @@
 import { cutesyTheme } from './cutesy'
 import { clayTheme } from './clay'
+import { cyberpunkTheme } from './cyberpunk'
 import type { Theme, ThemeTokens } from './types'
 
 export const themeRegistry: Record<string, Theme> = {
   cutesy: cutesyTheme,
   clay: clayTheme,
+  cyberpunk: cyberpunkTheme,
 }
 
 const STORAGE_THEME_KEY = 'trinqle_theme_id'
@@ -117,6 +119,13 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
     root.style.setProperty(
       '--tab-home-shadow',
       'inset 0 2px 4px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(90, 50, 30, 0.2)'
+    )
+  } else if (themeId === 'cyberpunk') {
+    root.style.setProperty('--tab-home-lift', '-4px')
+    root.style.setProperty('--tab-home-radius', '4px')
+    root.style.setProperty(
+      '--tab-home-shadow',
+      '0 0 12px rgba(0, 240, 255, 0.6), inset 0 0 4px #00f0ff'
     )
   } else {
     root.style.setProperty('--tab-home-lift', '0px')

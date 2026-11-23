@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { clayTheme } from '../themes/clay'
+import { cyberpunkTheme } from '../themes/cyberpunk'
 import {
   getTheme,
   themeRegistry,
@@ -31,12 +32,32 @@ describe('Theme System', () => {
     localStorage.clear()
   })
 
-  it('registers both cutesy and baked clay themes correctly', () => {
+  it('registers cutesy, baked clay, and cyberpunk themes correctly', () => {
     expect(themeRegistry['cutesy']).toBeDefined()
     expect(getTheme('cutesy').name).toBe('Cutesy')
 
     expect(themeRegistry['clay']).toBeDefined()
     expect(getTheme('clay').name).toBe('Baked Clay')
+
+    expect(themeRegistry['cyberpunk']).toBeDefined()
+    expect(getTheme('cyberpunk').name).toBe('Cyberpunk')
+  })
+
+  it('provides complete light, dark, and archive tokens for cyberpunk theme', () => {
+    const theme = cyberpunkTheme
+
+    // Check obsidian void & electric cyan
+    expect(theme.tokens.light.color.bg).toBe('#090a10')
+    expect(theme.tokens.light.color.accent).toBe('#00f0ff')
+    expect(theme.tokens.light.color.accent2).toBe('#ff0055')
+
+    // Check sharp angular shape tokens
+    expect(theme.tokens.light.shape.radiusPill).toBe('4px')
+    expect(theme.tokens.light.shape.buttonShape).toBe('sharp')
+
+    // Check archive tokens
+    expect(theme.archive.color.bg).toBeDefined()
+    expect(theme.archive.color.ink).toBeDefined()
   })
 
   it('provides complete light, dark, and archive tokens for baked clay theme', () => {

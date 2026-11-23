@@ -107,3 +107,22 @@
   transform: translateY(4px) scale(0.97);
   box-shadow: var(--shadow-pressed);
 }
+
+/* Cyberpunk theme specific neon glow and sharp tech styling */
+[data-theme="cyberpunk"] .sticker-card {
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.12), inset 0 0 1px #00f0ff;
+  border: 1px solid #232a40;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-m);
+}
+
+[data-theme="cyberpunk"] .sticker-button {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4), 0 3px 0 #008899;
+  border-radius: var(--radius-pill);
+  transition: all 120ms ease-out;
+}
+
+[data-theme="cyberpunk"] .sticker-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
