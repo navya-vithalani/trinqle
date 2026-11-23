@@ -98,7 +98,7 @@ Excel-style: a scrollable **tab bar of sections** at the top (the last tab is **
 Light edits apply immediately. Structural edits ask **"From next chapter" (default) / "This chapter"** with a one-line explanation of each. Core/extra is a toggle chip on each part block.
 
 ## 6. Character: Piqsie (starter look: white fluffy cat)
-Files: `characters/cat-white/character.svg` + `character.json`. Soft white body, pale pink-grey outline, pink inner ears and cheeks, dot eyes. Front view, so it hops/waddles/dances rather than walking across the stage. Layers: `tail body head ear-left ear-right eye-left eye-right mouth leg-left leg-right`.
+Files: `characters/white-cat/character.svg` + `character.json`. Soft white body, pale pink-grey outline, pink inner ears and cheeks, dot eyes. Front view, so it hops/waddles/dances rather than walking across the stage. Layers: `tail body head ear-left ear-right eye-left eye-right mouth leg-left leg-right`.
 Engine rules (see TRD 13): one shared animation engine for all characters; characters declare roles; **any number of limbs** (spider = `leg-1 ... leg-8` with `gait: octopod`); clips include idle loops, wave, bounce/jump, spin, dance, walk, sit, sleep, wiggle; custom clips are declarative keyframes in json.
 Stage behaviour: mostly idle (blink, breathe, tail sway, ear twitch), occasional random action, sleepy when the form is locked or late. Tap = random reaction; rapid taps = excited; long-press = pet. Size about 96 to 128 px inside the stage.
 

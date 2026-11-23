@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-bg: #fff3f6;
+    --color-surface: #ffffff;
+    --color-ink: #5b4350;
+    --color-ink-soft: #a58b98;
+    --color-line: #f6dfe7;
+    --color-accent: #ff8fb1;
+    --color-accent2: #9fe3c8;
+    --color-accent3: #c9b3f5;
+    --color-accent4: #ffd2b0;
+    --color-success: #8ee0c1;
+    --color-warn: #ffd280;
+    --color-danger: #ff93a3;
+    --color-star: #ffb84d;
+    --color-chart1: #ff8fb1;
+    --color-chart2: #9fe3c8;
+    --color-chart3: #c9b3f5;
+    --color-chart4: #ffd2b0;
+    --color-chart5: #ffb84d;
+    --color-chart6: #94d2bd;
+    --color-chart7: #e7c6ff;
+    --color-chart8: #b8c0ff;
+
+    --radius-s: 8px;
+    --radius-m: 14px;
+    --radius-l: 24px;
+    --radius-pill: 9999px;
+    --border-w: 2px;
+
+    --shadow-card: 0 6px 0 var(--color-line);
+    --shadow-button: 0 4px 0 #e0678f;
+    --shadow-pressed: 0 1px 0 #e0678f;
+
+    --font-body: 'Fredoka', system-ui, sans-serif;
+    --font-display: 'Fredoka', system-ui, sans-serif;
+
+    --ease-bounce: cubic-bezier(0.3, 1.6, 0.5, 1);
+    --ease-soft: cubic-bezier(0.25, 1, 0.5, 1);
+    --dur-fast: 150ms;
+    --dur-med: 300ms;
+    --dur-slow: 600ms;
+  }
+
+  * {
+    border-color: var(--color-line);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    touch-action: manipulation;
+  }
+}
+
+/* Custom utility styles for card sticker shadows and button press effects */
+.sticker-card {
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-l);
+}
+
+.sticker-button {
+  box-shadow: var(--shadow-button);
+  border-radius: var(--radius-pill);
+  transition: transform var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft);
+}
+
+.sticker-button:active {
+  transform: translateY(3px);
+  box-shadow: var(--shadow-pressed);
+}

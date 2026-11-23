@@ -1,0 +1,151 @@
+import type { Theme, ThemeTokens } from './types'
+
+const cutesyLightTokens: ThemeTokens = {
+  color: {
+    bg: '#fff3f6',
+    surface: '#ffffff',
+    ink: '#5b4350',
+    inkSoft: '#a58b98',
+    line: '#f6dfe7',
+    accent: '#ff8fb1', // pink
+    accent2: '#9fe3c8', // mint
+    accent3: '#c9b3f5', // lavender
+    accent4: '#ffd2b0', // peach
+    success: '#8ee0c1',
+    warn: '#ffd280',
+    danger: '#ff93a3',
+    star: '#ffb84d',
+    chart1: '#ff8fb1',
+    chart2: '#9fe3c8',
+    chart3: '#c9b3f5',
+    chart4: '#ffd2b0',
+    chart5: '#ffb84d',
+    chart6: '#94d2bd',
+    chart7: '#e7c6ff',
+    chart8: '#b8c0ff',
+  },
+  shape: {
+    radiusS: '8px',
+    radiusM: '14px',
+    radiusL: '24px',
+    radiusPill: '9999px',
+    borderW: '2px',
+    buttonShape: 'pill',
+  },
+  depth: {
+    shadowCard: '0 6px 0 #f6dfe7',
+    shadowButton: '0 4px 0 #e0678f',
+    shadowPressed: '0 1px 0 #e0678f',
+  },
+  type: {
+    fontBody: "'Fredoka', system-ui, sans-serif",
+    fontDisplay: "'Fredoka', system-ui, sans-serif",
+    sizeS: '0.8125rem',
+    sizeM: '0.9375rem',
+    sizeL: '1.125rem',
+    sizeXL: '1.375rem',
+    weightNormal: '400',
+    weightMedium: '500',
+    weightBold: '600',
+  },
+  space: {
+    s2: '2px',
+    s4: '4px',
+    s8: '8px',
+    s12: '12px',
+    s16: '16px',
+    s24: '24px',
+    s32: '32px',
+  },
+  motion: {
+    easeBounce: 'cubic-bezier(0.3, 1.6, 0.5, 1)',
+    easeSoft: 'cubic-bezier(0.25, 1, 0.5, 1)',
+    durFast: '150ms',
+    durMed: '300ms',
+    durSlow: '600ms',
+    entranceStyle: 'bouncy-pop',
+  },
+}
+
+const cutesyDarkTokens: ThemeTokens = {
+  ...cutesyLightTokens,
+  color: {
+    ...cutesyLightTokens.color,
+    bg: '#2a2032',
+    surface: '#382b43',
+    ink: '#f7e8f0',
+    inkSoft: '#b9a0b0',
+    line: '#4a3a57',
+    accent: '#ff8fb1',
+    accent2: '#9fe3c8',
+    accent3: '#c9b3f5',
+    accent4: '#ffd2b0',
+    star: '#ffc166',
+  },
+  depth: {
+    shadowCard: '0 6px 0 #4a3a57',
+    shadowButton: '0 4px 0 #d45980',
+    shadowPressed: '0 1px 0 #d45980',
+  },
+}
+
+const cutesyArchiveTokens: ThemeTokens = {
+  ...cutesyLightTokens,
+  color: {
+    ...cutesyLightTokens.color,
+    bg: '#f8f8fa',
+    surface: '#ffffff',
+    ink: '#2d2b30',
+    inkSoft: '#7a7680',
+    line: '#e5e3e8',
+    accent: '#595561',
+    accent2: '#757080',
+    accent3: '#918b9e',
+    accent4: '#adabb5',
+    star: '#757080',
+  },
+  depth: {
+    shadowCard: '0 6px 0 #e5e3e8',
+    shadowButton: '0 4px 0 #3e3b44',
+    shadowPressed: '0 1px 0 #3e3b44',
+  },
+}
+
+export const cutesyTheme: Theme = {
+  id: 'cutesy',
+  name: 'Cutesy',
+  tokens: {
+    light: cutesyLightTokens,
+    dark: cutesyDarkTokens,
+  },
+  archive: cutesyArchiveTokens,
+  iconSet: {
+    home: 'Home',
+    dashboard: 'LayoutDashboard',
+    insights: 'Sparkles',
+    archive: 'BookOpen',
+    profile: 'User',
+    plus: 'Plus',
+    edit: 'Pencil',
+    delete: 'Trash2',
+    search: 'Search',
+    'chevron-left': 'ChevronLeft',
+    'chevron-right': 'ChevronRight',
+    settings: 'Settings',
+    star: 'Star',
+    calendar: 'Calendar',
+    check: 'Check',
+    x: 'X',
+    moon: 'Moon',
+    sun: 'Sun',
+    sparkles: 'Sparkles',
+    'book-open': 'BookOpen',
+    'file-text': 'FileText',
+    clock: 'Clock',
+    heart: 'Heart',
+    activity: 'Activity',
+    share: 'Share2',
+    download: 'Download',
+    upload: 'Upload',
+  },
+}

@@ -1,0 +1,1401 @@
+{
+  "formatVersion": 1,
+  "kind": "form-pack",
+  "name": "Starter pack (disposable)",
+  "aliases": {
+    "mood": "q_state.p_state_mood.value",
+    "happiness": "q_state.p_state_happy.value",
+    "energy": "q_state.p_state_energy.value",
+    "sleepMinutes": "q_sleep.p_sleep_when.minutes",
+    "exercise": "q_fitness.p_fitness_did.done",
+    "study": "q_studies.p_studies_did.done",
+    "studyMinutes": "q_studies.p_studies_when.minutes",
+    "water": "q_water.p_water_glasses.value",
+    "bath": "q_bath.p_bath_did.done",
+    "screenHours": "q_screen.p_screen_hours.value"
+  },
+  "libraries": [
+    {
+      "id": "lib_study_types",
+      "name": "Study types",
+      "items": [
+        "Notes",
+        "Questions",
+        "One-shot videos",
+        "Revision",
+        "Practice problems"
+      ]
+    },
+    {
+      "id": "lib_coding_types",
+      "name": "Coding types",
+      "items": [
+        "Building",
+        "Debugging",
+        "Learning",
+        "Practice"
+      ]
+    },
+    {
+      "id": "lib_creative_types",
+      "name": "Writing types",
+      "items": [
+        "Story",
+        "Poetry",
+        "Journaling",
+        "Worldbuilding"
+      ]
+    },
+    {
+      "id": "lib_workout_types",
+      "name": "Workout types",
+      "items": [
+        "Walk",
+        "Run",
+        "Strength",
+        "Yoga",
+        "Stretching"
+      ]
+    },
+    {
+      "id": "lib_craft_types",
+      "name": "Craft types",
+      "items": [
+        "Crochet project",
+        "Practice stitches",
+        "Pattern reading"
+      ]
+    },
+    {
+      "id": "lib_projects",
+      "name": "Projects",
+      "items": []
+    },
+    {
+      "id": "lib_people",
+      "name": "People",
+      "items": []
+    },
+    {
+      "id": "lib_places",
+      "name": "Places",
+      "items": [
+        "College",
+        "Home",
+        "Cafe",
+        "Park"
+      ]
+    },
+    {
+      "id": "lib_foods",
+      "name": "Foods",
+      "items": []
+    },
+    {
+      "id": "lib_symptoms",
+      "name": "Symptoms",
+      "items": [
+        "Headache",
+        "Cramps",
+        "Fatigue",
+        "Nausea",
+        "Back pain",
+        "Bloating",
+        "Cold or cough"
+      ]
+    },
+    {
+      "id": "lib_feelings",
+      "name": "Feelings",
+      "items": [
+        "Cozy",
+        "Restless",
+        "Calm",
+        "Anxious",
+        "Excited",
+        "Lonely",
+        "Proud",
+        "Tired",
+        "Content"
+      ]
+    },
+    {
+      "id": "lib_dream_realism",
+      "name": "Dream realism",
+      "items": [
+        "Realistic",
+        "Fictional",
+        "Mixed"
+      ]
+    },
+    {
+      "id": "lib_dream_vibes",
+      "name": "Dream vibes",
+      "items": [
+        "Peaceful",
+        "Weird",
+        "Scary",
+        "Happy",
+        "Sad",
+        "Chaotic"
+      ]
+    },
+    {
+      "id": "lib_dream_themes",
+      "name": "Dream themes",
+      "items": []
+    },
+    {
+      "id": "lib_spend_cats",
+      "name": "Spending categories",
+      "items": [
+        "Food",
+        "Study",
+        "Transport",
+        "Fun",
+        "Other"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "id": "s_activities",
+      "name": "Things I do",
+      "icon": "list-checks",
+      "order": 1,
+      "scope": "daily"
+    },
+    {
+      "id": "s_routine",
+      "name": "Routine",
+      "icon": "sun-moon",
+      "order": 2,
+      "scope": "daily"
+    },
+    {
+      "id": "s_inner",
+      "name": "Inner state",
+      "icon": "heart",
+      "order": 3,
+      "scope": "daily"
+    },
+    {
+      "id": "s_outside",
+      "name": "Outside world",
+      "icon": "map-pin",
+      "order": 4,
+      "scope": "daily"
+    },
+    {
+      "id": "s_weekly",
+      "name": "Weekly review",
+      "icon": "calendar-days",
+      "order": 5,
+      "scope": "weekly"
+    },
+    {
+      "id": "s_chapter",
+      "name": "Chapter reflection",
+      "icon": "sprout",
+      "order": 6,
+      "scope": "chapterEnd"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_studies",
+      "sectionId": "s_activities",
+      "label": "Studies",
+      "icon": "book-open",
+      "order": 1,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_studies_did",
+          "kind": "yesno",
+          "label": "Studied today",
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_studies_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "core",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_studies_type",
+          "kind": "library",
+          "label": "What kind",
+          "level": "core",
+          "config": {
+            "libraryId": "lib_study_types",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_studies_project",
+          "kind": "library",
+          "label": "Project",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_projects",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_studies_focus",
+          "kind": "scale",
+          "label": "Focus",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_studies_note",
+          "kind": "text",
+          "label": "Details",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_coding",
+      "sectionId": "s_activities",
+      "label": "Coding",
+      "icon": "code",
+      "order": 2,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_coding_did",
+          "kind": "yesno",
+          "label": "Coded today",
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_coding_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "core",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_coding_type",
+          "kind": "library",
+          "label": "What kind",
+          "level": "core",
+          "config": {
+            "libraryId": "lib_coding_types",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_coding_project",
+          "kind": "library",
+          "label": "Project",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_projects",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_coding_focus",
+          "kind": "scale",
+          "label": "Focus",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_coding_note",
+          "kind": "text",
+          "label": "Details",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_creative",
+      "sectionId": "s_activities",
+      "label": "Creative writing",
+      "icon": "pen-line",
+      "order": 3,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_creative_did",
+          "kind": "yesno",
+          "label": "Wrote today",
+          "level": "extra",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_creative_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "extra",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_creative_type",
+          "kind": "library",
+          "label": "What kind",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_creative_types",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_creative_project",
+          "kind": "library",
+          "label": "Project",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_projects",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_creative_note",
+          "kind": "text",
+          "label": "Details",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_fitness",
+      "sectionId": "s_activities",
+      "label": "Fitness",
+      "icon": "dumbbell",
+      "order": 4,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_fitness_did",
+          "kind": "yesno",
+          "label": "Exercised today",
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_fitness_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "core",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_fitness_type",
+          "kind": "library",
+          "label": "What kind",
+          "level": "core",
+          "config": {
+            "libraryId": "lib_workout_types",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_fitness_intensity",
+          "kind": "scale",
+          "label": "Intensity",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_fitness_note",
+          "kind": "text",
+          "label": "Details",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_crochet",
+      "sectionId": "s_activities",
+      "label": "Crochet",
+      "icon": "flower-2",
+      "order": 5,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_crochet_did",
+          "kind": "yesno",
+          "label": "Crocheted today",
+          "level": "extra",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_crochet_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "extra",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_crochet_type",
+          "kind": "library",
+          "label": "What kind",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_craft_types",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_crochet_note",
+          "kind": "text",
+          "label": "Details",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_sleep",
+      "sectionId": "s_routine",
+      "label": "Sleep",
+      "icon": "bed",
+      "order": 1,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_sleep_when",
+          "kind": "timerange",
+          "label": "Slept from / until",
+          "level": "core",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_sleep_quality",
+          "kind": "scale",
+          "label": "Sleep quality",
+          "level": "core",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_dream",
+      "sectionId": "s_routine",
+      "parentId": "q_sleep",
+      "label": "Dream",
+      "icon": "cloud",
+      "order": 1,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_dream_had",
+          "kind": "yesno",
+          "label": "Had a dream",
+          "level": "extra",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_dream_vivid",
+          "kind": "scale",
+          "label": "How vivid",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_dream_realism",
+          "kind": "library",
+          "label": "Realistic or fictional",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_dream_realism",
+            "multi": false,
+            "creatable": false
+          }
+        },
+        {
+          "id": "p_dream_people",
+          "kind": "library",
+          "label": "Who was in it",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_people",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_dream_places",
+          "kind": "library",
+          "label": "Where",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_places",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_dream_vibe",
+          "kind": "library",
+          "label": "Vibe",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_dream_vibes",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_dream_themes",
+          "kind": "library",
+          "label": "Themes",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_dream_themes",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_dream_story",
+          "kind": "text",
+          "label": "What happened",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_meals",
+      "sectionId": "s_routine",
+      "label": "Meals",
+      "icon": "utensils",
+      "order": 2,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_meals_count",
+          "kind": "number",
+          "label": "Meals eaten",
+          "level": "extra",
+          "config": {
+            "unit": "meals",
+            "min": 0,
+            "max": 10,
+            "step": 1
+          }
+        },
+        {
+          "id": "p_meals_foods",
+          "kind": "library",
+          "label": "What I ate",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_foods",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_meals_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_water",
+      "sectionId": "s_routine",
+      "label": "Water",
+      "icon": "droplet",
+      "order": 3,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_water_glasses",
+          "kind": "number",
+          "label": "Glasses of water",
+          "level": "core",
+          "config": {
+            "unit": "glasses",
+            "min": 0,
+            "max": 30,
+            "step": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_screen",
+      "sectionId": "s_routine",
+      "label": "Screen time",
+      "icon": "smartphone",
+      "order": 4,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_screen_hours",
+          "kind": "number",
+          "label": "Hours on screens",
+          "level": "extra",
+          "config": {
+            "unit": "h",
+            "min": 0,
+            "max": 24,
+            "step": 0.5
+          }
+        },
+        {
+          "id": "p_screen_mostly",
+          "kind": "text",
+          "label": "Mostly on",
+          "level": "extra",
+          "config": {
+            "multiline": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_bath",
+      "sectionId": "s_routine",
+      "label": "Bath",
+      "icon": "bath",
+      "order": 5,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_bath_did",
+          "kind": "yesno",
+          "label": "Took a bath",
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_bath_head",
+          "kind": "yesno",
+          "label": "Head wash",
+          "level": "extra",
+          "config": {}
+        },
+        {
+          "id": "p_bath_shave",
+          "kind": "yesno",
+          "label": "Shaved",
+          "level": "extra",
+          "config": {}
+        },
+        {
+          "id": "p_bath_full",
+          "kind": "yesno",
+          "label": "Full bath (not a quick shower)",
+          "level": "extra",
+          "config": {}
+        },
+        {
+          "id": "p_bath_soap",
+          "kind": "yesno",
+          "label": "Used soap",
+          "level": "extra",
+          "config": {}
+        }
+      ]
+    },
+    {
+      "id": "q_health",
+      "sectionId": "s_routine",
+      "label": "Health",
+      "icon": "heart-pulse",
+      "order": 6,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_health_off",
+          "kind": "yesno",
+          "label": "Anything off today",
+          "level": "extra",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_health_symptoms",
+          "kind": "library",
+          "label": "Symptoms",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_symptoms",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_health_severity",
+          "kind": "scale",
+          "label": "How bad",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_health_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_meds",
+      "sectionId": "s_routine",
+      "label": "Medicines and vitamins",
+      "icon": "pill",
+      "order": 7,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_meds_took",
+          "kind": "yesno",
+          "label": "Took them today",
+          "level": "extra",
+          "config": {}
+        }
+      ]
+    },
+    {
+      "id": "q_period",
+      "sectionId": "s_routine",
+      "label": "Period",
+      "icon": "droplets",
+      "order": 8,
+      "repeats": false,
+      "special": "cycle",
+      "parts": [
+        {
+          "id": "p_period_flow",
+          "kind": "scale",
+          "label": "Flow",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 5,
+            "step": 1,
+            "display": "stars"
+          }
+        },
+        {
+          "id": "p_period_pain",
+          "kind": "scale",
+          "label": "Pain",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_period_symptoms",
+          "kind": "library",
+          "label": "Symptoms",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_symptoms",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_period_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_state",
+      "sectionId": "s_inner",
+      "label": "How I feel",
+      "icon": "smile",
+      "order": 1,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_state_mood",
+          "kind": "scale",
+          "label": "Mood",
+          "level": "core",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_state_happy",
+          "kind": "scale",
+          "label": "Happiness",
+          "level": "core",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_state_confidence",
+          "kind": "scale",
+          "label": "Confidence",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_state_energy",
+          "kind": "scale",
+          "label": "Energy",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_state_stress",
+          "kind": "scale",
+          "label": "Stress",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_feelings",
+      "sectionId": "s_inner",
+      "label": "Feelings today",
+      "icon": "cloud-sun",
+      "order": 2,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_feelings_words",
+          "kind": "library",
+          "label": "Words that fit",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_feelings",
+            "multi": true,
+            "creatable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_prompts",
+      "sectionId": "s_inner",
+      "label": "Prompts",
+      "icon": "notebook-pen",
+      "order": 3,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_prompt_grateful",
+          "kind": "text",
+          "label": "What I'm grateful for",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_prompt_best",
+          "kind": "text",
+          "label": "Best part of the day",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_prompt_hardest",
+          "kind": "text",
+          "label": "Hardest part of the day",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_prompt_forward",
+          "kind": "text",
+          "label": "Looking forward to tomorrow",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_college",
+      "sectionId": "s_outside",
+      "label": "College",
+      "icon": "graduation-cap",
+      "order": 1,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_college_went",
+          "kind": "yesno",
+          "label": "Went to college",
+          "level": "extra",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_college_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "extra",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_college_rating",
+          "kind": "scale",
+          "label": "How was it",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_college_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_out",
+      "sectionId": "s_outside",
+      "label": "Went out",
+      "icon": "footprints",
+      "order": 2,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_out_went",
+          "kind": "yesno",
+          "label": "Went out",
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_out_when",
+          "kind": "timerange",
+          "label": "When",
+          "level": "extra",
+          "config": {
+            "snapMinutes": 5
+          }
+        },
+        {
+          "id": "p_out_places",
+          "kind": "library",
+          "label": "Where",
+          "level": "core",
+          "config": {
+            "libraryId": "lib_places",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_out_people",
+          "kind": "library",
+          "label": "With whom",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_people",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_out_enjoy",
+          "kind": "scale",
+          "label": "How much I enjoyed it",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_out_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_talked",
+      "sectionId": "s_outside",
+      "label": "People I talked to",
+      "icon": "message-circle",
+      "order": 3,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_talked_people",
+          "kind": "library",
+          "label": "Who",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_people",
+            "multi": true,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_talked_felt",
+          "kind": "scale",
+          "label": "How it felt",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_talked_note",
+          "kind": "text",
+          "label": "Notes",
+          "level": "extra",
+          "config": {
+            "multiline": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_spend",
+      "sectionId": "s_outside",
+      "label": "Spending",
+      "icon": "coins",
+      "order": 4,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_spend_amount",
+          "kind": "number",
+          "label": "Amount",
+          "level": "extra",
+          "config": {
+            "unit": "",
+            "min": 0,
+            "step": 1
+          }
+        },
+        {
+          "id": "p_spend_cat",
+          "kind": "library",
+          "label": "Category",
+          "level": "extra",
+          "config": {
+            "libraryId": "lib_spend_cats",
+            "multi": false,
+            "creatable": true
+          }
+        },
+        {
+          "id": "p_spend_note",
+          "kind": "text",
+          "label": "Note",
+          "level": "extra",
+          "config": {
+            "multiline": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_highlights",
+      "sectionId": "s_outside",
+      "label": "Highlights of the day",
+      "icon": "star",
+      "order": 5,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_highlights_text",
+          "kind": "text",
+          "label": "Freestyle: whatever mattered today",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_weekly",
+      "sectionId": "s_weekly",
+      "label": "This week",
+      "icon": "calendar-days",
+      "order": 1,
+      "repeats": false,
+      "schedule": {
+        "weekdays": [
+          0
+        ]
+      },
+      "parts": [
+        {
+          "id": "p_weekly_well",
+          "kind": "text",
+          "label": "What went well this week",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_weekly_change",
+          "kind": "text",
+          "label": "One thing to change",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_weekly_rating",
+          "kind": "scale",
+          "label": "Week overall",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        }
+      ]
+    },
+    {
+      "id": "q_reflect",
+      "sectionId": "s_chapter",
+      "label": "Who I am right now",
+      "icon": "sprout",
+      "order": 1,
+      "repeats": false,
+      "schedule": {
+        "chapterEnd": true
+      },
+      "parts": [
+        {
+          "id": "p_ref_working",
+          "kind": "text",
+          "label": "What am I working toward right now?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_matters",
+          "kind": "text",
+          "label": "What matters most to me at the moment?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_belief",
+          "kind": "text",
+          "label": "What do I believe about living well?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_becoming",
+          "kind": "text",
+          "label": "Who am I becoming?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_letgo",
+          "kind": "text",
+          "label": "What do I want to let go of?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_proud",
+          "kind": "text",
+          "label": "What am I proudest of this chapter?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_advice",
+          "kind": "text",
+          "label": "What would I tell myself at the start of this chapter?",
+          "level": "extra",
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "id": "p_ref_aligned",
+          "kind": "scale",
+          "label": "How aligned do I feel with my goals?",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        },
+        {
+          "id": "p_ref_satisfied",
+          "kind": "scale",
+          "label": "How satisfied am I with life overall?",
+          "level": "extra",
+          "config": {
+            "min": 0,
+            "max": 10,
+            "step": 0.1,
+            "display": "slider"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,2 +1,15 @@
 node_modules
 dist
+.vercel
+.env.local
+coverage
+
+# Generated PWA assets
+public/pwa-*.png
+public/maskable-icon-*.png
+public/apple-touch-icon-*.png
+public/favicon.ico
+public/icons/pwa-*.png
+public/icons/maskable-icon-*.png
+public/icons/apple-touch-icon-*.png
+public/icons/favicon.ico
