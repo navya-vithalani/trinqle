@@ -71,6 +71,29 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
     })
   }
 
+  // Click on the vertical track to snap start or end time (15-min intervals)
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const clickY = Math.max(0, Math.min(rect.height, e.clientY - rect.top))
+    const pct = clickY / rect.height
+    // Snap to closest 15 min (96 slots of 15 min in 1440 min)
+    const slot15 = Math.round((pct * 1440) / 15) * 15
+    const clickedTime = logicalMinutesToTime(slot15)
+
+    const curStartLog = timeToLogicalMinutes(start)
+    const curEndLog = timeToLogicalMinutes(end)
+    const distToStart = Math.abs(slot15 - curStartLog)
+    const distToEnd = Math.abs(slot15 - curEndLog)
+
+    // Update whichever handle is closer to the tap
+    if (distToStart <= distToEnd) {
+      handleUpdate(clickedTime, end)
+    } else {
+      handleUpdate(start, clickedTime)
+    }
+  }
+
   // Visual vertical track height = 180px
   const TRACK_HEIGHT = 180
   const topPct = Math.min(100, Math.max(0, (startLogMin / 1440) * 100))
@@ -100,13 +123,15 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
         <div className="flex flex-col items-center space-y-1">
           <span className="text-[9px] font-bold text-[var(--color-ink-soft)]">3 am</span>
           <div
+            onClick={handleTrackClick}
             style={{ height: `${TRACK_HEIGHT}px` }}
-            className="w-5 bg-[var(--color-line)] rounded-full relative overflow-hidden border border-[var(--color-line)] shadow-inner"
+            className="w-6 bg-[var(--color-line)] rounded-full relative overflow-hidden border border-[var(--color-line)] shadow-inner cursor-pointer group active:scale-95 transition-transform"
+            title="Click track to snap time (15 min)"
           >
             {/* Midnight tick marker (21 hours from 3am = 87.5% down) */}
             <div
               style={{ top: '87.5%' }}
-              className="absolute left-0 right-0 h-0.5 bg-purple-400 z-10"
+              className="absolute left-0 right-0 h-0.5 bg-purple-400 z-10 pointer-events-none"
               title="Midnight"
             />
             {/* Highlighted active timeframe block */}
@@ -115,7 +140,7 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
                 top: `${topPct}%`,
                 height: `${heightPct}%`,
               }}
-              className="absolute left-0 right-0 bg-gradient-to-b from-[var(--color-accent2)] to-[var(--color-accent)] rounded-sm opacity-90 transition-all shadow-sm"
+              className="absolute left-0 right-0 bg-gradient-to-b from-[var(--color-accent2)] to-[var(--color-accent)] rounded-sm opacity-90 transition-all shadow-sm pointer-events-none"
             />
           </div>
           <span className="text-[9px] font-bold text-[var(--color-ink-soft)]">3 am</span>

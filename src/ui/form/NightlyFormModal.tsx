@@ -377,20 +377,20 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs">
       {/* 4-sided bordered floating modal sheet */}
-      <div className="w-full max-w-md max-h-[92vh] bg-[var(--color-surface)] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
+      <div className="w-full max-w-md max-h-[92vh] bg-(--color-surface) rounded-(--radius-l) border-2 border-(--color-line) flex flex-col overflow-hidden shadow-2xl animate-scale-up">
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[var(--color-line)] bg-[var(--color-bg)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-(--color-line) bg-(--color-bg)">
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-bold text-[var(--color-ink)]">
+            <span className="text-sm font-bold text-(--color-ink)">
               {date}
             </span>
             {isBackfill && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-warn)]/20 text-[var(--color-ink)] font-semibold border border-[var(--color-warn)]">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-(--color-warn)/20 text-(--color-ink) font-semibold border border-(--color-warn)">
                 Backfill
               </span>
             )}
             {isEditing && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent2)]/20 text-[var(--color-ink)] font-semibold border border-[var(--color-accent2)]">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-(--color-accent2)/20 text-(--color-ink) font-semibold border border-(--color-accent2)">
                 Edited
               </span>
             )}
@@ -398,7 +398,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)] active:scale-95"
+            className="p-1 rounded-full text-(--color-ink-soft) hover:bg-(--color-surface) active:scale-95"
           >
             <X size={20} />
           </button>
@@ -410,23 +410,23 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
             /* STEP 1: DAY HEADER */
             <div className="space-y-4">
               <div className="text-center space-y-1">
-                <h2 className="text-base font-bold text-[var(--color-ink)]">
+                <h2 className="text-base font-bold text-(--color-ink)">
                   How was your day?
                 </h2>
-                <p className="text-xs text-[var(--color-ink-soft)]">
+                <p className="text-xs text-(--color-ink-soft)">
                   Fill the day header and pick your logging mode.
                 </p>
               </div>
 
               {/* Mode choice segmented toggle */}
-              <div className="bg-[var(--color-bg)] p-1 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] grid grid-cols-2 gap-1">
+              <div className="bg-(--color-bg) p-1 rounded-(--radius-pill) border-2 border-(--color-line) grid grid-cols-2 gap-1">
                 <button
                   type="button"
                   onClick={() => setMode('full')}
-                  className={`py-2 text-xs font-semibold rounded-[var(--radius-pill)] transition-all ${
+                  className={`py-2 text-xs font-semibold rounded-(--radius-pill) transition-all ${
                     mode === 'full'
-                      ? 'bg-[var(--color-accent)] text-white shadow-xs'
-                      : 'text-[var(--color-ink-soft)]'
+                      ? 'bg-(--color-accent) text-white shadow-xs'
+                      : 'text-(--color-ink-soft)'
                   }`}
                 >
                   Full mode
@@ -434,10 +434,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setMode('quick')}
-                  className={`py-2 text-xs font-semibold rounded-[var(--radius-pill)] transition-all ${
+                  className={`py-2 text-xs font-semibold rounded-(--radius-pill) transition-all ${
                     mode === 'quick'
-                      ? 'bg-[var(--color-accent)] text-white shadow-xs'
-                      : 'text-[var(--color-ink-soft)]'
+                      ? 'bg-(--color-accent) text-white shadow-xs'
+                      : 'text-(--color-ink-soft)'
                   }`}
                 >
                   Quick mode
@@ -447,7 +447,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               {/* Title & One-liner */}
               <div className="sticker-card p-4 space-y-3">
                 <div>
-                  <label className="text-xs font-semibold text-[var(--color-ink)] block mb-1">
+                  <label className="text-xs font-semibold text-(--color-ink) block mb-1">
                     Day title
                   </label>
                   <input
@@ -455,12 +455,12 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     value={title}
                     placeholder="e.g. A productive rainy Tuesday..."
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full text-xs p-2 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                    className="w-full text-xs p-2 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) text-(--color-ink) focus:outline-none focus:border-(--color-accent)"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[var(--color-ink)] block mb-1">
+                  <label className="text-xs font-semibold text-(--color-ink) block mb-1">
                     One-liner summary
                   </label>
                   <input
@@ -468,7 +468,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     value={oneliner}
                     placeholder="e.g. Finished chapter 2 and walked in the park."
                     onChange={(e) => setOneliner(e.target.value)}
-                    className="w-full text-xs p-2 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                    className="w-full text-xs p-2 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) text-(--color-ink) focus:outline-none focus:border-(--color-accent)"
                   />
                 </div>
               </div>
@@ -477,17 +477,17 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               <div className="sticker-card p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold text-[var(--color-ink)] block">
+                    <span className="text-xs font-semibold text-(--color-ink) block">
                       Day sticker
                     </span>
-                    <span className="text-[11px] text-[var(--color-ink-soft)]">
+                    <span className="text-[11px] text-(--color-ink-soft)">
                       Pick a symbol for today
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsStickerPickerOpen(true)}
-                    className="w-12 h-12 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] flex items-center justify-center active:scale-95"
+                    className="w-12 h-12 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) flex items-center justify-center active:scale-95"
                   >
                     {selectedSticker ? (
                       <img
@@ -496,7 +496,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                         className="w-8 h-8 object-contain"
                       />
                     ) : (
-                      <Smile size={20} className="text-[var(--color-accent)]" />
+                      <Smile size={20} className="text-(--color-accent)" />
                     )}
                   </button>
                 </div>
@@ -511,7 +511,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
                 {/* Memorability chips (Star is glowing standalone star icon) */}
                 <div className="space-y-1.5 pt-1">
-                  <span className="text-xs font-semibold text-[var(--color-ink)] block">
+                  <span className="text-xs font-semibold text-(--color-ink) block">
                     Memorability
                   </span>
                   <div className="grid grid-cols-4 gap-1.5 items-center">
@@ -526,10 +526,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           key={m.val}
                           type="button"
                           onClick={() => setMemorability(m.val)}
-                          className={`flex items-center justify-center py-2 px-1 rounded-[var(--radius-pill)] text-[11px] font-semibold border-2 transition-all ${
+                          className={`flex items-center justify-center py-2 px-1 rounded-(--radius-pill) text-[11px] font-semibold border-2 transition-all ${
                             isSelected
-                              ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white shadow-xs'
-                              : 'border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink-soft)]'
+                              ? 'border-(--color-accent) bg-(--color-accent) text-white shadow-xs'
+                              : 'border-(--color-line) bg-(--color-bg) text-(--color-ink-soft)'
                           }`}
                         >
                           <span>{m.label}</span>
@@ -541,10 +541,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setMemorability(3)}
-                      className={`flex items-center justify-center py-2 px-1 rounded-[var(--radius-pill)] border-2 transition-all ${
+                      className={`flex items-center justify-center py-2 px-1 rounded-(--radius-pill) border-2 transition-all ${
                         memorability === 3
-                          ? 'border-[var(--color-star)] bg-[var(--color-star)] text-white shadow-[0_0_12px_rgba(255,184,77,0.8)] scale-105'
-                          : 'border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-star)]'
+                          ? 'border-(--color-star) bg-(--color-star) text-white shadow-[0_0_12px_rgba(255,184,77,0.8) scale-105'
+                          : 'border-(--color-line) bg-(--color-bg) text-(--color-star)'
                       }`}
                       aria-label="Star day"
                     >
@@ -561,7 +561,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep('questions')}
-                className="w-full py-3 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-sm sticker-button"
+                className="w-full py-3 rounded-(--radius-pill) bg-(--color-accent) text-white font-bold text-sm sticker-button"
               >
                 Continue to questions
               </button>
@@ -579,10 +579,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                         onClick={() => setCurrentSectionIndex(idx)}
                         className={`h-2 flex-1 rounded-full cursor-pointer transition-colors ${
                           idx === currentSectionIndex
-                            ? 'bg-[var(--color-accent)]'
+                            ? 'bg-(--color-accent)'
                             : idx < currentSectionIndex
-                              ? 'bg-[var(--color-accent)]/50'
-                              : 'bg-[var(--color-line)]'
+                              ? 'bg-(--color-accent)/50'
+                              : 'bg-(--color-line)'
                         }`}
                       />
                     ))}
@@ -591,12 +591,12 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   {/* Prominent Section Heading */}
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center space-x-2">
-                      <FolderOpen size={18} className="text-[var(--color-accent)]" />
-                      <h3 className="text-base font-extrabold tracking-tight text-[var(--color-ink)]">
+                      <FolderOpen size={18} className="text-(--color-accent)" />
+                      <h3 className="text-base font-extrabold tracking-tight text-(--color-ink)">
                         {currentSection?.name}
                       </h3>
                     </div>
-                    <span className="text-[11px] font-semibold text-[var(--color-ink-soft)] px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)]">
+                    <span className="text-[11px] font-semibold text-(--color-ink-soft) px-2 py-0.5 rounded-full bg-(--color-bg) border border-(--color-line)">
                       {currentSectionIndex + 1} of {sections.length}
                     </span>
                   </div>
@@ -633,7 +633,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     return (
                       <div
                         key={q.id}
-                        className="p-4 rounded-[var(--radius-l)] border-2 border-rose-200 bg-rose-50/50 space-y-3 shadow-xs"
+                        className="p-4 rounded-(--radius-l) border-2 border-rose-200 bg-rose-50/50 space-y-3 shadow-xs"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
@@ -654,7 +654,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           <button
                             type="button"
                             onClick={handleToggleCycle}
-                            className={`w-full py-2 px-3 rounded-[var(--radius-pill)] font-bold text-xs shadow-xs transition-transform active:scale-95 ${
+                            className={`w-full py-2 px-3 rounded-(--radius-pill) font-bold text-xs shadow-xs transition-transform active:scale-95 ${
                               activeCycle
                                 ? 'bg-rose-100 text-rose-800 border border-rose-300'
                                 : 'bg-rose-500 text-white'
@@ -709,16 +709,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     <div
                       key={q.id}
                       className={`sticker-card p-4 space-y-3 ${
-                        hasCorePart ? 'border-l-4 border-l-[var(--color-accent)]' : ''
+                        hasCorePart ? 'border-l-4 border-l-(--color-accent)' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <h4 className="font-bold text-sm text-[var(--color-ink)]">
+                          <h4 className="font-bold text-sm text-(--color-ink)">
                             {q.label}
                           </h4>
                           {hasCorePart && (
-                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] tracking-wider uppercase">
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-(--color-accent)/15 text-(--color-accent) tracking-wider uppercase">
                               Core
                             </span>
                           )}
@@ -728,7 +728,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           <button
                             type="button"
                             onClick={() => addSession(q.id)}
-                            className="flex items-center space-x-1 px-2.5 py-0.5 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)] active:scale-95"
+                            className="flex items-center space-x-1 px-2.5 py-0.5 rounded-(--radius-pill) bg-(--color-bg) border border-(--color-line) text-[10px] font-semibold text-(--color-accent) active:scale-95"
                           >
                             <Plus size={10} />
                             <span>Add session</span>
@@ -761,12 +761,12 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                               key={instance}
                               className={
                                 q.repeats && sessions.length > 1
-                                  ? 'p-3 bg-[var(--color-bg)]/50 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2'
+                                  ? 'p-3 bg-(--color-bg)/50 rounded-(--radius-m) border border-(--color-line) space-y-2'
                                   : 'space-y-2'
                               }
                             >
                               {q.repeats && sessions.length > 1 && (
-                                <div className="flex items-center justify-between text-xs font-semibold text-[var(--color-ink-soft)] pb-1 border-b border-[var(--color-line)]">
+                                <div className="flex items-center justify-between text-xs font-semibold text-(--color-ink-soft) pb-1 border-b border-(--color-line)">
                                   <span>Session {sIdx + 1}</span>
                                   <button
                                     type="button"
@@ -860,7 +860,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setExpandedMore(!expandedMore)}
-                    className="text-xs font-semibold text-[var(--color-accent)] hover:underline inline-flex items-center space-x-1"
+                    className="text-xs font-semibold text-(--color-accent) hover:underline inline-flex items-center space-x-1"
                   >
                     <Sparkles size={13} />
                     <span>{expandedMore ? 'Show fewer questions' : 'More questions (show extras)'}</span>
@@ -872,7 +872,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         </div>
 
         {/* Modal Bottom Action Bar */}
-        <div className="p-3 border-t-2 border-[var(--color-line)] bg-[var(--color-surface)]">
+        <div className="p-3 border-t-2 border-(--color-line) bg-(--color-surface)">
           {step === 'questions' ? (
             <div className="flex items-center space-x-2">
               <button
@@ -884,7 +884,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     setStep('header')
                   }
                 }}
-                className="py-2.5 px-4 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs text-[var(--color-ink)] flex items-center space-x-1 active:scale-95"
+                className="py-2.5 px-4 rounded-(--radius-pill) border-2 border-(--color-line) bg-(--color-surface) font-semibold text-xs text-(--color-ink) flex items-center space-x-1 active:scale-95"
               >
                 <ChevronLeft size={16} />
                 <span>Back</span>
@@ -894,7 +894,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
-                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
+                  className="flex-1 py-2.5 rounded-(--radius-pill) bg-(--color-accent) text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
                 >
                   <span>Next section</span>
                   <ChevronRight size={16} />
@@ -904,7 +904,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   type="button"
                   disabled={!completeness.complete}
                   onClick={handleSave}
-                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button disabled:opacity-50 disabled:shadow-none"
+                  className="flex-1 py-2.5 rounded-(--radius-pill) bg-(--color-accent) text-white font-bold text-xs sticker-button disabled:opacity-50 disabled:shadow-none"
                 >
                   {completeness.complete ? 'Save tonight' : 'Answer required core questions'}
                 </button>

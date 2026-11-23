@@ -106,5 +106,23 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
   const theme = getTheme(themeId)
   const tokens = isDark ? theme.tokens.dark : theme.tokens.light
   applyThemeTokens(tokens, isDark)
+
+  const root = document.documentElement
+  root.setAttribute('data-theme', themeId)
+
+  // Theme-specific tab variations
+  if (themeId === 'clay') {
+    root.style.setProperty('--tab-home-lift', '-6px')
+    root.style.setProperty('--tab-home-radius', '18px')
+    root.style.setProperty(
+      '--tab-home-shadow',
+      'inset 0 2px 4px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(90, 50, 30, 0.2)'
+    )
+  } else {
+    root.style.setProperty('--tab-home-lift', '0px')
+    root.style.setProperty('--tab-home-radius', '9999px')
+    root.style.setProperty('--tab-home-shadow', 'none')
+  }
+
   saveThemePreference(themeId, isDark)
 }

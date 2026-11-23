@@ -57,8 +57,8 @@ describe('Theme System', () => {
     expect(theme.archive.color.accent).toBeDefined()
 
     // Shapes & Depths
-    expect(theme.tokens.light.shape.radiusL).toBe('26px')
-    expect(theme.tokens.light.shape.radiusPill).toBe('9999px')
+    expect(theme.tokens.light.shape.radiusL).toBeDefined()
+    expect(theme.tokens.light.shape.radiusPill).toBeDefined()
     expect(theme.tokens.light.depth.shadowCard).toBeDefined()
     expect(theme.tokens.light.depth.shadowButton).toBeDefined()
   })

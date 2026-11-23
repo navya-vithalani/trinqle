@@ -88,3 +88,22 @@
   transform: translateY(3px);
   box-shadow: var(--shadow-pressed);
 }
+
+/* Claymorphism theme specific squishy interactions and depth */
+[data-theme="clay"] .sticker-card {
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-l);
+}
+
+[data-theme="clay"] .sticker-button {
+  box-shadow: var(--shadow-button);
+  border-radius: var(--radius-pill);
+  transition: transform 180ms cubic-bezier(0.3, 1.8, 0.4, 1), box-shadow 180ms ease-out;
+}
+
+[data-theme="clay"] .sticker-button:active {
+  transform: translateY(4px) scale(0.97);
+  box-shadow: var(--shadow-pressed);
+}
