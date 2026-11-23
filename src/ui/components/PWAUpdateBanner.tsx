@@ -1,27 +1,33 @@
 import React, { useState, useEffect } from 'react'
 import { RefreshCw, Sparkles } from 'lucide-react'
-import { registerSW } from 'virtual:pwa-register'
 
 export const PWAUpdateBanner: React.FC = () => {
   const [needRefresh, setNeedRefresh] = useState(false)
   const [updateFunction, setUpdateFunction] = useState<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
-    try {
-      const updateSW = registerSW({
-        onNeedRefresh() {
-          setNeedRefresh(true)
-        },
-        onOfflineReady() {
-          // Ready offline
-        },
-      })
-      setUpdateFunction(() => async () => {
-        await updateSW(true)
-      })
-    } catch {
-      // Ignore if not supported in dev
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return
     }
+
+    // Dynamic import to prevent crash if virtual module is unavailable in dev/test
+    import('virtual:pwa-register')
+      .then(({ registerSW }) => {
+        const updateSW = registerSW({
+          onNeedRefresh() {
+            setNeedRefresh(true)
+          },
+          onOfflineReady() {
+            // Service worker ready
+          },
+        })
+        setUpdateFunction(() => async () => {
+          await updateSW(true)
+        })
+      })
+      .catch(() => {
+        // PWA virtual module not present in dev mode
+      })
   }, [])
 
   if (!needRefresh) return null

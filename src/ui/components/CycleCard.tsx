@@ -47,9 +47,11 @@ export const CycleCard: React.FC<CycleCardProps> = ({
   cycles.forEach((c) => {
     const end = c.endDate || (c === activeCycle ? todayLogicalDate : c.startDate)
     let cur = c.startDate
-    while (cur <= end) {
+    let safety = 0
+    while (cur <= end && safety < 45) {
       bleedDates.add(cur)
       cur = addDays(cur, 1)
+      safety++
     }
   })
 

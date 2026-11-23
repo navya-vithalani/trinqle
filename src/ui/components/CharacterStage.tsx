@@ -73,19 +73,24 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
       )}
 
       {/* Interactive Character SVG */}
-      <div
-        ref={containerRef}
-        className="w-28 h-28 flex items-center justify-center transition-transform active:scale-95"
-        dangerouslySetInnerHTML={svgContent ? { __html: svgContent } : undefined}
-      >
-        {!svgContent && (
+      {svgContent ? (
+        <div
+          ref={containerRef}
+          className="w-28 h-28 flex items-center justify-center transition-transform active:scale-95"
+          dangerouslySetInnerHTML={{ __html: svgContent }}
+        />
+      ) : (
+        <div
+          ref={containerRef}
+          className="w-28 h-28 flex items-center justify-center transition-transform active:scale-95"
+        >
           <img
             src={character.svg}
             alt={character.name}
             className="w-24 h-24 object-contain"
           />
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="text-center mt-2">
         <p className="text-xs font-bold text-[var(--color-ink)]">
