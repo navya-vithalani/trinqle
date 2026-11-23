@@ -1,0 +1,665 @@
+{
+ "formatVersion": 1,
+ "_doc": {
+  "how": "Greetings are code-owned (not editable in the app). Evaluate every rule; keep matches; take the highest priority tier; pick one line at random (seeded by date + rule id so it is stable for the day). A rule matches when ALL of its conditions are true; empty 'when' always matches. Rules using an alias the form does not define are skipped.",
+  "ops": [
+   "<",
+   "<=",
+   ">",
+   ">=",
+   "==",
+   "!=",
+   "in"
+  ],
+  "tokens": "{{key}} in a line is replaced by the context value of that key.",
+  "builtinKeys": [
+   "daysOfData",
+   "loggingStreak",
+   "missedYesterday",
+   "missedDaysLast3",
+   "filledToday",
+   "formOpen",
+   "windowEnd",
+   "timeOfDay(morning|afternoon|evening|night)",
+   "weekday(0=Sun..6=Sat)",
+   "chapterNumber",
+   "chapterDay",
+   "chapterDaysLeft",
+   "periodActive",
+   "periodDay",
+   "memorableDayLast3",
+   "backupDaysAgo"
+  ],
+  "aliasKeys": "Derived from the form pack 'aliases' over the last 3 days vs baseline: mood3, moodDelta, sleep3Hours, sleepLowDays3 (< 6 h), exerciseDays3, studyDays3, studyMinutes3, water3avg",
+  "rules": "No emojis in any line."
+ },
+ "rules": [
+  {
+   "id": "first-ever",
+   "priority": 10,
+   "when": [
+    {
+     "key": "daysOfData",
+     "op": "==",
+     "value": 0
+    }
+   ],
+   "lines": [
+    "Hi, nice to meet you.",
+    "A fresh start. Let's see what your days look like.",
+    "Welcome. Fill in your first night when the diary opens."
+   ]
+  },
+  {
+   "id": "chapter-first-day",
+   "priority": 9,
+   "when": [
+    {
+     "key": "chapterDay",
+     "op": "==",
+     "value": 1
+    },
+    {
+     "key": "daysOfData",
+     "op": ">",
+     "value": 0
+    }
+   ],
+   "lines": [
+    "New chapter, clean page.",
+    "Day one of a new stretch.",
+    "Chapter {{chapterNumber}} starts now."
+   ]
+  },
+  {
+   "id": "chapter-ending",
+   "priority": 9,
+   "when": [
+    {
+     "key": "chapterDaysLeft",
+     "op": "<=",
+     "value": 2
+    },
+    {
+     "key": "chapterDaysLeft",
+     "op": ">=",
+     "value": 0
+    },
+    {
+     "key": "daysOfData",
+     "op": ">",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "This chapter wraps up soon. Worth thinking of a title.",
+    "Nearly the end of this chapter. Anything to put in the reflections?",
+    "{{chapterDaysLeft}} days left in this chapter."
+   ]
+  },
+  {
+   "id": "sunday-insights",
+   "priority": 8,
+   "when": [
+    {
+     "key": "weekday",
+     "op": "==",
+     "value": 0
+    },
+    {
+     "key": "filledToday",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "lines": [
+    "It's Sunday. Your weekly insights are ready to generate.",
+    "Week done. Want to see what the data noticed?"
+   ]
+  },
+  {
+   "id": "backup-due",
+   "priority": 8,
+   "when": [
+    {
+     "key": "backupDaysAgo",
+     "op": ">=",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "It's been a while since your last backup.",
+    "A backup would be a good idea today.",
+    "Your data lives only on this phone. Back it up soon."
+   ]
+  },
+  {
+   "id": "missed-many",
+   "priority": 8,
+   "when": [
+    {
+     "key": "missedDaysLast3",
+     "op": ">=",
+     "value": 2
+    },
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "A few gaps lately. That's fine. One entry tonight gets things moving.",
+    "Quiet few days. No pressure, just start again tonight.",
+    "Gaps happen. Pick it back up whenever you're ready."
+   ]
+  },
+  {
+   "id": "missed-yesterday",
+   "priority": 8,
+   "when": [
+    {
+     "key": "missedYesterday",
+     "op": "==",
+     "value": true
+    },
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "Yesterday's page is empty. Want to fill it in?",
+    "Nothing saved for yesterday. You can still backfill it.",
+    "A blank day yesterday. Backfill it if you remember."
+   ]
+  },
+  {
+   "id": "learning",
+   "priority": 7,
+   "when": [
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 1
+    },
+    {
+     "key": "daysOfData",
+     "op": "<",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "Still getting to know you.",
+    "Day {{daysOfData}} of learning your rhythm.",
+    "Give me a week and I'll start noticing things.",
+    "What's up? Tell me about today when the diary opens.",
+    "Early days. Every night adds to the picture."
+   ]
+  },
+  {
+   "id": "filled-today",
+   "priority": 7,
+   "when": [
+    {
+     "key": "filledToday",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "lines": [
+    "Tonight's page is saved. Sleep well.",
+    "All done for today.",
+    "Saved. Go rest."
+   ]
+  },
+  {
+   "id": "mood-up",
+   "priority": 7,
+   "when": [
+    {
+     "key": "moodDelta",
+     "op": ">=",
+     "value": 1
+    }
+   ],
+   "lines": [
+    "Your mood has been climbing lately.",
+    "Better days recently. Something is working.",
+    "Mood is up compared to your usual."
+   ]
+  },
+  {
+   "id": "mood-down",
+   "priority": 7,
+   "when": [
+    {
+     "key": "moodDelta",
+     "op": "<=",
+     "value": -1
+    }
+   ],
+   "lines": [
+    "A rougher few days. Be gentle with yourself.",
+    "Mood has been lower than usual. Small things count tonight.",
+    "Not the easiest stretch. You're still showing up."
+   ]
+  },
+  {
+   "id": "mood-low",
+   "priority": 7,
+   "when": [
+    {
+     "key": "mood3",
+     "op": "<",
+     "value": 4
+    }
+   ],
+   "lines": [
+    "Low mood the last few days. Rest counts as progress.",
+    "Heavy days lately. Tonight, just write what's true."
+   ]
+  },
+  {
+   "id": "mood-high",
+   "priority": 7,
+   "when": [
+    {
+     "key": "mood3",
+     "op": ">=",
+     "value": 8
+    }
+   ],
+   "lines": [
+    "Good few days. Notice what helped.",
+    "Things have felt bright lately."
+   ]
+  },
+  {
+   "id": "sleep-short",
+   "priority": 7,
+   "when": [
+    {
+     "key": "sleepLowDays3",
+     "op": ">=",
+     "value": 2
+    }
+   ],
+   "lines": [
+    "Short sleep a couple of times lately. Maybe an earlier night?",
+    "You've been running on little sleep."
+   ]
+  },
+  {
+   "id": "sleep-good",
+   "priority": 6,
+   "when": [
+    {
+     "key": "sleep3Hours",
+     "op": ">=",
+     "value": 7.5
+    }
+   ],
+   "lines": [
+    "Sleep has been solid lately.",
+    "Well rested streak. Your body says thanks."
+   ]
+  },
+  {
+   "id": "exercise-3",
+   "priority": 6,
+   "when": [
+    {
+     "key": "exerciseDays3",
+     "op": "==",
+     "value": 3
+    }
+   ],
+   "lines": [
+    "Moved all three days. Strong.",
+    "Three active days in a row."
+   ]
+  },
+  {
+   "id": "exercise-2",
+   "priority": 6,
+   "when": [
+    {
+     "key": "exerciseDays3",
+     "op": "==",
+     "value": 2
+    }
+   ],
+   "lines": [
+    "Active lately. Nice rhythm.",
+    "Two workouts in three days."
+   ]
+  },
+  {
+   "id": "exercise-none",
+   "priority": 6,
+   "when": [
+    {
+     "key": "exerciseDays3",
+     "op": "==",
+     "value": 0
+    },
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "No workouts in three days. A short walk counts.",
+    "Body's been still lately. Even ten minutes helps."
+   ]
+  },
+  {
+   "id": "study-3",
+   "priority": 6,
+   "when": [
+    {
+     "key": "studyDays3",
+     "op": "==",
+     "value": 3
+    }
+   ],
+   "lines": [
+    "Studied three days running. Steady wins.",
+    "Consistent study days lately."
+   ]
+  },
+  {
+   "id": "study-none",
+   "priority": 6,
+   "when": [
+    {
+     "key": "studyDays3",
+     "op": "==",
+     "value": 0
+    },
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "The books have been quiet lately. No pressure.",
+    "Three days without studying. Easy restart tonight?"
+   ]
+  },
+  {
+   "id": "water-low",
+   "priority": 6,
+   "when": [
+    {
+     "key": "water3avg",
+     "op": "<",
+     "value": 4
+    },
+    {
+     "key": "daysOfData",
+     "op": ">=",
+     "value": 4
+    }
+   ],
+   "lines": [
+    "Water has been low lately. Have a glass now.",
+    "Hydration check: you're due a glass."
+   ]
+  },
+  {
+   "id": "streak-30",
+   "priority": 6,
+   "when": [
+    {
+     "key": "loggingStreak",
+     "op": ">=",
+     "value": 30
+    }
+   ],
+   "lines": [
+    "{{loggingStreak}} nights in a row. That's a real habit."
+   ]
+  },
+  {
+   "id": "streak-14",
+   "priority": 6,
+   "when": [
+    {
+     "key": "loggingStreak",
+     "op": ">=",
+     "value": 14
+    },
+    {
+     "key": "loggingStreak",
+     "op": "<",
+     "value": 30
+    }
+   ],
+   "lines": [
+    "{{loggingStreak}} nights without a gap. Impressive.",
+    "Two weeks and counting."
+   ]
+  },
+  {
+   "id": "streak-7",
+   "priority": 6,
+   "when": [
+    {
+     "key": "loggingStreak",
+     "op": ">=",
+     "value": 7
+    },
+    {
+     "key": "loggingStreak",
+     "op": "<",
+     "value": 14
+    }
+   ],
+   "lines": [
+    "A full week of entries. Nice.",
+    "{{loggingStreak}} nights in a row."
+   ]
+  },
+  {
+   "id": "streak-3",
+   "priority": 5,
+   "when": [
+    {
+     "key": "loggingStreak",
+     "op": ">=",
+     "value": 3
+    },
+    {
+     "key": "loggingStreak",
+     "op": "<",
+     "value": 7
+    }
+   ],
+   "lines": [
+    "{{loggingStreak}} nights in a row. Keep it going.",
+    "Streak at {{loggingStreak}}."
+   ]
+  },
+  {
+   "id": "period-early",
+   "priority": 6,
+   "when": [
+    {
+     "key": "periodActive",
+     "op": "==",
+     "value": true
+    },
+    {
+     "key": "periodDay",
+     "op": "<=",
+     "value": 2
+    }
+   ],
+   "lines": [
+    "Period day {{periodDay}}. Take it easy.",
+    "Day {{periodDay}}. Warm drinks and rest are allowed."
+   ]
+  },
+  {
+   "id": "period-later",
+   "priority": 6,
+   "when": [
+    {
+     "key": "periodActive",
+     "op": "==",
+     "value": true
+    },
+    {
+     "key": "periodDay",
+     "op": ">",
+     "value": 2
+    }
+   ],
+   "lines": [
+    "Day {{periodDay}} of your period. Be kind to yourself.",
+    "Still on your period. Go slow."
+   ]
+  },
+  {
+   "id": "memorable",
+   "priority": 6,
+   "when": [
+    {
+     "key": "memorableDayLast3",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "lines": [
+    "That memorable day is still fresh. Worth a look back later.",
+    "A standout day recently. Nice."
+   ]
+  },
+  {
+   "id": "monday-morning",
+   "priority": 4,
+   "when": [
+    {
+     "key": "weekday",
+     "op": "==",
+     "value": 1
+    },
+    {
+     "key": "timeOfDay",
+     "op": "==",
+     "value": "morning"
+    }
+   ],
+   "lines": [
+    "New week. What's the plan?",
+    "Monday. Fresh page."
+   ]
+  },
+  {
+   "id": "late-open",
+   "priority": 4,
+   "when": [
+    {
+     "key": "timeOfDay",
+     "op": "==",
+     "value": "night"
+    },
+    {
+     "key": "formOpen",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "lines": [
+    "Still up? The diary is open until {{windowEnd}}.",
+    "Late one. The diary is open whenever you are."
+   ]
+  },
+  {
+   "id": "diary-open",
+   "priority": 3,
+   "when": [
+    {
+     "key": "formOpen",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "lines": [
+    "The diary is open. Whenever you're ready.",
+    "Tonight's page is waiting.",
+    "Ready when you are."
+   ]
+  },
+  {
+   "id": "morning",
+   "priority": 3,
+   "when": [
+    {
+     "key": "timeOfDay",
+     "op": "==",
+     "value": "morning"
+    }
+   ],
+   "lines": [
+    "Good morning.",
+    "Morning. A fresh day ahead.",
+    "A slow start is fine."
+   ]
+  },
+  {
+   "id": "afternoon",
+   "priority": 3,
+   "when": [
+    {
+     "key": "timeOfDay",
+     "op": "==",
+     "value": "afternoon"
+    }
+   ],
+   "lines": [
+    "Afternoon check-in.",
+    "Halfway through the day.",
+    "How's today going?"
+   ]
+  },
+  {
+   "id": "evening",
+   "priority": 3,
+   "when": [
+    {
+     "key": "timeOfDay",
+     "op": "==",
+     "value": "evening"
+    },
+    {
+     "key": "formOpen",
+     "op": "==",
+     "value": false
+    }
+   ],
+   "lines": [
+    "Evening. The diary opens soon.",
+    "Winding down soon?",
+    "Almost time to write the day down."
+   ]
+  },
+  {
+   "id": "fallback",
+   "priority": 1,
+   "when": [],
+   "lines": [
+    "Hey there.",
+    "Welcome back.",
+    "What's up?",
+    "Hello again.",
+    "Good to see you."
+   ]
+  }
+ ]
+}

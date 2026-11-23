@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "id": "cat-white",
+  "name": "White fluffy cat",
+  "svg": "character.svg",
+  "view": "front",
+  "roles": {
+    "body": ["body"],
+    "head": ["head"],
+    "tail": ["tail"],
+    "ears": ["ear-left", "ear-right"],
+    "eyes": ["eye-left", "eye-right"],
+    "mouth": ["mouth"],
+    "limbs": [ { "role": "leg", "layers": ["leg-left", "leg-right"], "gait": "biped" } ]
+  },
+  "clips": {
+    "idle": ["blink", "breathe", "tail-sway", "ear-twitch", "look-around"],
+    "actions": ["bounce", "spin", "dance", "wiggle", "sleep", "sit"],
+    "overrides": { "walk": { "fallback": "waddle" } }
+  },
+  "reactions": {
+    "tap": ["bounce", "spin", "wiggle"],
+    "saved": "bounce",
+    "locked": "sleep",
+    "chapterClosed": "dance"
+  }
+}
