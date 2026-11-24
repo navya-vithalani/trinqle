@@ -55,6 +55,7 @@ export interface ScaleConfig {
   max: number
   step: number
   display: 'stars' | 'slider'
+  icon?: string
 }
 
 export interface NumberConfig {
@@ -135,6 +136,7 @@ export interface TimeRangeValue {
   start: string // HH:mm
   end: string // HH:mm
   crossesMidnight: boolean
+  startDayOffset?: number // 0 = current day, -1 = wrapped into previous evening
 }
 
 export type AnswerValue =

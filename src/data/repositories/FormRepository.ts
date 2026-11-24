@@ -105,6 +105,7 @@ export class FormRepository {
   async createQuestion(params: {
     sectionId: string
     label: string
+    icon?: string
     order?: number
     repeats?: boolean
     parentId?: string
@@ -124,6 +125,7 @@ export class FormRepository {
       id: generateUUIDv7(now),
       sectionId: params.sectionId,
       label: params.label,
+      icon: params.icon,
       order,
       repeats: params.repeats ?? false,
       parentId: params.parentId,

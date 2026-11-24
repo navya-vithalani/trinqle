@@ -9,8 +9,19 @@ import {
   Star,
   Plus,
   Trash2,
-  Droplet,
+  Droplets,
   FolderOpen,
+  Pencil,
+  Clock,
+  BookOpen,
+  Heart,
+  Activity,
+  FileText,
+  Coffee,
+  Award,
+  Zap,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import type {
   Section,
@@ -45,11 +56,31 @@ import { TimeRangeWidget } from '../widgets/TimeRangeWidget'
 import { LibraryWidget } from '../widgets/LibraryWidget'
 import { StickerPickerModal } from '../dialogs/StickerPickerModal'
 
+const QUESTION_ICONS: Record<
+  string,
+  React.ComponentType<{ size?: number; className?: string }>
+> = {
+  Sparkles,
+  Clock,
+  BookOpen,
+  Heart,
+  Smile,
+  Activity,
+  FileText,
+  Coffee,
+  Award,
+  Zap,
+  Sun,
+  Moon,
+  Droplets,
+}
+
 interface NightlyFormModalProps {
   isOpen: boolean
   date: string // Logical date YYYY-MM-DD
   chapterId: string
   todayLogicalDate: string
+  readOnly?: boolean
   onClose: () => void
   onSaved: () => void
 }
@@ -59,14 +90,15 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   date,
   chapterId,
   todayLogicalDate,
+  readOnly = false,
   onClose,
   onSaved,
 }) => {
   const [step, setStep] = useState<'header' | 'questions'>('header')
-  // Default to full mode per request
   const [mode, setMode] = useState<EntryMode>('full')
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [expandedMore, setExpandedMore] = useState(false)
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(readOnly)
 
   // Day header state
   const [title, setTitle] = useState('')
@@ -88,14 +120,19 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   const [answersMap, setAnswersMap] = useState<Record<string, Record<number, AnswerValue>>>({})
   const [repeatingSessions, setRepeatingSessions] = useState<Record<string, number[]>>({}) // questionId -> instance numbers
 
-  // Existing day check (editing mode)
-  const [isEditing, setIsEditing] = useState(false)
+  // Existing day check & change diff tracking
+  const [existingDayRecord, setExistingDayRecord] = useState<Day | null>(null)
+  const [initialSnapshotJson, setInitialSnapshotJson] = useState<string>('')
 
   const isBackfill = date < todayLogicalDate
 
   const formRepo = useMemo(() => new FormRepository(), [])
   const dayRepo = useMemo(() => new DayRepository(), [])
   const cycleRepo = useMemo(() => new CycleRepository(), [])
+
+  useEffect(() => {
+    setIsReadOnly(readOnly)
+  }, [readOnly])
 
   // 1. Load schema and existing entry or draft
   useEffect(() => {
@@ -109,9 +146,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         cycleRepo.getActiveCycle(),
       ])
 
-      // Filter sections:
-      // - chapterEnd sections are strictly for chapter wrap-up and NEVER in nightly form!
-      // - weekly section is only included if today is Sunday (weekday 0)
       const [y, m, d] = date.split('-').map(Number)
       const dayOfWeek = new Date(y, m - 1, d).getDay()
 
@@ -121,7 +155,6 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         return true
       })
 
-      // Filter questions belonging to active nightly sections
       const nightlySectionIds = new Set(nightlySections.map((s) => s.id))
       const nightlyQuestions = allQs.filter((q) => nightlySectionIds.has(q.sectionId))
 
@@ -130,16 +163,14 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       setParts(allParts)
       setActiveCycle(cycle || null)
 
-      // Initialize default session 0 for repeating questions
       const initSessions: Record<string, number[]> = {}
       nightlyQuestions.forEach((q) => {
         if (q.repeats) initSessions[q.id] = [0]
       })
 
-      // Check if existing saved day exists
       const existingDay = await dayRepo.getDay(date)
       if (existingDay) {
-        setIsEditing(true)
+        setExistingDayRecord(existingDay)
         setTitle(existingDay.title || '')
         setOneliner(existingDay.oneliner || '')
         setStickerId(existingDay.stickerId)
@@ -166,8 +197,20 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           sessionsRecord[qId] = Array.from(insts).sort((a, b) => a - b)
         })
         setRepeatingSessions((prev) => ({ ...prev, ...sessionsRecord }))
+
+        // Save baseline snapshot to detect actual edits
+        setInitialSnapshotJson(
+          JSON.stringify({
+            answers: loadedAnswers,
+            title: existingDay.title || '',
+            oneliner: existingDay.oneliner || '',
+            rating: existingDay.overallRating,
+            memorability: existingDay.memorability,
+          })
+        )
       } else {
-        setIsEditing(false)
+        setExistingDayRecord(null)
+        setInitialSnapshotJson('')
         const draftKey = `trinqle_draft_${date}`
         const savedDraft = localStorage.getItem(draftKey)
         if (savedDraft) {
@@ -195,9 +238,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     loadData()
   }, [isOpen, date, formRepo, dayRepo, cycleRepo])
 
-  // 2. Draft autosaving
+  // 2. Draft autosaving (only when not editing an existing record)
   useEffect(() => {
-    if (!isOpen || isEditing) return
+    if (!isOpen || existingDayRecord || isReadOnly) return
     const draftKey = `trinqle_draft_${date}`
     const draft = {
       title,
@@ -210,7 +253,20 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       sessions: repeatingSessions,
     }
     localStorage.setItem(draftKey, JSON.stringify(draft))
-  }, [isOpen, isEditing, date, title, oneliner, stickerId, overallRating, memorability, mode, answersMap, repeatingSessions])
+  }, [
+    isOpen,
+    existingDayRecord,
+    isReadOnly,
+    date,
+    title,
+    oneliner,
+    stickerId,
+    overallRating,
+    memorability,
+    mode,
+    answersMap,
+    repeatingSessions,
+  ])
 
   if (!isOpen) return null
 
@@ -220,13 +276,13 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     const part = parts.find((p) => p.id === partId)
     if (!part) return
     Object.entries(instMap).forEach(([instStr, val]) => {
-      const instance = parseInt(instStr, 10)
+      const inst = parseInt(instStr, 10)
       currentAnswerArray.push({
-        id: `ans_${partId}_${instance}`,
+        id: generateUUIDv7(),
         date,
         questionId: part.questionId,
         partId,
-        instance,
+        instance: inst,
         value: val,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -234,110 +290,140 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     })
   })
 
-  // Completeness check
-  const snapshot = { sections, questions, parts }
+  // Completeness verification
   const completeness = checkCompleteness(
-    snapshot,
+    { sections, questions, parts },
     date,
     mode,
     currentAnswerArray,
-    !!activeCycle
+    Boolean(activeCycle)
   )
 
+  const timeAnswers = currentAnswerArray
+    .filter((a) => a.value && typeof a.value === 'object' && 'start' in a.value && 'end' in a.value)
+    .map((a) => {
+      const val = a.value as { start: string; end: string; crossesMidnight?: boolean }
+      return {
+        start: val.start,
+        end: val.end,
+        crossesMidnight: Boolean(val.crossesMidnight),
+      }
+    })
+  const hasTimeOverlap = checkOverlappingTimeRanges(timeAnswers)
+
   const handleAnswerChange = (partId: string, instance: number, value: AnswerValue) => {
-    setAnswersMap((prev) => {
-      const partAnswers = prev[partId] ? { ...prev[partId] } : {}
-      partAnswers[instance] = value
-      return { ...prev, [partId]: partAnswers }
+    if (isReadOnly) return
+    setAnswersMap((prev) => ({
+      ...prev,
+      [partId]: {
+        ...(prev[partId] || {}),
+        [instance]: value,
+      },
+    }))
+  }
+
+  const addSession = (qId: string) => {
+    if (isReadOnly) return
+    setRepeatingSessions((prev) => {
+      const existing = prev[qId] || [0]
+      const nextInst = existing.length > 0 ? Math.max(...existing) + 1 : 0
+      return { ...prev, [qId]: [...existing, nextInst] }
     })
   }
 
-  const addSession = (questionId: string) => {
+  const removeSession = (qId: string, instance: number) => {
+    if (isReadOnly) return
     setRepeatingSessions((prev) => {
-      const list = prev[questionId] || [0]
-      const nextInst = list.length > 0 ? Math.max(...list) + 1 : 0
-      return { ...prev, [questionId]: [...list, nextInst] }
-    })
-  }
-
-  const removeSession = (questionId: string, instance: number) => {
-    setRepeatingSessions((prev) => {
-      const list = (prev[questionId] || [0]).filter((i) => i !== instance)
-      return { ...prev, [questionId]: list.length > 0 ? list : [0] }
+      const existing = prev[qId] || [0]
+      if (existing.length <= 1) return prev
+      return { ...prev, [qId]: existing.filter((i) => i !== instance) }
     })
 
-    const qParts = parts.filter((p) => p.questionId === questionId)
     setAnswersMap((prev) => {
-      const nextMap = { ...prev }
+      const updated = { ...prev }
+      const qParts = parts.filter((p) => p.questionId === qId)
       qParts.forEach((p) => {
-        if (nextMap[p.id]) {
-          const instMap = { ...nextMap[p.id] }
-          delete instMap[instance]
-          nextMap[p.id] = instMap
+        if (updated[p.id]) {
+          const nextInstMap = { ...updated[p.id] }
+          delete nextInstMap[instance]
+          updated[p.id] = nextInstMap
         }
       })
-      return nextMap
+      return updated
     })
   }
 
   const handleToggleCycle = async () => {
     if (activeCycle) {
-      // End period
-      await cycleRepo.endCycle(activeCycle.id, date)
+      await cycleRepo.endCycle(activeCycle.id, todayLogicalDate)
       setActiveCycle(null)
     } else {
-      // Start period
-      const newCycle = await cycleRepo.startCycle(date)
-      setActiveCycle(newCycle)
+      const newC = await cycleRepo.startCycle(todayLogicalDate)
+      setActiveCycle(newC)
     }
   }
 
   const handleSave = async () => {
-    if (!completeness.complete) return
+    if (isReadOnly) {
+      onClose()
+      return
+    }
 
+    const now = Date.now()
     const finalAnswers: Answer[] = []
     const finalLinks: AnswerLink[] = []
-    const now = Date.now()
 
     Object.entries(answersMap).forEach(([partId, instMap]) => {
       const part = parts.find((p) => p.id === partId)
       if (!part) return
 
       Object.entries(instMap).forEach(([instStr, val]) => {
-        const instance = parseInt(instStr, 10)
-        if (val === undefined || val === null || val === '') return
+        const inst = parseInt(instStr, 10)
+        if (val === undefined || val === null) return
 
-        const answerId = generateUUIDv7(now)
+        const ansId = generateUUIDv7(now)
         finalAnswers.push({
-          id: answerId,
+          id: ansId,
           date,
           questionId: part.questionId,
           partId,
-          instance,
+          instance: inst,
           value: val,
           createdAt: now,
           updatedAt: now,
         })
 
-        if (part.kind === 'library' && (typeof val === 'string' || Array.isArray(val))) {
-          const config = part.config as { libraryId?: string }
-          const libId = config.libraryId || ''
-          const itemNames = Array.isArray(val) ? val : [val]
-
-          itemNames.forEach((name) => {
-            finalLinks.push({
-              id: generateUUIDv7(now),
-              answerId,
-              date,
-              libraryId: libId,
-              itemId: name,
-              createdAt: now,
-              updatedAt: now,
-            })
+        if (part.kind === 'library' && Array.isArray(val)) {
+          const libId = (part.config as any)?.libraryId || ''
+          val.forEach((itemId) => {
+            if (typeof itemId === 'string') {
+              finalLinks.push({
+                id: generateUUIDv7(now),
+                answerId: ansId,
+                date,
+                libraryId: libId,
+                itemId,
+                createdAt: now,
+                updatedAt: now,
+              })
+            }
           })
         }
       })
     })
+
+    // Check if actual diffs occurred
+    const currentSnapshotJson = JSON.stringify({
+      answers: answersMap,
+      title: title.trim(),
+      oneliner: oneliner.trim(),
+      rating: overallRating,
+      memorability,
+    })
+    const hasActualChanges =
+      Boolean(existingDayRecord) &&
+      initialSnapshotJson !== '' &&
+      initialSnapshotJson !== currentSnapshotJson
 
     const dayRecord: Day = {
       date,
@@ -350,8 +436,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       mode,
       expandedMore,
       backfilled: isBackfill,
-      filledAt: now,
-      editedAt: isEditing ? now : undefined,
+      filledAt: existingDayRecord ? existingDayRecord.filledAt : now,
+      editedAt: hasActualChanges ? now : existingDayRecord?.editedAt,
       tz: getLocalTimeZone(),
     }
 
@@ -376,32 +462,51 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs">
-      {/* 4-sided bordered floating modal sheet */}
-      <div className="w-full max-w-md max-h-[92vh] bg-(--color-surface) rounded-(--radius-l) border-2 border-(--color-line) flex flex-col overflow-hidden shadow-2xl animate-scale-up">
+      <div className="w-full max-w-md max-h-[92vh] bg-[var(--color-surface)] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-(--color-line) bg-(--color-bg)">
+        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[var(--color-line)] bg-[var(--color-bg)]">
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-bold text-(--color-ink)">
-              {date}
-            </span>
+            <span className="text-sm font-bold text-[var(--color-ink)]">{date}</span>
             {isBackfill && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-(--color-warn)/20 text-(--color-ink) font-semibold border border-(--color-warn)">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 font-bold border border-amber-400">
                 Backfill
               </span>
             )}
-            {isEditing && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-(--color-accent2)/20 text-(--color-ink) font-semibold border border-(--color-accent2)">
+            {/* Edited tag: ONLY show if previously modified and saved (Item 6) */}
+            {existingDayRecord?.editedAt && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent2)]/20 text-[var(--color-ink)] font-bold border border-[var(--color-accent2)]">
                 Edited
               </span>
             )}
+            {isReadOnly && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-line)] text-[var(--color-ink-soft)] font-semibold">
+                Browse Mode
+              </span>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-full text-(--color-ink-soft) hover:bg-(--color-surface) active:scale-95"
-          >
-            <X size={20} />
-          </button>
+
+          <div className="flex items-center space-x-1.5">
+            {/* Small Edit button to switch from Browse into Edit Mode (Item 5) */}
+            {isReadOnly && (
+              <button
+                type="button"
+                onClick={() => setIsReadOnly(false)}
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[11px] font-bold text-[var(--color-accent)] hover:border-[var(--color-accent)] active:scale-95 shadow-xs"
+                title="Switch to Edit Mode"
+              >
+                <Pencil size={11} />
+                <span>Edit</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)] active:scale-95"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Content */}
@@ -410,146 +515,135 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
             /* STEP 1: DAY HEADER */
             <div className="space-y-4">
               <div className="text-center space-y-1">
-                <h2 className="text-base font-bold text-(--color-ink)">
-                  How was your day?
+                <h2 className="text-base font-bold text-[var(--color-ink)]">
+                  {isReadOnly ? 'Day Summary' : 'How was your day?'}
                 </h2>
-                <p className="text-xs text-(--color-ink-soft)">
-                  Fill the day header and pick your logging mode.
+                <p className="text-xs text-[var(--color-ink-soft)]">
+                  {isReadOnly
+                    ? 'Reviewing recorded journal entry for this date.'
+                    : 'Fill the day header and pick your logging mode.'}
                 </p>
               </div>
 
-              {/* Mode choice segmented toggle */}
-              <div className="bg-(--color-bg) p-1 rounded-(--radius-pill) border-2 border-(--color-line) grid grid-cols-2 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setMode('full')}
-                  className={`py-2 text-xs font-semibold rounded-(--radius-pill) transition-all ${
-                    mode === 'full'
-                      ? 'bg-(--color-accent) text-white shadow-xs'
-                      : 'text-(--color-ink-soft)'
-                  }`}
-                >
-                  Full mode
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('quick')}
-                  className={`py-2 text-xs font-semibold rounded-(--radius-pill) transition-all ${
-                    mode === 'quick'
-                      ? 'bg-(--color-accent) text-white shadow-xs'
-                      : 'text-(--color-ink-soft)'
-                  }`}
-                >
-                  Quick mode
-                </button>
-              </div>
-
-              {/* Title & One-liner */}
-              <div className="sticker-card p-4 space-y-3">
-                <div>
-                  <label className="text-xs font-semibold text-(--color-ink) block mb-1">
-                    Day title
+              {/* Title & One-liner Input */}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
+                    Day Headline
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g. Rainy cafe morning & deep focus"
                     value={title}
-                    placeholder="e.g. A productive rainy Tuesday..."
+                    disabled={isReadOnly}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full text-xs p-2 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) text-(--color-ink) focus:outline-none focus:border-(--color-accent)"
+                    className="w-full text-xs p-2.5 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] font-semibold text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-75"
                   />
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-(--color-ink) block mb-1">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
                     One-liner summary
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g. Shipped Phase 4 and made matcha tea"
                     value={oneliner}
-                    placeholder="e.g. Finished chapter 2 and walked in the park."
+                    disabled={isReadOnly}
                     onChange={(e) => setOneliner(e.target.value)}
-                    className="w-full text-xs p-2 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) text-(--color-ink) focus:outline-none focus:border-(--color-accent)"
+                    className="w-full text-xs p-2.5 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-75"
                   />
                 </div>
               </div>
 
-              {/* Sticker, Rating & Memorability */}
-              <div className="sticker-card p-4 space-y-4">
+              {/* Overall Rating (1 to 10 slider) */}
+              <div className="p-3 bg-[var(--color-bg)] rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-(--color-ink) block">
-                      Day sticker
-                    </span>
-                    <span className="text-[11px] text-(--color-ink-soft)">
-                      Pick a symbol for today
-                    </span>
-                  </div>
+                  <span className="text-xs font-semibold text-[var(--color-ink)]">
+                    Day Rating
+                  </span>
+                  <span className="text-xs font-bold text-[var(--color-accent)]">
+                    {overallRating.toFixed(1)} / 10
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  value={overallRating}
+                  disabled={isReadOnly}
+                  onChange={(e) => setOverallRating(parseFloat(e.target.value))}
+                  className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)] bg-[var(--color-line)] disabled:opacity-75"
+                />
+              </div>
+
+              {/* Sticker & Memorability Picker */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
+                    Daily Sticker
+                  </label>
                   <button
                     type="button"
+                    disabled={isReadOnly}
                     onClick={() => setIsStickerPickerOpen(true)}
-                    className="w-12 h-12 rounded-(--radius-m) border-2 border-(--color-line) bg-(--color-bg) flex items-center justify-center active:scale-95"
+                    className="w-full h-12 flex items-center justify-center rounded-[var(--radius-m)] border-2 border-dashed border-[var(--color-line)] bg-[var(--color-bg)] text-xs text-[var(--color-ink-soft)] hover:border-[var(--color-accent)] disabled:opacity-75"
                   >
                     {selectedSticker ? (
-                      <img
-                        src={selectedSticker.url}
-                        alt={selectedSticker.name}
-                        className="w-8 h-8 object-contain"
-                      />
+                      <span className="text-sm font-bold text-[var(--color-accent)]">
+                        {selectedSticker.name}
+                      </span>
                     ) : (
-                      <Smile size={20} className="text-(--color-accent)" />
+                      <div className="flex items-center space-x-1">
+                        <Smile size={16} />
+                        <span>Pick sticker</span>
+                      </div>
                     )}
                   </button>
                 </div>
 
-                {/* Overall Rating Slider with flowing gradient */}
-                <ScaleWidget
-                  label="Overall day rating"
-                  value={overallRating}
-                  config={{ min: 0, max: 10, step: 0.5, display: 'slider' }}
-                  onChange={setOverallRating}
-                />
-
-                {/* Memorability chips (Star is glowing standalone star icon) */}
-                <div className="space-y-1.5 pt-1">
-                  <span className="text-xs font-semibold text-(--color-ink) block">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
                     Memorability
-                  </span>
-                  <div className="grid grid-cols-4 gap-1.5 items-center">
-                    {[
-                      { val: 0 as Memorability, label: 'Normal' },
-                      { val: 1 as Memorability, label: 'Notable' },
-                      { val: 2 as Memorability, label: 'Outstanding' },
-                    ].map((m) => {
-                      const isSelected = memorability === m.val
-                      return (
-                        <button
-                          key={m.val}
-                          type="button"
-                          onClick={() => setMemorability(m.val)}
-                          className={`flex items-center justify-center py-2 px-1 rounded-(--radius-pill) text-[11px] font-semibold border-2 transition-all ${
-                            isSelected
-                              ? 'border-(--color-accent) bg-(--color-accent) text-white shadow-xs'
-                              : 'border-(--color-line) bg-(--color-bg) text-(--color-ink-soft)'
-                          }`}
-                        >
-                          <span>{m.label}</span>
-                        </button>
-                      )
-                    })}
-
-                    {/* Glowing standalone star chip */}
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 h-12">
                     <button
                       type="button"
-                      onClick={() => setMemorability(3)}
-                      className={`flex items-center justify-center py-2 px-1 rounded-(--radius-pill) border-2 transition-all ${
-                        memorability === 3
-                          ? 'border-(--color-star) bg-(--color-star) text-white shadow-[0_0_12px_rgba(255,184,77,0.8) scale-105'
-                          : 'border-(--color-line) bg-(--color-bg) text-(--color-star)'
+                      disabled={isReadOnly}
+                      onClick={() => setMemorability(0)}
+                      className={`rounded-[var(--radius-m)] border text-[11px] font-semibold transition-all ${
+                        memorability === 0
+                          ? 'bg-[var(--color-accent)] text-white border-transparent'
+                          : 'bg-[var(--color-bg)] border-[var(--color-line)] text-[var(--color-ink-soft)]'
                       }`}
-                      aria-label="Star day"
+                    >
+                      Normal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isReadOnly}
+                      onClick={() => setMemorability(2)}
+                      className={`rounded-[var(--radius-m)] border text-[11px] font-semibold transition-all ${
+                        memorability === 2
+                          ? 'bg-indigo-600 text-white border-transparent'
+                          : 'bg-[var(--color-bg)] border-[var(--color-line)] text-[var(--color-ink-soft)]'
+                      }`}
+                    >
+                      Notable
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isReadOnly}
+                      onClick={() => setMemorability(3)}
+                      className={`rounded-[var(--radius-m)] border text-[11px] font-semibold flex items-center justify-center transition-all ${
+                        memorability === 3
+                          ? 'bg-amber-500 text-white border-transparent'
+                          : 'bg-[var(--color-bg)] border-[var(--color-line)] text-[var(--color-ink-soft)]'
+                      }`}
                     >
                       <Star
-                        size={18}
+                        size={16}
                         className={memorability === 3 ? 'fill-white text-white drop-shadow' : 'fill-current'}
                       />
                     </button>
@@ -561,7 +655,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep('questions')}
-                className="w-full py-3 rounded-(--radius-pill) bg-(--color-accent) text-white font-bold text-sm sticker-button"
+                className="w-full py-3 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-sm sticker-button"
               >
                 Continue to questions
               </button>
@@ -569,7 +663,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           ) : (
             /* STEP 2: QUESTIONS */
             <div className="space-y-4">
-              {/* Full mode prominent section heading and progress bar */}
+              {/* Full mode section heading and question icons (Item 10) */}
               {mode === 'full' && sections.length > 0 && (
                 <div className="space-y-2 pb-2">
                   <div className="flex items-center space-x-1">
@@ -579,24 +673,45 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                         onClick={() => setCurrentSectionIndex(idx)}
                         className={`h-2 flex-1 rounded-full cursor-pointer transition-colors ${
                           idx === currentSectionIndex
-                            ? 'bg-(--color-accent)'
+                            ? 'bg-[var(--color-accent)]'
                             : idx < currentSectionIndex
-                              ? 'bg-(--color-accent)/50'
-                              : 'bg-(--color-line)'
+                              ? 'bg-[var(--color-accent)]/50'
+                              : 'bg-[var(--color-line)]'
                         }`}
                       />
                     ))}
                   </div>
 
-                  {/* Prominent Section Heading */}
+                  {/* Section Heading & Question Icon Navigation (Item 10) */}
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center space-x-2">
-                      <FolderOpen size={18} className="text-(--color-accent)" />
-                      <h3 className="text-base font-extrabold tracking-tight text-(--color-ink)">
+                      <FolderOpen size={16} className="text-[var(--color-accent)]" />
+                      <h3 className="text-sm font-extrabold text-[var(--color-ink)]">
                         {currentSection?.name}
                       </h3>
+                      {/* Question icon shortcuts for smooth scrolling (Item 10) */}
+                      <div className="flex items-center space-x-1 pl-1">
+                        {currentSectionQuestions.map((sq) => {
+                          const IconCmp = (sq.icon && QUESTION_ICONS[sq.icon]) || Sparkles
+                          return (
+                            <button
+                              key={sq.id}
+                              type="button"
+                              onClick={() => {
+                                document
+                                  .getElementById(`question-${sq.id}`)
+                                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              }}
+                              title={sq.label}
+                              className="w-5 h-5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)] flex items-center justify-center hover:scale-110 active:scale-90 transition-transform"
+                            >
+                              <IconCmp size={10} />
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <span className="text-[11px] font-semibold text-(--color-ink-soft) px-2 py-0.5 rounded-full bg-(--color-bg) border border-(--color-line)">
+                    <span className="text-[10px] font-semibold text-[var(--color-ink-soft)] px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)]">
                       {currentSectionIndex + 1} of {sections.length}
                     </span>
                   </div>
@@ -611,127 +726,121 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   const gateValue = answersMap[gatePart?.id || '']?.[0]
                   const isGateOn = gateValue === true
 
-                  const sessions = q.repeats
-                    ? repeatingSessions[q.id] || [0]
-                    : [0]
-
+                  const sessions = q.repeats ? repeatingSessions[q.id] || [0] : [0]
                   const isCycleQuestion = q.special === 'cycle'
 
-                  // Check overlapping time ranges
-                  const timeParts = qParts.filter((p) => p.kind === 'timerange')
-                  const timeAnswers = timeParts.flatMap((p) => {
-                    return sessions.map((inst) => answersMap[p.id]?.[inst]).filter(Boolean) as {
-                      start: string
-                      end: string
-                      crossesMidnight: boolean
-                    }[]
-                  })
-                  const hasOverlap = checkOverlappingTimeRanges(timeAnswers)
+                  // Menstrual cycle section strict visibility (Section 6, 3B):
+                  // Hide Period question if activeCycle is NOT active
+                  if (isCycleQuestion && !activeCycle) {
+                    return null
+                  }
 
-                  // Special Period / Cycle block styling
-                  if (isCycleQuestion) {
+                  const hasOverlap =
+                    hasTimeOverlap &&
+                    parts.some((p) => p.questionId === q.id && p.kind === 'timerange')
+
+                  // Special Period question when active
+                  if (isCycleQuestion && activeCycle) {
                     return (
                       <div
+                        id={`question-${q.id}`}
                         key={q.id}
-                        className="p-4 rounded-(--radius-l) border-2 border-rose-200 bg-rose-50/50 space-y-3 shadow-xs"
+                        className="sticker-card p-4 space-y-3 border-2 border-rose-300 bg-rose-50/40"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <Droplet size={18} className="text-rose-500 fill-rose-500" />
-                            <h4 className="font-bold text-sm text-rose-950">
-                              {q.label}
-                            </h4>
+                            <Droplets size={16} className="text-rose-600" />
+                            <h4 className="font-bold text-sm text-rose-900">{q.label}</h4>
                           </div>
-                          {activeCycle && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-200 text-rose-800">
-                              Period active
-                            </span>
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={handleToggleCycle}
+                              className="py-1 px-3 rounded-full bg-rose-200 text-rose-900 border border-rose-300 font-bold text-[11px] active:scale-95"
+                            >
+                              End Period
+                            </button>
                           )}
                         </div>
 
-                        {/* Start / End Period Button */}
-                        <div className="pt-1">
-                          <button
-                            type="button"
-                            onClick={handleToggleCycle}
-                            className={`w-full py-2 px-3 rounded-(--radius-pill) font-bold text-xs shadow-xs transition-transform active:scale-95 ${
-                              activeCycle
-                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                : 'bg-rose-500 text-white'
-                            }`}
-                          >
-                            {activeCycle ? 'End period today' : 'Start period today'}
-                          </button>
+                        {/* Daily period symptoms & flow */}
+                        <div className="space-y-2 pt-2 border-t border-rose-200">
+                          {qParts.map((p) => {
+                            const val = answersMap[p.id]?.[0]
+                            return (
+                              <div key={p.id}>
+                                {p.kind === 'scale' && (
+                                  <ScaleWidget
+                                    label={p.label}
+                                    value={val as number}
+                                    disabled={isReadOnly}
+                                    config={p.config as any}
+                                    onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                  />
+                                )}
+                                {p.kind === 'library' && (
+                                  <LibraryWidget
+                                    label={p.label}
+                                    value={val as any}
+                                    disabled={isReadOnly}
+                                    config={p.config as any}
+                                    onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                  />
+                                )}
+                                {p.kind === 'text' && (
+                                  <TextWidget
+                                    label={p.label}
+                                    value={(val as string) ?? ''}
+                                    disabled={isReadOnly}
+                                    onChange={(v) => handleAnswerChange(p.id, 0, v)}
+                                  />
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
-
-                        {/* Daily period symptoms & flow if active */}
-                        {activeCycle && (
-                          <div className="space-y-2 pt-2 border-t border-rose-200">
-                            {qParts.map((p) => {
-                              const val = answersMap[p.id]?.[0]
-                              return (
-                                <div key={p.id}>
-                                  {p.kind === 'scale' && (
-                                    <ScaleWidget
-                                      label={p.label}
-                                      value={val as number}
-                                      config={p.config as any}
-                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
-                                    />
-                                  )}
-                                  {p.kind === 'library' && (
-                                    <LibraryWidget
-                                      label={p.label}
-                                      value={val as any}
-                                      config={p.config as any}
-                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
-                                    />
-                                  )}
-                                  {p.kind === 'text' && (
-                                    <TextWidget
-                                      label={p.label}
-                                      value={(val as string) ?? ''}
-                                      onChange={(v) => handleAnswerChange(p.id, 0, v)}
-                                    />
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
                       </div>
                     )
                   }
 
                   const hasCorePart = qParts.some((p) => p.level === 'core')
+                  const libraryParts = qParts.filter(
+                    (p) => !p.gate && p.kind === 'library'
+                  )
+                  const otherParts = qParts.filter(
+                    (p) => !p.gate && p.kind !== 'library'
+                  )
+                  const hasMultipleLibraryParts = libraryParts.length > 1
 
                   return (
                     <div
+                      id={`question-${q.id}`}
                       key={q.id}
                       className={`sticker-card p-4 space-y-3 ${
-                        hasCorePart ? 'border-l-4 border-l-(--color-accent)' : ''
+                        hasCorePart ? 'border-l-4 border-l-[var(--color-accent)]' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <h4 className="font-bold text-sm text-(--color-ink)">
+                          <h4 className="font-bold text-sm text-[var(--color-ink)]">
                             {q.label}
                           </h4>
                           {hasCorePart && (
-                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-(--color-accent)/15 text-(--color-accent) tracking-wider uppercase">
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] tracking-wider uppercase">
                               Core
                             </span>
                           )}
                         </div>
 
-                        {q.repeats && isGateOn && (
+                        {/* Large readable Add Session Button (Item 9) */}
+                        {q.repeats && (!gatePart || isGateOn) && !isReadOnly && (
                           <button
                             type="button"
                             onClick={() => addSession(q.id)}
-                            className="flex items-center space-x-1 px-2.5 py-0.5 rounded-(--radius-pill) bg-(--color-bg) border border-(--color-line) text-[10px] font-semibold text-(--color-accent) active:scale-95"
+                            className="flex items-center space-x-1 px-3 py-1 rounded-full bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-xs font-bold text-[var(--color-accent)] hover:border-[var(--color-accent)] active:scale-95 shadow-xs"
                           >
-                            <Plus size={10} />
-                            <span>Add session</span>
+                            <Plus size={12} />
+                            <span>Add Session</span>
                           </button>
                         )}
                       </div>
@@ -749,38 +858,67 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           label={gatePart.label}
                           value={typeof gateValue === 'boolean' ? gateValue : undefined}
                           required={gatePart.level === 'core'}
+                          disabled={isReadOnly}
                           onChange={(val) => handleAnswerChange(gatePart.id, 0, val ?? false)}
                         />
                       )}
 
-                      {/* Render sessions and sibling parts */}
+                      {/* Horizontally Swipeable Sessions (Items 7 & 8) */}
                       {(!gatePart || isGateOn) && (
-                        <div className="space-y-3">
+                        <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-2.5 pb-2 scrollbar-thin">
                           {sessions.map((instance, sIdx) => (
                             <div
                               key={instance}
                               className={
                                 q.repeats && sessions.length > 1
-                                  ? 'p-3 bg-(--color-bg)/50 rounded-(--radius-m) border border-(--color-line) space-y-2'
-                                  : 'space-y-2'
+                                  ? 'min-w-[85%] sm:min-w-[90%] snap-center shrink-0 p-3 bg-[var(--color-bg)]/60 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2 shadow-xs'
+                                  : 'w-full space-y-2'
                               }
                             >
+                              {/* Session Top Bar: Plain numeral in top-left (Item 8) */}
                               {q.repeats && sessions.length > 1 && (
-                                <div className="flex items-center justify-between text-xs font-semibold text-(--color-ink-soft) pb-1 border-b border-(--color-line)">
-                                  <span>Session {sIdx + 1}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeSession(q.id, instance)}
-                                    className="text-red-400 hover:text-red-600"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
+                                <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+                                  <span className="w-5 h-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[11px] font-extrabold text-[var(--color-accent)] flex items-center justify-center">
+                                    {sIdx + 1}
+                                  </span>
+                                  {!isReadOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removeSession(q.id, instance)}
+                                      className="text-red-400 hover:text-red-600 p-0.5 active:scale-90"
+                                      title="Remove session"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
                                 </div>
                               )}
 
-                              {qParts
-                                .filter((p) => !p.gate)
-                                .filter((p) => (mode === 'quick' && !expandedMore ? p.level === 'core' : true))
+                              {/* Two-Column Split Layout for Multiple Library Parts (Item 11) */}
+                              {hasMultipleLibraryParts && (
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  {libraryParts.map((p) => {
+                                    const val = answersMap[p.id]?.[instance]
+                                    return (
+                                      <div key={p.id}>
+                                        <LibraryWidget
+                                          label={p.label}
+                                          value={val as any}
+                                          disabled={isReadOnly}
+                                          config={p.config as any}
+                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                        />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Other Parts (or single library part) */}
+                              {(hasMultipleLibraryParts ? otherParts : qParts.filter((p) => !p.gate))
+                                .filter((p) =>
+                                  mode === 'quick' && !expandedMore ? p.level === 'core' : true
+                                )
                                 .map((p) => {
                                   const val = answersMap[p.id]?.[instance]
                                   const isMissing = completeness.missingPartIds.includes(p.id)
@@ -800,7 +938,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                           label={p.label}
                                           value={typeof val === 'boolean' ? val : undefined}
                                           required={isCore}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v ?? false)}
+                                          disabled={isReadOnly}
+                                          onChange={(v) =>
+                                            handleAnswerChange(p.id, instance, v ?? false)
+                                          }
                                         />
                                       )}
                                       {p.kind === 'scale' && (
@@ -808,6 +949,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                           label={p.label}
                                           value={val as number}
                                           required={isCore}
+                                          disabled={isReadOnly}
                                           config={p.config as any}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
@@ -816,6 +958,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                         <NumberWidget
                                           label={p.label}
                                           value={val as number}
+                                          disabled={isReadOnly}
                                           config={p.config as any}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
@@ -824,6 +967,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                         <TextWidget
                                           label={p.label}
                                           value={(val as string) ?? ''}
+                                          disabled={isReadOnly}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
                                       )}
@@ -831,13 +975,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                         <TimeRangeWidget
                                           label={p.label}
                                           value={val as any}
+                                          date={date}
+                                          disabled={isReadOnly}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
                                       )}
-                                      {p.kind === 'library' && (
+                                      {!hasMultipleLibraryParts && p.kind === 'library' && (
                                         <LibraryWidget
                                           label={p.label}
                                           value={val as any}
+                                          disabled={isReadOnly}
                                           config={p.config as any}
                                           onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                         />
@@ -860,10 +1007,27 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setExpandedMore(!expandedMore)}
-                    className="text-xs font-semibold text-(--color-accent) hover:underline inline-flex items-center space-x-1"
+                    className="text-xs font-semibold text-[var(--color-accent)] hover:underline inline-flex items-center space-x-1"
                   >
                     <Sparkles size={13} />
                     <span>{expandedMore ? 'Show fewer questions' : 'More questions (show extras)'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Forgot to log period start quick-action chip (Section 6, 3B) */}
+              {!activeCycle && !isReadOnly && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const newC = await cycleRepo.startCycle(todayLogicalDate)
+                      setActiveCycle(newC)
+                    }}
+                    className="flex items-center space-x-1 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-semibold active:scale-95 shadow-xs"
+                  >
+                    <Droplets size={12} className="text-rose-500" />
+                    <span>Forgot to log period start?</span>
                   </button>
                 </div>
               )}
@@ -872,7 +1036,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         </div>
 
         {/* Modal Bottom Action Bar */}
-        <div className="p-3 border-t-2 border-(--color-line) bg-(--color-surface)">
+        <div className="p-3 border-t-2 border-[var(--color-line)] bg-[var(--color-surface)]">
           {step === 'questions' ? (
             <div className="flex items-center space-x-2">
               <button
@@ -884,7 +1048,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     setStep('header')
                   }
                 }}
-                className="py-2.5 px-4 rounded-(--radius-pill) border-2 border-(--color-line) bg-(--color-surface) font-semibold text-xs text-(--color-ink) flex items-center space-x-1 active:scale-95"
+                className="py-2.5 px-4 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs text-[var(--color-ink)] flex items-center space-x-1 active:scale-95"
               >
                 <ChevronLeft size={16} />
                 <span>Back</span>
@@ -894,19 +1058,31 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
-                  className="flex-1 py-2.5 rounded-(--radius-pill) bg-(--color-accent) text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
+                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
                 >
                   <span>Next section</span>
                   <ChevronRight size={16} />
+                </button>
+              ) : isReadOnly ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-ink)] text-white font-bold text-xs sticker-button active:scale-95"
+                >
+                  Done
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={!completeness.complete}
                   onClick={handleSave}
-                  className="flex-1 py-2.5 rounded-(--radius-pill) bg-(--color-accent) text-white font-bold text-xs sticker-button disabled:opacity-50 disabled:shadow-none"
+                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button disabled:opacity-50 disabled:shadow-none"
                 >
-                  {completeness.complete ? 'Save tonight' : 'Answer required core questions'}
+                  {completeness.complete
+                    ? existingDayRecord
+                      ? 'Save changes'
+                      : 'Save tonight'
+                    : 'Answer required core questions'}
                 </button>
               )}
             </div>

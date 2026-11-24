@@ -49,6 +49,15 @@ describe('TimeRange Calculations & Widget Helpers', () => {
     expect(sleep3.crossesMidnight).toBe(false)
   })
 
+  it('calculates duration with explicit startDayOffset for multi-day previous evening wrapping', () => {
+    // Started at 8:30 PM previous day (startDayOffset = -1) and ended at 6:45 AM today (endDayOffset = 0)
+    // 20:30 to 24:00 is 3h 30m (210m); 00:00 to 06:45 is 6h 45m (405m); total = 615m (10h 15m)
+    const wrappedSleep = calculateTimeRangeDuration('20:30', '06:45', -1, 0)
+    expect(wrappedSleep.durationMinutes).toBe(615)
+    expect(wrappedSleep.crossesMidnight).toBe(true)
+    expect(formatMinutesToHours(wrappedSleep.durationMinutes)).toBe('10h 15m')
+  })
+
   it('calculates duration for same-day periods without crossing midnight', () => {
     const nap = calculateTimeRangeDuration('14:00', '15:30')
     expect(nap.durationMinutes).toBe(90)

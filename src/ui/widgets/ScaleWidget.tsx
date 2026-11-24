@@ -1,6 +1,33 @@
 import React from 'react'
-import { Star } from 'lucide-react'
+import {
+  Star,
+  Flame,
+  Zap,
+  Heart,
+  Smile,
+  Battery,
+  Activity,
+  Sparkles,
+  Sun,
+  Award,
+} from 'lucide-react'
 import type { ScaleConfig } from '../../data/types'
+
+const SCALE_ICONS: Record<
+  string,
+  React.ComponentType<{ size?: number; className?: string }>
+> = {
+  Star,
+  Flame,
+  Zap,
+  Heart,
+  Smile,
+  Battery,
+  Activity,
+  Sparkles,
+  Sun,
+  Award,
+}
 
 interface ScaleWidgetProps {
   label: string
@@ -22,15 +49,29 @@ export const ScaleWidget: React.FC<ScaleWidgetProps> = ({
   const max = config?.max ?? 10
   const step = config?.step ?? 0.5
   const display = config?.display ?? 'slider'
+  const iconName = config?.icon || 'Sparkles'
+  const IconComponent = SCALE_ICONS[iconName] || Sparkles
+
   const currentVal = value ?? min
   const pct = Math.max(0, Math.min(100, ((currentVal - min) / (max - min)) * 100))
+
+  // Dynamic icon size scaling linearly from 14px at 0% to 32px at 100%
+  const dynamicIconSize = Math.round(14 + (pct / 100) * 18)
 
   if (display === 'stars') {
     const starCount = Math.min(Math.round(max - min), 10)
     return (
       <div className="py-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+            <div className="w-8 h-8 flex items-center justify-center">
+              <IconComponent
+                size={dynamicIconSize}
+                className="text-[var(--color-accent)] transition-all duration-150"
+              />
+            </div>
+          </div>
           <span className="text-xs font-bold text-[var(--color-accent)]">
             {value !== undefined ? `${value} / ${max}` : 'Not rated'}
           </span>
@@ -64,11 +105,19 @@ export const ScaleWidget: React.FC<ScaleWidgetProps> = ({
     )
   }
 
-  // Slider display with flowing gradient fill from left to pointer
+  // Slider display with flowing gradient fill from left to pointer & scaling icon
   return (
     <div className="py-2.5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+          <div className="w-8 h-8 flex items-center justify-center">
+            <IconComponent
+              size={dynamicIconSize}
+              className="text-[var(--color-accent)] transition-all duration-150 drop-shadow-xs"
+            />
+          </div>
+        </div>
         <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)]">
           {value !== undefined ? value.toFixed(1) : `${min.toFixed(1)}`}
         </span>

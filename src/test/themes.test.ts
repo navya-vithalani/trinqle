@@ -43,13 +43,18 @@ describe('Theme System', () => {
     expect(getTheme('cyberpunk').name).toBe('Cyberpunk')
   })
 
-  it('provides complete light, dark, and archive tokens for cyberpunk theme', () => {
+  it('provides complete light, dark, and archive tokens for cyberpunk theme with tech typography', () => {
     const theme = cyberpunkTheme
 
-    // Check obsidian void & electric cyan
-    expect(theme.tokens.light.color.bg).toBe('#090a10')
-    expect(theme.tokens.light.color.accent).toBe('#00f0ff')
-    expect(theme.tokens.light.color.accent2).toBe('#ff0055')
+    // Check high contrast colors in light and dark
+    expect(theme.tokens.light.color.bg).toBe('#e8ecf2')
+    expect(theme.tokens.dark.color.bg).toBe('#07080d')
+    expect(theme.tokens.dark.color.accent).toBe('#00f0ff')
+    expect(theme.tokens.dark.color.accent2).toBe('#ff0055')
+
+    // Check tech typography (replacing awkward bubble font)
+    expect(theme.tokens.light.type.fontDisplay).toContain('Orbitron')
+    expect(theme.tokens.light.type.fontBody).toContain('Share Tech Mono')
 
     // Check sharp angular shape tokens
     expect(theme.tokens.light.shape.radiusPill).toBe('4px')
@@ -60,7 +65,7 @@ describe('Theme System', () => {
     expect(theme.archive.color.ink).toBeDefined()
   })
 
-  it('provides complete light, dark, and archive tokens for baked clay theme', () => {
+  it('provides complete light, dark, and archive tokens for baked clay theme with comfortaa typography', () => {
     const theme = clayTheme
 
     // Check light colors
@@ -71,6 +76,9 @@ describe('Theme System', () => {
     // Check dark colors
     expect(theme.tokens.dark.color.bg).toMatch(/^#[0-9a-fA-F]{6}$/)
     expect(theme.tokens.dark.color.surface).toMatch(/^#[0-9a-fA-F]{6}$/)
+
+    // Check typography
+    expect(theme.tokens.light.type.fontDisplay).toContain('Comfortaa')
 
     // Check archive tokens (monochrome)
     expect(theme.archive.color.bg).toBeDefined()

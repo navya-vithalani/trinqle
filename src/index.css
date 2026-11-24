@@ -4,25 +4,25 @@
   :root {
     --color-bg: #fff3f6;
     --color-surface: #ffffff;
-    --color-ink: #5b4350;
-    --color-ink-soft: #a58b98;
+    --color-ink: #523a48;
+    --color-ink-soft: #8c6e80;
     --color-line: #f6dfe7;
-    --color-accent: #ff8fb1;
-    --color-accent2: #9fe3c8;
-    --color-accent3: #c9b3f5;
-    --color-accent4: #ffd2b0;
-    --color-success: #8ee0c1;
-    --color-warn: #ffd280;
-    --color-danger: #ff93a3;
-    --color-star: #ffb84d;
-    --color-chart1: #ff8fb1;
-    --color-chart2: #9fe3c8;
-    --color-chart3: #c9b3f5;
-    --color-chart4: #ffd2b0;
-    --color-chart5: #ffb84d;
-    --color-chart6: #94d2bd;
-    --color-chart7: #e7c6ff;
-    --color-chart8: #b8c0ff;
+    --color-accent: #e0678f;
+    --color-accent2: #48a885;
+    --color-accent3: #906fc9;
+    --color-accent4: #e0833a;
+    --color-success: #3b9e78;
+    --color-warn: #d48d28;
+    --color-danger: #d6475b;
+    --color-star: #e09a24;
+    --color-chart1: #e0678f;
+    --color-chart2: #48a885;
+    --color-chart3: #906fc9;
+    --color-chart4: #e0833a;
+    --color-chart5: #e09a24;
+    --color-chart6: #58a892;
+    --color-chart7: #b58ae0;
+    --color-chart8: #8590e8;
 
     --radius-s: 8px;
     --radius-m: 14px;
@@ -31,8 +31,8 @@
     --border-w: 2px;
 
     --shadow-card: 0 6px 0 var(--color-line);
-    --shadow-button: 0 4px 0 #e0678f;
-    --shadow-pressed: 0 1px 0 #e0678f;
+    --shadow-button: 0 4px 0 #c44f74;
+    --shadow-pressed: 0 1px 0 #c44f74;
 
     --font-body: 'Fredoka', system-ui, sans-serif;
     --font-display: 'Fredoka', system-ui, sans-serif;
@@ -67,6 +67,15 @@
     min-height: 100vh;
     min-height: -webkit-fill-available;
     touch-action: manipulation;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+
+  #root {
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -108,21 +117,54 @@
   box-shadow: var(--shadow-pressed);
 }
 
+/* Cyberpunk theme subtle moving circuit / digital grid background animation */
+body[data-theme='cyberpunk']::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.7;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  animation: cyber-grid-drift 25s linear infinite;
+}
+
+html:not(.dark) body[data-theme='cyberpunk']::before {
+  opacity: 0.5;
+  background-image: 
+    linear-gradient(to right, rgba(0, 102, 204, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 102, 204, 0.05) 1px, transparent 1px);
+}
+
+@keyframes cyber-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 24px 24px;
+  }
+}
+
 /* Cyberpunk theme specific neon glow and sharp tech styling */
 [data-theme="cyberpunk"] .sticker-card {
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.12), inset 0 0 1px #00f0ff;
-  border: 1px solid #232a40;
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
   background-color: var(--color-surface);
   border-radius: var(--radius-m);
 }
 
 [data-theme="cyberpunk"] .sticker-button {
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4), 0 3px 0 #008899;
+  box-shadow: var(--shadow-button);
   border-radius: var(--radius-pill);
   transition: all 120ms ease-out;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 [data-theme="cyberpunk"] .sticker-button:active {
   transform: translateY(2px);
-  box-shadow: 0 0 6px rgba(0, 240, 255, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-pressed);
 }

@@ -75,6 +75,11 @@ export class ChapterRepository {
     return chapter
   }
 
+  async updateChapter(chapter: Chapter): Promise<Chapter> {
+    await this.db.chapters.put(chapter)
+    return chapter
+  }
+
   async updatePlannedEndDate(chapterId: string, plannedEndDate: string): Promise<Chapter> {
     const chapter = await this.getChapterById(chapterId)
     if (!chapter) throw new Error(`Chapter ${chapterId} not found`)

@@ -44,4 +44,17 @@ export class CycleRepository {
     await this.db.cycles.put(updated)
     return updated
   }
+
+  async updateCycle(cycle: Cycle): Promise<Cycle> {
+    const updated = { ...cycle, updatedAt: Date.now() }
+    await this.db.cycles.put(updated)
+    return updated
+  }
+
+  async deleteCycle(cycleId: string): Promise<void> {
+    await this.db.cycles.update(cycleId, {
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+  }
 }

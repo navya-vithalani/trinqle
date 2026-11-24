@@ -2,7 +2,7 @@ import React from 'react'
 import { addDays } from '../../core/logicalDay'
 import { calculateChapterDuration } from '../../core/chapters'
 import type { Chapter, Day } from '../../data/types'
-import { Star } from 'lucide-react'
+import { Star, Triangle } from 'lucide-react'
 
 interface HeatmapCalendarProps {
   chapter: Chapter
@@ -43,23 +43,36 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({
   }
 
   return (
-    <div className="sticker-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-xs uppercase tracking-wider text-[var(--color-ink)]">
-          Chapter Heatmap ({totalDays} Days)
-        </h3>
-        <div className="flex items-center space-x-2 text-[10px] text-[var(--color-ink-soft)]">
+    <div className="space-y-3">
+      {/* Legend */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--color-ink-soft)] px-1">
+        <div className="flex items-center space-x-2">
           <span className="flex items-center space-x-1">
             <span className="w-2.5 h-2.5 rounded bg-[var(--color-accent)] inline-block" />
             <span>Full</span>
           </span>
           <span className="flex items-center space-x-1">
-            <span className="w-2.5 h-2.5 rounded bg-[var(--color-accent)]/40 inline-block" />
+            <span className="w-2.5 h-2.5 rounded bg-[var(--color-accent)]/30 border border-[var(--color-accent)]/50 inline-block" />
             <span>Quick</span>
           </span>
           <span className="flex items-center space-x-1">
-            <span className="w-2.5 h-2.5 rounded border border-[var(--color-line)] inline-block" />
+            <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" />
+            <span>Backfill</span>
+          </span>
+          <span className="flex items-center space-x-1">
+            <span className="w-2.5 h-2.5 rounded border border-[var(--color-line)] bg-[var(--color-surface)] inline-block" />
             <span>Empty</span>
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-2.5">
+          <span className="flex items-center space-x-1">
+            <Star size={10} className="fill-amber-400 text-amber-500" />
+            <span>Starred</span>
+          </span>
+          <span className="flex items-center space-x-1">
+            <Triangle size={9} className="fill-indigo-400 text-indigo-500" />
+            <span>Outstanding</span>
           </span>
         </div>
       </div>
@@ -67,18 +80,23 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({
       {/* Grid */}
       <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {cells.map(({ date, dayNumber, day, isToday, isFuture }) => {
-          let bgClass = 'bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)]'
+          let bgClass =
+            'bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)]'
 
           if (isFuture) {
             bgClass =
               'bg-[var(--color-bg)]/40 border border-dashed border-[var(--color-line)] text-[var(--color-ink-soft)] opacity-40'
           } else if (day) {
-            if (day.mode === 'full') {
+            if (day.backfilled) {
+              // Dedicated distinct Backfill color (Item 26)
               bgClass =
-                'bg-[var(--color-accent)] border-2 border-[var(--color-accent)] text-white font-bold shadow-sm'
+                'bg-amber-500 border-2 border-amber-600 text-white font-bold shadow-xs'
+            } else if (day.mode === 'full') {
+              bgClass =
+                'bg-[var(--color-accent)] border-2 border-[var(--color-accent)] text-white font-bold shadow-xs'
             } else {
               bgClass =
-                'bg-[var(--color-accent)]/30 border-2 border-[var(--color-accent)]/60 text-[var(--color-ink)] font-semibold'
+                'bg-[var(--color-accent)]/25 border-2 border-[var(--color-accent)]/50 text-[var(--color-ink)] font-semibold'
             }
           }
 
@@ -94,21 +112,18 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({
             >
               <span className="text-[11px] leading-tight">{dayNumber}</span>
 
-              {/* Badges: Star or Backfill */}
+              {/* Distinct Markings: Star (3) vs. Outstanding (2) */}
               <div className="flex items-center space-x-0.5 absolute bottom-0.5">
-                {day && day.memorability > 0 && (
+                {day?.memorability === 3 && (
                   <Star
-                    size={7}
-                    className={
-                      day.mode === 'full' ? 'text-amber-200 fill-amber-200' : 'text-amber-500 fill-amber-500'
-                    }
+                    size={8}
+                    className="text-amber-200 fill-amber-200 drop-shadow-xs"
                   />
                 )}
-                {day?.backfilled && (
-                  <span
-                    className={`w-1 h-1 rounded-full ${
-                      day.mode === 'full' ? 'bg-white' : 'bg-[var(--color-ink)]'
-                    }`}
+                {day?.memorability === 2 && (
+                  <Triangle
+                    size={7}
+                    className="text-indigo-200 fill-indigo-200 drop-shadow-xs"
                   />
                 )}
               </div>

@@ -4,24 +4,24 @@ const clayLightTokens: ThemeTokens = {
   color: {
     bg: '#f9f4ed', // warm biscuit dough
     surface: '#fffefc',
-    ink: '#463328', // baked chocolate
-    inkSoft: '#876d5a', // warm mocha
+    ink: '#3d2b22', // baked chocolate (contrast > 10:1)
+    inkSoft: '#785f4e', // warm mocha (contrast > 5.5:1)
     line: '#e6d6c4', // cookie crumb border
-    accent: '#d97443', // warm baked terracotta
+    accent: '#c95e2d', // warm baked terracotta (high contrast)
     accent2: '#dba874', // toasted almond
     accent3: '#bf8152', // warm caramel
     accent4: '#e8c497', // golden biscuit
-    success: '#7ea872', // soft matcha
-    warn: '#e8a642', // warm honey
-    danger: '#c9544d', // baked berry
-    star: '#e09f3e',
-    chart1: '#d97443',
+    success: '#6d9761', // soft matcha
+    warn: '#d48d28', // warm honey
+    danger: '#bf4740', // baked berry
+    star: '#d48d28',
+    chart1: '#c95e2d',
     chart2: '#dba874',
     chart3: '#bf8152',
     chart4: '#e8c497',
-    chart5: '#e09f3e',
-    chart6: '#8fb584',
-    chart7: '#a37c63',
+    chart5: '#d48d28',
+    chart6: '#7ea872',
+    chart7: '#9c7359',
     chart8: '#d6a06e',
   },
   shape: {
@@ -38,8 +38,8 @@ const clayLightTokens: ThemeTokens = {
     shadowPressed: 'inset 0 3px 6px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(140, 65, 30, 0.15)',
   },
   type: {
-    fontBody: "'Fredoka', system-ui, sans-serif",
-    fontDisplay: "'Fredoka', system-ui, sans-serif",
+    fontBody: "'Comfortaa', 'Fredoka', system-ui, sans-serif",
+    fontDisplay: "'Comfortaa', 'Fredoka', system-ui, sans-serif",
     sizeS: '0.8125rem',
     sizeM: '0.9375rem',
     sizeL: '1.125rem',
@@ -71,21 +71,21 @@ const clayDarkTokens: ThemeTokens = {
   ...clayLightTokens,
   color: {
     ...clayLightTokens.color,
-    bg: '#2b201a', // dark roast espresso
-    surface: '#382b24',
-    ink: '#f5eae0', // oat milk
-    inkSoft: '#bfa796',
-    line: '#4c3b31',
-    accent: '#e08353',
+    bg: '#241a15', // dark roast espresso
+    surface: '#33241d',
+    ink: '#fdf7f2', // crisp oat milk (contrast > 12:1)
+    inkSoft: '#c4aea0', // warm cream (contrast > 5.5:1)
+    line: '#4a372c',
+    accent: '#e67d47',
     accent2: '#dba874',
     accent3: '#bf8152',
     accent4: '#e8c497',
     star: '#e8a642',
   },
   depth: {
-    shadowCard: '0 6px 0 #4c3b31',
-    shadowButton: '0 4px 0 #bf5e2b',
-    shadowPressed: '0 1px 0 #bf5e2b',
+    shadowCard: '0 6px 0 #4a372c',
+    shadowButton: '0 4px 0 #b35626',
+    shadowPressed: '0 1px 0 #b35626',
   },
 }
 

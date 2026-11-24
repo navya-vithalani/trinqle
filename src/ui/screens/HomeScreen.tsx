@@ -6,10 +6,9 @@ import {
   Check,
   AlertCircle,
   Eye,
-  BookOpen,
   ShieldAlert,
-  X,
   Sliders,
+  ChevronRight,
 } from 'lucide-react'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { ImportDialog } from '../dialogs/ImportDialog'
@@ -18,7 +17,6 @@ import {
   ChapterRepository,
   DayRepository,
   CycleRepository,
-  FormRepository,
 } from '../../data/repositories'
 import { importFormPack } from '../../data/formPack/importer'
 import starterPackRaw from '../../content/starter-form-pack.json'
@@ -31,37 +29,34 @@ import {
 } from '../../core/logicalDay'
 import {
   isChapterHardLocked,
-  isPreCloseDue,
   getChapterProgress,
 } from '../../core/chapters'
 import { buildGreetingContext, evaluateGreetings } from '../../core/greetings'
 import { CharacterStage } from '../components/CharacterStage'
-import { HeatmapCalendar } from '../components/HeatmapCalendar'
-import { CycleCard } from '../components/CycleCard'
-import { EndDateModal } from '../components/EndDateModal'
+import { UnifiedCalendarCard } from '../components/UnifiedCalendarCard'
+import { ChapterDetailsModal } from '../components/ChapterDetailsModal'
 import { ReflectionsSheet } from './ReflectionsSheet'
 import { ChapterGate } from './ChapterGate'
 import type { FormPack, Chapter, Day, Cycle } from '../../data/types'
 
 export const HomeScreen: React.FC = () => {
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
+  const [allChaptersCount, setAllChaptersCount] = useState(1)
   const [todayDay, setTodayDay] = useState<Day | null>(null)
   const [chapterDays, setChapterDays] = useState<Day[]>([])
   const [missingDays, setMissingDays] = useState<string[]>([])
   const [cycles, setCycles] = useState<Cycle[]>([])
   const [activeCycle, setActiveCycle] = useState<Cycle | undefined>(undefined)
-  const [reflectionsAnsweredCount, setReflectionsAnsweredCount] = useState(0)
-  const [reflectionsTotalCount, setReflectionsTotalCount] = useState(0)
 
   // Modals & Sheets
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalDate, setModalDate] = useState<string>('')
   const [isImportOpen, setIsImportOpen] = useState(false)
-  const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
+  const [isChapterDetailsOpen, setIsChapterDetailsOpen] = useState(false)
   const [isReflectionsOpen, setIsReflectionsOpen] = useState(false)
   const [isChapterGateOpen, setIsChapterGateOpen] = useState(false)
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
-  const [preCloseDismissed, setPreCloseDismissed] = useState(false)
+  const [isDevMode] = useState(false)
 
   // Greetings & Character
   const [greetingText, setGreetingText] = useState<string>('')
@@ -71,7 +66,6 @@ export const HomeScreen: React.FC = () => {
   const chapterRepo = new ChapterRepository()
   const dayRepo = new DayRepository()
   const cycleRepo = new CycleRepository()
-  const formRepo = new FormRepository()
 
   const now = new Date()
   const todayStr = logicalDate(now, undefined, DEFAULT_WINDOW.endHour)
@@ -85,17 +79,26 @@ export const HomeScreen: React.FC = () => {
   const loadState = async () => {
     setActiveCharacterId(loadCharacterPreference())
 
-    // 1. Get or initialize open chapter
-    let chapter = await chapterRepo.getOpenChapter()
+    // 1. Get all chapters to accurately compute current chapter number
+    const allChapters = await chapterRepo.getAllChapters()
+    const activeCh = await chapterRepo.getOpenChapter()
+    let chapter = activeCh
+
     if (!chapter) {
+      const nextNum = allChapters.length + 1
       chapter = await chapterRepo.createChapter({
         startDate: todayStr,
-        title: 'Chapter 1',
+        title: `Chapter ${nextNum}`,
       })
+      allChapters.push(chapter)
     }
+
+    const currentChapterIdx =
+      allChapters.findIndex((c) => c.id === chapter?.id) + 1 || allChapters.length || 1
+    setAllChaptersCount(currentChapterIdx)
     setActiveChapter(chapter)
 
-    // Check hard-lock
+    // Check hard-lock (ceremony on scheduled closing date)
     if (isChapterHardLocked(chapter, todayStr)) {
       setIsChapterGateOpen(true)
     }
@@ -130,25 +133,7 @@ export const HomeScreen: React.FC = () => {
     const currentActiveCycle = await cycleRepo.getActiveCycle()
     setActiveCycle(currentActiveCycle)
 
-    // 6. Reflections Count
-    const snapshot = await formRepo.getSnapshot(chapter.startDate)
-    const chapterEndSecs = new Set(
-      snapshot.sections.filter((s) => s.scope === 'chapterEnd').map((s) => s.id)
-    )
-    const reflQuestions = snapshot.questions.filter((q) => chapterEndSecs.has(q.sectionId))
-    const reflQIds = new Set(reflQuestions.map((q) => q.id))
-    const reflParts = snapshot.parts.filter((p) => reflQIds.has(p.questionId))
-    const customPrompts = chapter.customPrompts || []
-    const totalPrompts = reflParts.length + customPrompts.length
-    setReflectionsTotalCount(totalPrompts)
-
-    const answers = await chapterRepo.getChapterAnswers(chapter.id)
-    const answered = answers.filter(
-      (a) => a.value !== undefined && a.value !== null && a.value !== ''
-    ).length
-    setReflectionsAnsweredCount(answered)
-
-    // 7. Greetings Engine
+    // 6. Greetings Engine
     try {
       const { context, dateStr } = await buildGreetingContext(now)
       const greeting = evaluateGreetings(context, dateStr)
@@ -164,11 +149,11 @@ export const HomeScreen: React.FC = () => {
 
   const handleUseStarterPack = async () => {
     try {
-      await importFormPack(starterPackRaw as unknown as FormPack, 'replace')
-      showToast('Sample starter pack imported!')
+      await importFormPack(starterPackRaw as unknown as FormPack)
+      showToast('Starter form pack imported successfully!')
       loadState()
-    } catch {
-      showToast('Failed to import starter pack')
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Error importing pack')
     }
   }
 
@@ -177,23 +162,46 @@ export const HomeScreen: React.FC = () => {
     setIsModalOpen(true)
   }
 
-  const handleStartCycle = async (date: string) => {
-    await cycleRepo.startCycle(date)
-    showToast('Cycle started')
-    loadState()
-  }
-
-  const handleEndCycle = async (cycleId: string, date: string) => {
-    await cycleRepo.endCycle(cycleId, date)
-    showToast('Cycle ended')
-    loadState()
-  }
-
-  const handleSavePlannedEndDate = async (newDate: string) => {
+  const handleSaveChapterTitle = async (newTitle: string) => {
     if (!activeChapter) return
-    const updated = await chapterRepo.updatePlannedEndDate(activeChapter.id, newDate)
+    const updated = { ...activeChapter, title: newTitle, updatedAt: Date.now() }
+    await chapterRepo.updateChapter(updated)
+    setActiveChapter(updated)
+    showToast('Chapter name updated')
+  }
+
+  const handleSavePlannedEndDate = async (newPlannedEndDate: string) => {
+    if (!activeChapter) return
+    const updated = await chapterRepo.updatePlannedEndDate(
+      activeChapter.id,
+      newPlannedEndDate
+    )
     setActiveChapter(updated)
     showToast('Chapter end date updated!')
+    loadState()
+  }
+
+  const handleStartCycle = async (dateStr: string) => {
+    await cycleRepo.startCycle(dateStr)
+    showToast('Period start logged')
+    loadState()
+  }
+
+  const handleEndCycle = async (cycleId: string, dateStr: string) => {
+    await cycleRepo.endCycle(cycleId, dateStr)
+    showToast('Period ended')
+    loadState()
+  }
+
+  const handleUpdateCycle = async (c: Cycle) => {
+    await cycleRepo.updateCycle(c)
+    showToast('Cycle updated')
+    loadState()
+  }
+
+  const handleDeleteCycle = async (cycleId: string) => {
+    await cycleRepo.deleteCycle(cycleId)
+    showToast('Cycle record deleted')
     loadState()
   }
 
@@ -201,11 +209,9 @@ export const HomeScreen: React.FC = () => {
     ? getChapterProgress(activeChapter, todayStr)
     : { currentDayNumber: 1, totalDays: 28, daysRemaining: 27 }
 
-  const showPreClose =
-    activeChapter &&
-    isPreCloseDue(activeChapter, todayStr) &&
-    !preCloseDismissed &&
-    !isChapterGateOpen
+  const isFinalTwoDays = progress.daysRemaining <= 2
+  const chapterWorkingName =
+    activeChapter?.title || `Chapter ${allChaptersCount}`
 
   return (
     <div className="space-y-4 pb-20">
@@ -216,87 +222,56 @@ export const HomeScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Chapter Countdown / Top Bar */}
+      {/* Redesigned Chapter Banner (Items 21 & 22) */}
       {activeChapter && (
-        <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-surface)] rounded-[var(--radius-m)] border-2 border-[var(--color-line)] text-xs font-medium text-[var(--color-ink-soft)]">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-[var(--color-ink)]">
-              {activeChapter.title || 'Chapter 1'}
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsEndDateModalOpen(true)}
-              className="text-[10px] text-[var(--color-accent)] font-semibold underline underline-offset-2 active:scale-95"
-            >
-              Adjust
-            </button>
-          </div>
-
-          <span>
-            Day {progress.currentDayNumber} of {progress.totalDays}
-          </span>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-[var(--color-accent)] font-semibold">
-              {progress.daysRemaining} days left
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsChapterGateOpen(true)}
-              className="text-[10px] bg-[var(--color-bg)] border border-[var(--color-line)] px-2 py-0.5 rounded text-[var(--color-ink)] font-semibold active:scale-95"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Pre-close Dismissible Banner (T-2 days) */}
-      {showPreClose && (
-        <div className="p-3.5 bg-amber-50 rounded-[var(--radius-m)] border-2 border-amber-300 flex items-start justify-between text-xs text-amber-900 shadow-sm animate-in fade-in duration-150">
-          <div className="flex items-start space-x-2.5">
-            <ShieldAlert size={18} className="text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-bold">This chapter wraps up soon.</p>
-              <p className="text-[11px] text-amber-800">
-                You have {progress.daysRemaining} days remaining. Review your reflections and prepare photos for the ceremony.
-              </p>
-              <div className="flex items-center space-x-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsReflectionsOpen(true)}
-                  className="px-2.5 py-1 rounded-full bg-amber-600 text-white font-semibold text-[11px] active:scale-95"
-                >
-                  Review Reflections
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsChapterGateOpen(true)}
-                  className="px-2.5 py-1 rounded-full bg-amber-100 border border-amber-400 text-amber-900 font-semibold text-[11px] active:scale-95"
-                >
-                  Close Early
-                </button>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setIsChapterDetailsOpen(true)}
+          className={`cursor-pointer transition-all select-none active:scale-[0.99] ${
+            isFinalTwoDays
+              ? 'p-3.5 bg-amber-500 text-white rounded-[var(--radius-m)] shadow-md border-2 border-amber-600 space-y-1'
+              : 'px-4 py-2.5 bg-[var(--color-surface)] rounded-[var(--radius-m)] border-2 border-[var(--color-line)] shadow-xs hover:border-[var(--color-accent)]'
+          }`}
+        >
+          {isFinalTwoDays ? (
+            /* Final 2 Days Prominent Warning Alert (Item 22 Exception) */
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <ShieldAlert size={18} className="text-white shrink-0" />
+                <div>
+                  <h4 className="font-extrabold text-xs">
+                    {chapterWorkingName} wraps up in {progress.daysRemaining} days!
+                  </h4>
+                  <p className="text-[11px] text-amber-100">
+                    Prepare your closing ceremony and reflections now.
+                  </p>
+                </div>
               </div>
+              <ChevronRight size={18} className="text-white shrink-0" />
             </div>
-          </div>
+          ) : (
+            /* Standard Clean Centered Banner (Item 22) */
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[11px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider">
+                Day {progress.currentDayNumber}/{progress.totalDays}
+              </span>
 
-          <button
-            type="button"
-            onClick={() => setPreCloseDismissed(true)}
-            className="p-1 text-amber-700 hover:text-amber-900 active:scale-90"
-          >
-            <X size={16} />
-          </button>
+              {/* Centered Working Name */}
+              <span className="font-extrabold text-sm text-[var(--color-ink)] text-center px-2 truncate">
+                {chapterWorkingName}
+              </span>
+
+              {/* X Days To Go on Right */}
+              <span className="text-xs font-bold text-[var(--color-accent)] shrink-0">
+                {progress.daysRemaining} days to go
+              </span>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Character Stage with Live Greeting */}
-      <CharacterStage
-        characterId={activeCharacterId}
-        greetingText={greetingText}
-      />
-
-      {/* Tonight's Form Card */}
+      {/* Tonight's Form Card - MOVED ABOVE CHARACTER (Item 25) */}
       <div className="sticker-card p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -306,9 +281,9 @@ export const HomeScreen: React.FC = () => {
           <span
             className={`text-xs px-2.5 py-0.5 rounded-full border ${
               todayDay
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-bold'
                 : windowOpen
-                  ? 'bg-[var(--color-accent)] text-white border-transparent'
+                  ? 'bg-[var(--color-accent)] text-white border-transparent font-bold'
                   : 'bg-[var(--color-bg)] text-[var(--color-ink-soft)] border-[var(--color-line)]'
             }`}
           >
@@ -316,111 +291,87 @@ export const HomeScreen: React.FC = () => {
           </span>
         </div>
 
-        <p className="text-xs text-[var(--color-ink-soft)]">
-          {todayDay
-            ? 'You logged your night. You can review or edit anytime during the open chapter.'
-            : windowOpen
-              ? 'Form is open until 3:00 AM. Fill your nightly structured entry.'
-              : 'Window opens at 21:00. Preview or test the form below.'}
-        </p>
+        {/* Removed Edit Form and View Form buttons after submission (Item 1) */}
+        {todayDay ? (
+          <div className="p-3 rounded-[var(--radius-m)] bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-center space-x-2">
+            <Check size={16} className="text-emerald-600 shrink-0" />
+            <span>Tonight's journal is logged! View or edit past forms from the Profile tab.</span>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-[var(--color-ink-soft)]">
+              {windowOpen
+                ? 'Form is open until 3:00 AM. Fill your nightly structured entry.'
+                : 'Window opens at 21:00. Preview or test the form below.'}
+            </p>
 
-        <div className="flex items-center space-x-2 pt-1">
-          {todayDay ? (
-            <button
-              type="button"
-              onClick={() => openFormForDate(todayStr)}
-              className="flex-1 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs flex items-center justify-center space-x-1.5 active:scale-95"
-            >
-              <Check size={14} className="text-[var(--color-success)]" />
-              <span>Edit tonight's entry</span>
-            </button>
-          ) : windowOpen ? (
-            <button
-              type="button"
-              onClick={() => openFormForDate(todayStr)}
-              className="flex-1 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button flex items-center justify-center space-x-1.5"
-            >
-              <Sparkles size={14} />
-              <span>Fill tonight's form</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => openFormForDate(todayStr)}
-              className="flex-1 py-2 px-3 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs flex items-center justify-center space-x-1.5 active:scale-95"
-            >
-              <Eye size={14} className="text-[var(--color-accent)]" />
-              <span>Preview form (dev mode)</span>
-            </button>
-          )}
-        </div>
+            <div className="flex items-center space-x-2 pt-1">
+              {windowOpen ? (
+                <button
+                  type="button"
+                  onClick={() => openFormForDate(todayStr)}
+                  className="flex-1 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button flex items-center justify-center space-x-1.5 active:scale-95 shadow-md"
+                >
+                  <Sparkles size={14} />
+                  <span>Fill tonight's form</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openFormForDate(todayStr)}
+                  className="flex-1 py-2 px-3 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs flex items-center justify-center space-x-1.5 active:scale-95"
+                >
+                  <Eye size={14} className="text-[var(--color-accent)]" />
+                  <span>Preview form (early test)</span>
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
+      {/* Character Stage with Live Greeting (Item 25 - below Tonight's Journal) */}
+      <CharacterStage
+        characterId={activeCharacterId}
+        greetingText={greetingText}
+      />
 
       {/* Backfill Banner */}
       {missingDays.length > 0 && (
-        <div className="p-3 bg-amber-50 rounded-[var(--radius-m)] border border-amber-200 flex items-center justify-between text-xs text-amber-900">
+        <div className="p-3 bg-amber-50 rounded-[var(--radius-m)] border border-amber-200 flex items-center justify-between text-xs text-amber-900 shadow-xs">
           <div className="flex items-center space-x-2">
             <AlertCircle size={16} className="text-amber-600 shrink-0" />
             <span>
-              <strong>{missingDays[0]}</strong> is missing. Backfill it?
+              <strong>{missingDays[0]}</strong> was not filled.
             </span>
           </div>
           <button
             type="button"
             onClick={() => openFormForDate(missingDays[0])}
-            className="px-2.5 py-1 rounded-full bg-amber-600 text-white font-semibold text-[11px] shrink-0 active:scale-95"
+            className="px-3 py-1 rounded-full bg-amber-600 text-white font-bold text-[11px] shrink-0 active:scale-95"
           >
-            Fill it
+            Backfill
           </button>
         </div>
       )}
 
-      {/* Chapter Reflections Row */}
+      {/* Unified Calendar Container (Section 6, 1) */}
       {activeChapter && (
-        <div
-          onClick={() => setIsReflectionsOpen(true)}
-          className="sticker-card p-3.5 flex items-center justify-between cursor-pointer hover:border-[var(--color-accent)] transition-all active:scale-98"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex items-center justify-center shrink-0">
-              <BookOpen size={16} />
-            </div>
-            <div>
-              <h4 className="font-bold text-xs text-[var(--color-ink)]">
-                Chapter Reflections
-              </h4>
-              <p className="text-[11px] text-[var(--color-ink-soft)]">
-                {reflectionsAnsweredCount} of {reflectionsTotalCount || 7} prompts answered
-              </p>
-            </div>
-          </div>
-
-          <span className="text-xs font-semibold text-[var(--color-accent)]">
-            Open &rarr;
-          </span>
-        </div>
-      )}
-
-      {/* Open Chapter Fill Heatmap */}
-      {activeChapter && (
-        <HeatmapCalendar
+        <UnifiedCalendarCard
           chapter={activeChapter}
           days={chapterDays}
           todayLogicalDate={todayStr}
+          cycles={cycles}
+          activeCycle={activeCycle}
           onSelectDate={openFormForDate}
+          onStartCycle={handleStartCycle}
+          onEndCycle={handleEndCycle}
+          onUpdateCycle={handleUpdateCycle}
+          onDeleteCycle={handleDeleteCycle}
         />
       )}
 
-      {/* Menstrual Cycle Card */}
-      <CycleCard
-        cycles={cycles}
-        activeCycle={activeCycle}
-        todayLogicalDate={todayStr}
-        onStartCycle={handleStartCycle}
-        onEndCycle={handleEndCycle}
-      />
-
-      {/* Form Pack Setup */}
+      {/* Starter Pack Card */}
       <div className="sticker-card p-5 space-y-4">
         <div>
           <h2 className="text-base font-bold text-[var(--color-ink)]">Starter pack</h2>
@@ -474,13 +425,19 @@ export const HomeScreen: React.FC = () => {
         />
       )}
 
-      {/* End Date Adjustment Modal */}
-      {isEndDateModalOpen && activeChapter && (
-        <EndDateModal
-          isOpen={isEndDateModalOpen}
+      {/* Chapter Details Modal (Items 22 & 23) */}
+      {isChapterDetailsOpen && activeChapter && (
+        <ChapterDetailsModal
+          isOpen={isChapterDetailsOpen}
           chapter={activeChapter}
-          onClose={() => setIsEndDateModalOpen(false)}
-          onSave={handleSavePlannedEndDate}
+          chapterIndex={allChaptersCount}
+          daysRemaining={progress.daysRemaining}
+          isDevMode={isDevMode}
+          onClose={() => setIsChapterDetailsOpen(false)}
+          onSaveTitle={handleSaveChapterTitle}
+          onSavePlannedEndDate={handleSavePlannedEndDate}
+          onOpenReflections={() => setIsReflectionsOpen(true)}
+          onCloseChapterDev={() => setIsChapterGateOpen(true)}
         />
       )}
 
@@ -496,7 +453,7 @@ export const HomeScreen: React.FC = () => {
         />
       )}
 
-      {/* Chapter Closing Ceremony Gate */}
+      {/* Chapter Closing Ceremony Gate (Enforced on scheduled closing date) */}
       {isChapterGateOpen && activeChapter && (
         <ChapterGate
           isOpen={isChapterGateOpen}

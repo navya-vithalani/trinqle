@@ -4,25 +4,25 @@ const cutesyLightTokens: ThemeTokens = {
   color: {
     bg: '#fff3f6',
     surface: '#ffffff',
-    ink: '#5b4350',
-    inkSoft: '#a58b98',
+    ink: '#523a48', // high contrast ink (> 8:1)
+    inkSoft: '#8c6e80', // readable soft ink (> 4.5:1)
     line: '#f6dfe7',
-    accent: '#ff8fb1', // pink
-    accent2: '#9fe3c8', // mint
-    accent3: '#c9b3f5', // lavender
-    accent4: '#ffd2b0', // peach
-    success: '#8ee0c1',
-    warn: '#ffd280',
-    danger: '#ff93a3',
-    star: '#ffb84d',
-    chart1: '#ff8fb1',
-    chart2: '#9fe3c8',
-    chart3: '#c9b3f5',
-    chart4: '#ffd2b0',
-    chart5: '#ffb84d',
-    chart6: '#94d2bd',
-    chart7: '#e7c6ff',
-    chart8: '#b8c0ff',
+    accent: '#e0678f', // warm pink (> 4.5:1 on white)
+    accent2: '#48a885', // mint
+    accent3: '#906fc9', // lavender
+    accent4: '#e0833a', // peach
+    success: '#3b9e78',
+    warn: '#d48d28',
+    danger: '#d6475b',
+    star: '#e09a24',
+    chart1: '#e0678f',
+    chart2: '#48a885',
+    chart3: '#906fc9',
+    chart4: '#e0833a',
+    chart5: '#e09a24',
+    chart6: '#58a892',
+    chart7: '#b58ae0',
+    chart8: '#8590e8',
   },
   shape: {
     radiusS: '8px',
@@ -34,8 +34,8 @@ const cutesyLightTokens: ThemeTokens = {
   },
   depth: {
     shadowCard: '0 6px 0 #f6dfe7',
-    shadowButton: '0 4px 0 #e0678f',
-    shadowPressed: '0 1px 0 #e0678f',
+    shadowButton: '0 4px 0 #c44f74',
+    shadowPressed: '0 1px 0 #c44f74',
   },
   type: {
     fontBody: "'Fredoka', system-ui, sans-serif",
@@ -71,11 +71,11 @@ const cutesyDarkTokens: ThemeTokens = {
   ...cutesyLightTokens,
   color: {
     ...cutesyLightTokens.color,
-    bg: '#2a2032',
-    surface: '#382b43',
-    ink: '#f7e8f0',
-    inkSoft: '#b9a0b0',
-    line: '#4a3a57',
+    bg: '#1e1422',
+    surface: '#2c1e33',
+    ink: '#fdf2f7', // high contrast (> 14:1)
+    inkSoft: '#c6a8ba', // readable (> 5.5:1)
+    line: '#432f4e',
     accent: '#ff8fb1',
     accent2: '#9fe3c8',
     accent3: '#c9b3f5',
@@ -83,7 +83,7 @@ const cutesyDarkTokens: ThemeTokens = {
     star: '#ffc166',
   },
   depth: {
-    shadowCard: '0 6px 0 #4a3a57',
+    shadowCard: '0 6px 0 #432f4e',
     shadowButton: '0 4px 0 #d45980',
     shadowPressed: '0 1px 0 #d45980',
   },

@@ -1,5 +1,24 @@
 import React, { useState } from 'react'
-import { X, Check, Sliders, Hash, Type, Clock, BookOpen, ToggleLeft } from 'lucide-react'
+import {
+  X,
+  Check,
+  Sliders,
+  Hash,
+  Type,
+  Clock,
+  BookOpen,
+  ToggleLeft,
+  Flame,
+  Zap,
+  Heart,
+  Smile,
+  Battery,
+  Activity,
+  Sparkles,
+  Star,
+  Sun,
+  Award,
+} from 'lucide-react'
 import type { Part, PartKind, PartLevel, PartConfig, Library } from '../../data/types'
 
 interface PartEditorModalProps {
@@ -8,6 +27,7 @@ interface PartEditorModalProps {
   questionId: string
   libraries: Library[]
   onSave: (partData: {
+    questionId: string
     kind: PartKind
     label: string
     level: PartLevel
@@ -17,7 +37,11 @@ interface PartEditorModalProps {
   onClose: () => void
 }
 
-const PART_KINDS: { kind: PartKind; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const PART_KINDS: {
+  kind: PartKind
+  label: string
+  icon: React.ComponentType<{ size?: number; className?: string }>
+}[] = [
   { kind: 'yesno', label: 'Yes / No Checkbox', icon: ToggleLeft },
   { kind: 'scale', label: 'Scale / Rating', icon: Sliders },
   { kind: 'number', label: 'Number with Unit', icon: Hash },
@@ -26,9 +50,23 @@ const PART_KINDS: { kind: PartKind; label: string; icon: React.ComponentType<{ s
   { kind: 'library', label: 'Library Item Tag', icon: BookOpen },
 ]
 
+const SCALE_ICONS_LIST = [
+  { name: 'Sparkles', icon: Sparkles },
+  { name: 'Flame', icon: Flame },
+  { name: 'Zap', icon: Zap },
+  { name: 'Heart', icon: Heart },
+  { name: 'Smile', icon: Smile },
+  { name: 'Battery', icon: Battery },
+  { name: 'Activity', icon: Activity },
+  { name: 'Star', icon: Star },
+  { name: 'Sun', icon: Sun },
+  { name: 'Award', icon: Award },
+]
+
 export const PartEditorModal: React.FC<PartEditorModalProps> = ({
   isOpen,
   part,
+  questionId,
   libraries,
   onSave,
   onClose,
@@ -42,18 +80,31 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
   const [scaleMin, setScaleMin] = useState<number>((part?.config as any)?.min ?? 1)
   const [scaleMax, setScaleMax] = useState<number>((part?.config as any)?.max ?? 10)
   const [scaleStep, setScaleStep] = useState<number>((part?.config as any)?.step ?? 1)
-  const [scaleDisplay, setScaleDisplay] = useState<'slider' | 'stars'>((part?.config as any)?.display || 'slider')
+  const [scaleDisplay, setScaleDisplay] = useState<'slider' | 'stars'>(
+    (part?.config as any)?.display || 'slider'
+  )
+  const [scaleIcon, setScaleIcon] = useState<string>(
+    (part?.config as any)?.icon || 'Sparkles'
+  )
 
   const [numberUnit, setNumberUnit] = useState<string>((part?.config as any)?.unit || '')
-  const [numberAggregate, setNumberAggregate] = useState<'sum' | 'mean'>((part?.config as any)?.aggregate || 'sum')
+  const [numberAggregate, setNumberAggregate] = useState<'sum' | 'mean'>(
+    (part?.config as any)?.aggregate || 'sum'
+  )
 
-  const [textMultiline, setTextMultiline] = useState<boolean>((part?.config as any)?.multiline ?? false)
+  const [textMultiline, setTextMultiline] = useState<boolean>(
+    (part?.config as any)?.multiline ?? false
+  )
 
   const [libraryId, setLibraryId] = useState<string>(
     (part?.config as any)?.libraryId || libraries[0]?.id || ''
   )
-  const [libraryMulti, setLibraryMulti] = useState<boolean>((part?.config as any)?.multi ?? true)
-  const [libraryCreatable, setLibraryCreatable] = useState<boolean>((part?.config as any)?.creatable ?? true)
+  const [libraryMulti, setLibraryMulti] = useState<boolean>(
+    (part?.config as any)?.multi ?? true
+  )
+  const [libraryCreatable, setLibraryCreatable] = useState<boolean>(
+    (part?.config as any)?.creatable ?? true
+  )
 
   if (!isOpen) return null
 
@@ -69,6 +120,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
           max: scaleMax,
           step: scaleStep,
           display: scaleDisplay,
+          icon: scaleIcon,
         }
         break
       case 'number':
@@ -101,6 +153,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
     }
 
     onSave({
+      questionId,
       kind,
       label: label.trim(),
       level,
@@ -111,7 +164,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-[var(--color-surface)] w-full max-w-md max-h-[90vh] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b-2 border-[var(--color-line)] flex items-center justify-between shrink-0">
@@ -168,22 +221,22 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
           </div>
 
           {/* Level: Core vs Extra */}
-          <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2">
+          <div className="space-y-2 p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)]">
             <div className="flex items-center justify-between">
               <div>
-                <span className="font-bold text-[var(--color-ink)] block">Requirement Level</span>
-                <span className="text-[11px] text-[var(--color-ink-soft)]">
-                  Core parts must be filled for day completion.
+                <span className="font-bold text-[var(--color-ink)] block">Importance Level</span>
+                <span className="text-[10px] text-[var(--color-ink-soft)]">
+                  Core parts always show in Quick Mode; Extra parts show in Full Mode.
                 </span>
               </div>
-              <div className="flex items-center space-x-1 bg-[var(--color-surface)] p-1 rounded-full border border-[var(--color-line)]">
+              <div className="flex items-center space-x-1">
                 <button
                   type="button"
                   onClick={() => setLevel('core')}
-                  className={`px-3 py-1 rounded-full font-bold text-[10px] transition-all ${
+                  className={`py-1 px-3 rounded-[var(--radius-pill)] text-[10px] font-extrabold transition-all ${
                     level === 'core'
                       ? 'bg-[var(--color-accent)] text-white shadow-xs'
-                      : 'text-[var(--color-ink-soft)]'
+                      : 'bg-[var(--color-line)] text-[var(--color-ink-soft)]'
                   }`}
                 >
                   CORE
@@ -191,10 +244,10 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setLevel('extra')}
-                  className={`px-3 py-1 rounded-full font-bold text-[10px] transition-all ${
+                  className={`py-1 px-3 rounded-[var(--radius-pill)] text-[10px] font-extrabold transition-all ${
                     level === 'extra'
-                      ? 'bg-[var(--color-ink)] text-white shadow-xs'
-                      : 'text-[var(--color-ink-soft)]'
+                      ? 'bg-[var(--color-accent)] text-white shadow-xs'
+                      : 'bg-[var(--color-line)] text-[var(--color-ink-soft)]'
                   }`}
                 >
                   EXTRA
@@ -220,7 +273,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
 
           {/* Config details based on kind */}
           {kind === 'scale' && (
-            <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2.5">
+            <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-3">
               <span className="font-bold text-[var(--color-ink)] block">Scale Configuration</span>
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -252,6 +305,8 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Display mode */}
               <div className="flex items-center space-x-3 pt-1">
                 <label className="flex items-center space-x-1.5 cursor-pointer">
                   <input
@@ -269,8 +324,36 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
                     checked={scaleDisplay === 'stars'}
                     onChange={() => setScaleDisplay('stars')}
                   />
-                  <span>Stars (1-5)</span>
+                  <span>Stars</span>
                 </label>
+              </div>
+
+              {/* Custom Scaling Icon Selection */}
+              <div className="space-y-1.5 pt-2 border-t border-[var(--color-line)]">
+                <label className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                  Scaling Icon (grows with value)
+                </label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {SCALE_ICONS_LIST.map((item) => {
+                    const Icon = item.icon
+                    const isSelected = scaleIcon === item.name
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => setScaleIcon(item.name)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-[var(--radius-s)] border transition-all ${
+                          isSelected
+                            ? 'border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-accent)] font-bold shadow-xs'
+                            : 'border-[var(--color-line)] bg-[var(--color-surface)]/50 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
+                        }`}
+                      >
+                        <Icon size={16} />
+                        <span className="text-[8px] mt-1 leading-none">{item.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -279,69 +362,70 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
             <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2.5">
               <span className="font-bold text-[var(--color-ink)] block">Number Configuration</span>
               <div>
-                <label className="text-[10px] text-[var(--color-ink-soft)] block mb-1">
-                  Unit (e.g. steps, pages, cups, minutes)
-                </label>
+                <label className="text-[10px] text-[var(--color-ink-soft)] block">Unit Label</label>
                 <input
                   type="text"
-                  placeholder="e.g. glasses"
+                  placeholder="e.g. km, mins, cups, glasses, steps"
                   value={numberUnit}
                   onChange={(e) => setNumberUnit(e.target.value)}
-                  className="w-full p-2 rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-semibold"
+                  className="w-full p-1.5 rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-semibold"
                 />
               </div>
-              <div className="flex items-center space-x-4 pt-1">
-                <span className="text-[11px] font-semibold text-[var(--color-ink)]">
-                  Session Aggregation:
-                </span>
-                <label className="flex items-center space-x-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="numAgg"
-                    checked={numberAggregate === 'sum'}
-                    onChange={() => setNumberAggregate('sum')}
-                  />
-                  <span>Sum</span>
-                </label>
-                <label className="flex items-center space-x-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="numAgg"
-                    checked={numberAggregate === 'mean'}
-                    onChange={() => setNumberAggregate('mean')}
-                  />
-                  <span>Average</span>
-                </label>
+              <div>
+                <label className="text-[10px] text-[var(--color-ink-soft)] block">Aggregate in stats</label>
+                <div className="flex items-center space-x-3 pt-1">
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="numberAgg"
+                      checked={numberAggregate === 'sum'}
+                      onChange={() => setNumberAggregate('sum')}
+                    />
+                    <span>Sum (Total accumulated)</span>
+                  </label>
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="numberAgg"
+                      checked={numberAggregate === 'mean'}
+                      onChange={() => setNumberAggregate('mean')}
+                    />
+                    <span>Average (Daily mean)</span>
+                  </label>
+                </div>
               </div>
             </div>
           )}
 
           {kind === 'text' && (
-            <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)]">
+            <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2">
+              <span className="font-bold text-[var(--color-ink)] block">Text Configuration</span>
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={textMultiline}
                   onChange={(e) => setTextMultiline(e.target.checked)}
                 />
-                <span className="font-semibold text-[var(--color-ink)]">
-                  Allow multi-line paragraph text
-                </span>
+                <span>Multiline journal textarea (allows multi-paragraph reflections)</span>
               </label>
+            </div>
+          )}
+
+          {kind === 'timerange' && (
+            <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs text-[var(--color-ink-soft)]">
+              Universal time range selector. Uses dual-clock continuous scrub pop-up with dynamic 24-hour summary axis.
             </div>
           )}
 
           {kind === 'library' && (
             <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2.5">
-              <span className="font-bold text-[var(--color-ink)] block">Library Tagging</span>
+              <span className="font-bold text-[var(--color-ink)] block">Library Tag Configuration</span>
               <div>
-                <label className="text-[10px] text-[var(--color-ink-soft)] block mb-1">
-                  Select Library
-                </label>
+                <label className="text-[10px] text-[var(--color-ink-soft)] block">Target Library</label>
                 <select
                   value={libraryId}
                   onChange={(e) => setLibraryId(e.target.value)}
-                  className="w-full p-2 rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-bold text-[var(--color-ink)]"
+                  className="w-full p-2 rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs"
                 >
                   {libraries.map((lib) => (
                     <option key={lib.id} value={lib.id}>

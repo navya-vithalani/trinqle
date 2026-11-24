@@ -89,6 +89,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   // Inline Question creation
   const [isAddingQuestion, setIsAddingQuestion] = useState(false)
   const [newQuestionLabel, setNewQuestionLabel] = useState('')
+  const [newQuestionIcon, setNewQuestionIcon] = useState('Sparkles')
 
   // Move Question state
   const [movingQuestionId, setMovingQuestionId] = useState<string | null>(null)
@@ -174,6 +175,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const handleCreateQuestion = async () => {
     if (!newQuestionLabel.trim() || !selectedSectionId) return
     const label = newQuestionLabel.trim()
+    const icon = newQuestionIcon
     setNewQuestionLabel('')
     setIsAddingQuestion(false)
 
@@ -186,6 +188,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
         const createdQ = await formRepo.createQuestion({
           sectionId: selectedSectionId,
           label,
+          icon,
           validFrom,
         })
         // Automatically give it a default primary part
@@ -245,13 +248,14 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
 
   // --- PART ACTIONS ---
   const handleSavePart = async (partData: {
+    questionId: string
     kind: PartKind
     label: string
     level: PartLevel
     gate: boolean
     config: PartConfig
   }) => {
-    const qId = editingPartModal.questionId
+    const qId = partData.questionId || editingPartModal.questionId
     const existingPart = editingPartModal.part
 
     if (existingPart?.id) {
@@ -717,6 +721,28 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateQuestion()}
                 className="w-full p-2 text-xs rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-[var(--color-ink)]"
               />
+              <div className="space-y-1 pt-1">
+                <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                  Question Icon
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Sparkles', 'Clock', 'BookOpen', 'Heart', 'Smile', 'Activity', 'FileText', 'Coffee', 'Award', 'Zap', 'Sun', 'Moon'].map((icName) => (
+                    <button
+                      key={icName}
+                      type="button"
+                      onClick={() => setNewQuestionIcon(icName)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                        newQuestionIcon === icName
+                          ? 'bg-[var(--color-accent)] text-white shadow-xs font-bold'
+                          : 'bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink-soft)]'
+                      }`}
+                    >
+                      {icName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center justify-end space-x-2 pt-1">
                 <button
                   type="button"
