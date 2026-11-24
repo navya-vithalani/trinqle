@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, Calendar, BookOpen, Check, Shield } from 'lucide-react'
 import {
   getPlannedEndBounds,
@@ -38,7 +38,18 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(chapter.plannedEndDate)
   const [error, setError] = useState<string | null>(null)
   const [savingDate, setSavingDate] = useState(false)
+  const [dateSaved, setDateSaved] = useState(false)
   const [titleSaved, setTitleSaved] = useState(false)
+
+  useEffect(() => {
+    setSelectedDate(chapter.plannedEndDate)
+    setError(null)
+    setDateSaved(false)
+  }, [chapter.plannedEndDate, isOpen])
+
+  useEffect(() => {
+    setWorkingTitle(chapter.title || `Chapter ${chapterIndex}`)
+  }, [chapter.title, chapterIndex, isOpen])
 
   if (!isOpen) return null
 
@@ -56,18 +67,47 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
 
   const handleDateConfirm = async () => {
     if (!isValidDate) {
-      setError('Chapter length must be between 20 and 45 days.')
+      setError('Chapter length must be up to 45 days.')
       return
     }
     setSavingDate(true)
+    setError(null)
     try {
       await onSavePlannedEndDate(selectedDate)
-      setError(null)
+      setDateSaved(true)
+      setTimeout(() => {
+        onClose()
+      }, 400)
     } catch (err: any) {
       setError(err?.message || 'Failed to update end date')
-    } finally {
       setSavingDate(false)
     }
+  }
+
+  const handleDone = async () => {
+    const isNewDate = selectedDate !== chapter.plannedEndDate
+    const isNewTitle =
+      workingTitle.trim().length > 0 &&
+      workingTitle.trim() !== (chapter.title || `Chapter ${chapterIndex}`)
+
+    if (isNewDate && isValidDate) {
+      try {
+        await onSavePlannedEndDate(selectedDate)
+      } catch (err: any) {
+        setError(err?.message || 'Failed to update end date')
+        return
+      }
+    }
+
+    if (isNewTitle) {
+      try {
+        await onSaveTitle(workingTitle.trim())
+      } catch {
+        // Proceed to close
+      }
+    }
+
+    onClose()
   }
 
   return (
@@ -145,9 +185,18 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
               type="button"
               disabled={selectedDate === chapter.plannedEndDate || savingDate}
               onClick={handleDateConfirm}
-              className="w-full py-2 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs font-bold text-[var(--color-ink)] hover:border-[var(--color-accent)] disabled:opacity-40 active:scale-95"
+              className="w-full py-2 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs font-bold text-[var(--color-ink)] hover:border-[var(--color-accent)] disabled:opacity-40 active:scale-95 flex items-center justify-center space-x-1.5"
             >
-              {savingDate ? 'Saving...' : 'Update End Date'}
+              {dateSaved ? (
+                <>
+                  <Check size={14} className="text-emerald-600" />
+                  <span className="text-emerald-600">Saved! Closing...</span>
+                </>
+              ) : savingDate ? (
+                <span>Saving...</span>
+              ) : (
+                <span>Update End Date</span>
+              )}
             </button>
           </div>
         ) : (
@@ -208,7 +257,7 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
         <div className="pt-2 border-t border-[var(--color-line)]">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleDone}
             className="w-full py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-ink)] text-white font-bold text-xs active:scale-95"
           >
             Done

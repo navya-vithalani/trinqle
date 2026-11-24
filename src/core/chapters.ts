@@ -1,7 +1,7 @@
 import { addDays } from './logicalDay'
 import type { Chapter } from '../data/types'
 
-export const MIN_CHAPTER_DAYS = 20
+export const MIN_CHAPTER_DAYS = 1
 export const MAX_CHAPTER_DAYS = 45
 export const DEFAULT_CHAPTER_DAYS = 28
 
@@ -17,7 +17,7 @@ export function calculateChapterDuration(startDate: string, endDate: string): nu
 }
 
 /**
- * Validates that plannedEndDate is within 20 to 45 days from startDate.
+ * Validates that plannedEndDate is within 1 to 45 days from startDate.
  */
 export function isPlannedEndDateValid(startDate: string, plannedEndDate: string): boolean {
   const days = calculateChapterDuration(startDate, plannedEndDate)
@@ -32,7 +32,7 @@ export function getPlannedEndBounds(startDate: string): {
   maxDate: string
 } {
   return {
-    minDate: addDays(startDate, MIN_CHAPTER_DAYS - 1),
+    minDate: startDate,
     maxDate: addDays(startDate, MAX_CHAPTER_DAYS - 1),
   }
 }

@@ -33,6 +33,7 @@ import { FormEditorScreen } from '../editor/FormEditorScreen'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { generateDemoData } from '../../tools/demoData'
 import { db } from '../../data/db'
+import { logicalDate, DEFAULT_WINDOW } from '../../core/logicalDay'
 import {
   SettingsRepository,
   ChapterRepository,
@@ -75,31 +76,30 @@ export const ProfileScreen: React.FC = () => {
     setSelectedThemeId(themeId)
     setIsDark(dark)
     setSelectedCharacterId(loadCharacterPreference())
-
-    // Load saved settings & open chapter days
-    async function loadProfileData() {
-      const savedName = await settingsRepo.getSetting<string>('user_name', '')
-      const savedStart = await settingsRepo.getSetting<string>('form_window_start', '21:00')
-      const savedEnd = await settingsRepo.getSetting<string>('form_window_end', '03:00')
-      const savedWeek = await settingsRepo.getSetting<'Monday' | 'Sunday'>('week_start', 'Monday')
-      const savedTimeFmt = await settingsRepo.getSetting<'12-hour' | '24-hour'>('time_format', '12-hour')
-
-      setUserName(savedName || '')
-      setFormWindowStart(savedStart || '21:00')
-      setFormWindowEnd(savedEnd || '03:00')
-      setWeekStart(savedWeek || 'Monday')
-      setTimeFormat(savedTimeFmt || '12-hour')
-
-      const ch = await chapterRepo.getOpenChapter()
-      setOpenChapter(ch || null)
-      if (ch) {
-        const days = await dayRepo.getDaysInDateRange(ch.startDate, ch.plannedEndDate)
-        setOpenChapterDays(days.filter((d) => !d.deletedAt))
-      }
-    }
-
     loadProfileData()
   }, [])
+
+  // Load saved settings & open chapter days
+  const loadProfileData = async () => {
+    const savedName = await settingsRepo.getSetting<string>('user_name', '')
+    const savedStart = await settingsRepo.getSetting<string>('form_window_start', '21:00')
+    const savedEnd = await settingsRepo.getSetting<string>('form_window_end', '03:00')
+    const savedWeek = await settingsRepo.getSetting<'Monday' | 'Sunday'>('week_start', 'Monday')
+    const savedTimeFmt = await settingsRepo.getSetting<'12-hour' | '24-hour'>('time_format', '12-hour')
+
+    setUserName(savedName || '')
+    setFormWindowStart(savedStart || '21:00')
+    setFormWindowEnd(savedEnd || '03:00')
+    setWeekStart(savedWeek || 'Monday')
+    setTimeFormat(savedTimeFmt || '12-hour')
+
+    const ch = await chapterRepo.getOpenChapter()
+    setOpenChapter(ch || null)
+    if (ch) {
+      const days = await dayRepo.getDaysInDateRange(ch.startDate, ch.plannedEndDate)
+      setOpenChapterDays(days.filter((d) => !d.deletedAt))
+    }
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -584,12 +584,13 @@ export const ProfileScreen: React.FC = () => {
           isOpen={Boolean(inspectDate)}
           date={inspectDate}
           chapterId={openChapter.id}
-          todayLogicalDate={openChapterDays[0]?.date || inspectDate}
+          todayLogicalDate={logicalDate(new Date(), undefined, DEFAULT_WINDOW.endHour)}
           readOnly={true} // Default to locked Browse Mode! (Item 4)
           onClose={() => setInspectDate(null)}
           onSaved={() => {
             showToast('Changes saved')
             setInspectDate(null)
+            loadProfileData()
           }}
         />
       )}

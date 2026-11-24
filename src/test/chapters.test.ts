@@ -21,8 +21,12 @@ describe('Chapter Lifecycle & Gates (Phase 3)', () => {
     repo = new ChapterRepository(db)
   })
 
-  it('calculates chapter duration and validates 20 to 45 day bounds', () => {
+  it('calculates chapter duration and validates up to 45 day bounds', () => {
     const start = '2026-10-01'
+
+    // 1 day: 2026-10-01
+    expect(calculateChapterDuration(start, '2026-10-01')).toBe(1)
+    expect(isPlannedEndDateValid(start, '2026-10-01')).toBe(true)
 
     // 20 days: 2026-10-01 to 2026-10-20
     expect(calculateChapterDuration(start, '2026-10-20')).toBe(20)
@@ -32,14 +36,14 @@ describe('Chapter Lifecycle & Gates (Phase 3)', () => {
     expect(calculateChapterDuration(start, '2026-11-14')).toBe(45)
     expect(isPlannedEndDateValid(start, '2026-11-14')).toBe(true)
 
-    // Invalid < 20 days (19 days)
-    expect(isPlannedEndDateValid(start, '2026-10-19')).toBe(false)
-
     // Invalid > 45 days (46 days)
     expect(isPlannedEndDateValid(start, '2026-11-15')).toBe(false)
 
+    // Invalid before start date
+    expect(isPlannedEndDateValid(start, '2026-09-30')).toBe(false)
+
     const bounds = getPlannedEndBounds(start)
-    expect(bounds.minDate).toBe('2026-10-20')
+    expect(bounds.minDate).toBe('2026-10-01')
     expect(bounds.maxDate).toBe('2026-11-14')
   })
 

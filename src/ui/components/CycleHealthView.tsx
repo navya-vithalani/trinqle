@@ -15,6 +15,9 @@ interface CycleHealthViewProps {
   cycles: Cycle[]
   activeCycle?: Cycle
   todayLogicalDate: string
+  isUpdateModalOpen?: boolean
+  onOpenUpdateModal?: () => void
+  onCloseUpdateModal?: () => void
   onStartCycle: (date: string) => Promise<void>
   onEndCycle: (cycleId: string, date: string) => Promise<void>
   onUpdateCycle?: (cycle: Cycle) => Promise<void>
@@ -25,6 +28,9 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   cycles,
   activeCycle,
   todayLogicalDate,
+  isUpdateModalOpen,
+  onOpenUpdateModal,
+  onCloseUpdateModal,
   onStartCycle,
   onEndCycle,
   onUpdateCycle: _onUpdateCycle,
@@ -33,7 +39,19 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   const [viewOffsetMonths, setViewOffsetMonths] = useState(0)
   const [selectedDate, setSelectedDate] = useState<string>(todayLogicalDate)
   const [selectedDayAnswers, setSelectedDayAnswers] = useState<Answer[]>([])
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
+  const [internalModalOpen, setInternalModalOpen] = useState(false)
+  const isModalVisible = isUpdateModalOpen !== undefined ? isUpdateModalOpen : internalModalOpen
+
+  const openUpdateModal = () => {
+    if (onOpenUpdateModal) onOpenUpdateModal()
+    setInternalModalOpen(true)
+  }
+
+  const closeUpdateModal = () => {
+    if (onCloseUpdateModal) onCloseUpdateModal()
+    setInternalModalOpen(false)
+  }
+
   const [earlyEndModalOpen, setEarlyEndModalOpen] = useState(false)
   const [isAddingPastCycle, setIsAddingPastCycle] = useState(false)
   const [pastStart, setPastStart] = useState('')
@@ -111,7 +129,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
       setEarlyEndModalOpen(true)
     } else {
       onEndCycle(activeCycle.id, todayLogicalDate)
-      setIsUpdateModalOpen(false)
+      closeUpdateModal()
     }
   }
 
@@ -119,10 +137,10 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   const isForgottenPrompt = activeCycle && isForgottenEnd(activeCycle.startDate, todayLogicalDate)
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-2.5">
       {/* Forgotten End Guardrail Banner (> 9 days) */}
       {isForgottenPrompt && (
-        <div className="p-3 bg-amber-50 rounded-[var(--radius-m)] border border-amber-300 flex items-start justify-between text-xs text-amber-900 shadow-xs">
+        <div className="p-2.5 bg-amber-50 rounded-[var(--radius-m)] border border-amber-300 flex items-start justify-between text-xs text-amber-900 shadow-xs">
           <div className="flex items-start space-x-2">
             <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
             <div>
@@ -134,7 +152,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => setIsUpdateModalOpen(true)}
+            onClick={openUpdateModal}
             className="py-1 px-2.5 rounded-full bg-amber-600 text-white font-bold text-[11px] shrink-0 active:scale-95"
           >
             Confirm
@@ -232,31 +250,31 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
         })}
       </div>
 
-      {/* Read-Only Day Inspector Summary Panel */}
-      <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-2">
-        <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-line)]">
-          <span className="font-bold text-xs text-[var(--color-ink)]">
+      {/* Read-Only Day Inspector Summary Panel (Compact & Clean) */}
+      <div className="p-2.5 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] space-y-1.5">
+        <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+          <span className="font-bold text-[11px] text-[var(--color-ink)]">
             Log Inspector: {selectedDate}
           </span>
-          <span className="text-[10px] text-[var(--color-ink-soft)] uppercase tracking-wider">
+          <span className="text-[9px] text-[var(--color-ink-soft)] uppercase tracking-wider font-semibold">
             {confirmedPeriodDates.has(selectedDate) ? 'Period Confirmed' : 'No Period Logged'}
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="p-2 rounded bg-[var(--color-surface)] border border-[var(--color-line)]">
-            <span className="text-[10px] text-[var(--color-ink-soft)] block">Health Score</span>
-            <span className="font-bold text-[var(--color-ink)]">{healthScore}</span>
+        <div className="grid grid-cols-3 gap-1.5 text-xs">
+          <div className="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-center">
+            <span className="text-[9px] text-[var(--color-ink-soft)] block">Health</span>
+            <span className="font-bold text-xs text-[var(--color-ink)]">{healthScore}</span>
           </div>
 
-          <div className="p-2 rounded bg-[var(--color-surface)] border border-[var(--color-line)]">
-            <span className="text-[10px] text-[var(--color-ink-soft)] block">Energy</span>
-            <span className="font-bold text-[var(--color-ink)]">{energyLevel}</span>
+          <div className="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-center">
+            <span className="text-[9px] text-[var(--color-ink-soft)] block">Energy</span>
+            <span className="font-bold text-xs text-[var(--color-ink)]">{energyLevel}</span>
           </div>
 
-          <div className="p-2 rounded bg-[var(--color-surface)] border border-[var(--color-line)]">
-            <span className="text-[10px] text-[var(--color-ink-soft)] block">Symptoms</span>
-            <span className="font-bold text-[var(--color-ink)] truncate">
+          <div className="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-center">
+            <span className="text-[9px] text-[var(--color-ink-soft)] block">Symptoms</span>
+            <span className="font-bold text-xs text-[var(--color-ink)] truncate block">
               {symptomsList.length > 0 ? symptomsList.join(', ') : 'None'}
             </span>
           </div>
@@ -264,7 +282,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
       </div>
 
       {/* UPDATE CYCLE MODAL (Strict entry point A) */}
-      {isUpdateModalOpen && (
+      {isModalVisible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-[var(--color-surface)] w-full max-w-sm rounded-[var(--radius-l)] border-2 border-[var(--color-line)] shadow-2xl p-4 space-y-4 max-h-[85vh] overflow-y-auto">
             {/* Modal Header */}
@@ -275,7 +293,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setIsUpdateModalOpen(false)}
+                onClick={closeUpdateModal}
                 className="p-1 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-line)]/50 active:scale-90"
               >
                 <X size={16} />
@@ -301,7 +319,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
                   type="button"
                   onClick={async () => {
                     await onStartCycle(todayLogicalDate)
-                    setIsUpdateModalOpen(false)
+                    closeUpdateModal()
                   }}
                   className="w-full py-3 px-4 rounded-[var(--radius-pill)] bg-rose-500 text-white font-extrabold text-sm sticker-button flex items-center justify-center space-x-2 active:scale-95 shadow-md"
                 >
@@ -431,7 +449,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
                 onClick={() => {
                   onEndCycle(activeCycle.id, todayLogicalDate)
                   setEarlyEndModalOpen(false)
-                  setIsUpdateModalOpen(false)
+                  closeUpdateModal()
                 }}
                 className="w-full py-2 rounded-full bg-rose-600 text-white font-bold text-xs"
               >
@@ -443,7 +461,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
                   // Spotting does not reset Cycle Day 1: delete active cycle
                   onDeleteCycle(activeCycle.id)
                   setEarlyEndModalOpen(false)
-                  setIsUpdateModalOpen(false)
+                  closeUpdateModal()
                 }}
                 className="w-full py-2 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs"
               >

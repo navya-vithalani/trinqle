@@ -91,15 +91,6 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
           />
         </div>
       )}
-
-      <div className="text-center mt-2">
-        <p className="text-xs font-bold text-[var(--color-ink)]">
-          Piqsie ({character.name})
-        </p>
-        <p className="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
-          Tap Piqsie to react
-        </p>
-      </div>
     </div>
   )
 }

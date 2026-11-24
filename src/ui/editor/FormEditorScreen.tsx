@@ -259,9 +259,10 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
     const existingPart = editingPartModal.part
 
     if (existingPart?.id) {
-      // Light edits (label, config, gate) apply immediately
+      // Edits (kind, label, config, gate, level) apply immediately
       const updated: Part = {
         ...(existingPart as Part),
+        kind: partData.kind,
         label: partData.label,
         level: partData.level,
         gate: partData.gate,
@@ -271,25 +272,18 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
       await formRepo.savePart(updated)
       await loadData()
     } else {
-      // Structural addition: prompt scope
-      setScopeModal({
-        isOpen: true,
-        title: 'Add Part',
-        description: `Adding part "${partData.label}" to question.`,
-        onConfirm: async (scope) => {
-          const { validFrom } = getScopeDates(scope)
-          await formRepo.createPart({
-            questionId: qId,
-            kind: partData.kind,
-            label: partData.label,
-            level: partData.level,
-            gate: partData.gate,
-            config: partData.config,
-            validFrom,
-          })
-          await loadData()
-        },
+      // Add part immediately to the current chapter so it is active and testable right away
+      const validFrom = activeChapter?.startDate || null
+      await formRepo.createPart({
+        questionId: qId,
+        kind: partData.kind,
+        label: partData.label,
+        level: partData.level,
+        gate: partData.gate,
+        config: partData.config,
+        validFrom,
       })
+      await loadData()
     }
   }
 

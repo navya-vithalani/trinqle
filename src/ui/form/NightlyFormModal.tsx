@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import {
   X,
+  Check,
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
@@ -499,6 +500,19 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               </button>
             )}
 
+            {/* Direct Save Button in Header when in Edit Mode */}
+            {!isReadOnly && existingDayRecord && (
+              <button
+                type="button"
+                onClick={handleSave}
+                className="flex items-center space-x-1 px-3 py-1 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold active:scale-95 shadow-xs"
+                title="Save changes"
+              >
+                <Check size={12} />
+                <span>Save</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onClose}
@@ -507,6 +521,32 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               <X size={20} />
             </button>
           </div>
+        </div>
+
+        {/* Step Navigation Tabs (Summary vs Questions) */}
+        <div className="flex items-center border-b border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-1.5 gap-2">
+          <button
+            type="button"
+            onClick={() => setStep('header')}
+            className={`py-1 px-3 rounded-full text-xs font-bold transition-all ${
+              step === 'header'
+                ? 'bg-[var(--color-bg)] text-[var(--color-accent)] border border-[var(--color-line)]'
+                : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
+            }`}
+          >
+            Day Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep('questions')}
+            className={`py-1 px-3 rounded-full text-xs font-bold transition-all ${
+              step === 'questions'
+                ? 'bg-[var(--color-bg)] text-[var(--color-accent)] border border-[var(--color-line)]'
+                : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
+            }`}
+          >
+            Questions ({sections.length} sections)
+          </button>
         </div>
 
         {/* Modal Content */}
@@ -1055,14 +1095,25 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               </button>
 
               {mode === 'full' && currentSectionIndex < sections.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
-                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
-                >
-                  <span>Next section</span>
-                  <ChevronRight size={16} />
-                </button>
+                <>
+                  {existingDayRecord && !isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="py-2.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-accent)] text-[var(--color-accent)] font-bold text-xs bg-[var(--color-surface)] active:scale-95"
+                    >
+                      Save
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
+                    className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs flex items-center justify-center space-x-1 sticker-button"
+                  >
+                    <span>Next section</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </>
               ) : isReadOnly ? (
                 <button
                   type="button"
@@ -1086,7 +1137,27 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 </button>
               )}
             </div>
-          ) : null}
+          ) : (
+            <div className="flex items-center space-x-2">
+              {existingDayRecord && !isReadOnly && (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button active:scale-95"
+                >
+                  Save changes
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setStep('questions')}
+                className="flex-1 py-2.5 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-xs text-[var(--color-ink)] flex items-center justify-center space-x-1 active:scale-95"
+              >
+                <span>Continue to questions</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

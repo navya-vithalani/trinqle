@@ -86,7 +86,7 @@ export class ChapterRepository {
     if (chapter.status === 'closed') throw new Error('Chapter is closed and write-protected')
 
     if (!isPlannedEndDateValid(chapter.startDate, plannedEndDate)) {
-      throw new Error('Planned end date must be between 20 and 45 days from start date')
+      throw new Error('Planned end date must be up to 45 days from start date')
     }
 
     const updated: Chapter = {

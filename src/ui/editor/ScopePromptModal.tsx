@@ -1,5 +1,5 @@
 import React from 'react'
-import { Calendar, AlertCircle } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 
 export type EditScope = 'nextChapter' | 'thisChapter'
 
@@ -36,37 +36,37 @@ export const ScopePromptModal: React.FC<ScopePromptModalProps> = ({
         </p>
 
         <div className="space-y-2 pt-1">
-          {/* Option A: Next Chapter (Recommended) */}
+          {/* Option A: This Chapter (Recommended Default) */}
           <button
             type="button"
-            onClick={() => onSelect('nextChapter')}
+            onClick={() => onSelect('thisChapter')}
             className="w-full text-left p-3 rounded-[var(--radius-m)] border-2 border-[var(--color-accent)] bg-[var(--color-bg)] space-y-1 active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="font-bold text-xs text-[var(--color-ink)]">
-                From Next Chapter (Recommended)
+                Apply to Current Chapter (Active Now)
               </span>
               <span className="text-[9px] uppercase tracking-wider font-extrabold bg-[var(--color-accent)] text-white px-1.5 py-0.5 rounded-full">
-                Default
+                Recommended
               </span>
             </div>
             <p className="text-[11px] text-[var(--color-ink-soft)]">
-              Keeps {currentChapterTitle} pristine. Edits take effect automatically when the next chapter starts.
+              Applies immediately to {currentChapterTitle}. Active and visible in your journal right now.
             </p>
           </button>
 
-          {/* Option B: This Chapter */}
+          {/* Option B: Next Chapter */}
           <button
             type="button"
-            onClick={() => onSelect('thisChapter')}
+            onClick={() => onSelect('nextChapter')}
             className="w-full text-left p-3 rounded-[var(--radius-m)] border border-[var(--color-line)] bg-[var(--color-surface)] hover:border-[var(--color-ink-soft)] space-y-1 active:scale-98 transition-transform"
           >
             <div className="flex items-center space-x-1.5 text-xs font-bold text-[var(--color-ink)]">
-              <AlertCircle size={13} className="text-amber-500" />
-              <span>Apply From This Chapter</span>
+              <Calendar size={13} className="text-[var(--color-accent)]" />
+              <span>Schedule from Next Chapter</span>
             </div>
             <p className="text-[11px] text-[var(--color-ink-soft)]">
-              Adds to today. Earlier days in this chapter will show it as missing (not zero).
+              Keeps current chapter unchanged. Edits take effect automatically when the next chapter starts.
             </p>
           </button>
         </div>

@@ -295,7 +295,6 @@ export const HomeScreen: React.FC = () => {
         {todayDay ? (
           <div className="p-3 rounded-[var(--radius-m)] bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-center space-x-2">
             <Check size={16} className="text-emerald-600 shrink-0" />
-            <span>Tonight's journal is logged! View or edit past forms from the Profile tab.</span>
           </div>
         ) : (
           <>
