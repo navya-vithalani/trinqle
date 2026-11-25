@@ -6,9 +6,13 @@ import type {
   Chapter,
   Day,
   Answer,
+  AnswerLink,
   Cycle,
   ChapterAnswer,
+  Item,
 } from '../data/types'
+import { importFormPack } from '../data/formPack/importer'
+import starterPack from '../content/starter-form-pack.json'
 
 // Simple LCG pseudo-random number generator for deterministic seed
 function createSeededPRNG(seed = 42) {
@@ -41,6 +45,22 @@ const SAMPLE_ONELINERS = [
   'Steady progress on current learning topics.',
 ]
 
+const SAMPLE_DREAMS = [
+  'Dreamed of wandering through an ancient library filled with spiral staircases and quiet sunlight streaming through stained glass windows.',
+  'Found a hidden garden behind my old school with unusual glowing plants and a clear stream with stepping stones.',
+  'Was walking on the beach at twilight when the ocean waves began to reflect constellations from the night sky.',
+  'Traveled by train through snow-covered mountain valleys with friends, watching pine trees drift past.',
+  'Floating gently above a lively city market smelling fresh pastries and warm spiced tea.',
+]
+
+const SAMPLE_GRATITUDE = [
+  'Grateful for peaceful morning silence before the city wakes up.',
+  'Thankful for good conversations with friends and steady progress on projects.',
+  'Grateful for a warm cup of coffee and sunny afternoon reading.',
+  'Thankful for restorative sleep and feeling refreshed today.',
+  'Grateful for kindness from strangers and beautiful cloud formations.',
+]
+
 const STICKERS = ['star', 'cat-face', 'sun', 'moon', 'leaf', 'flower', 'cloud']
 
 export interface DemoDataOptions {
@@ -64,10 +84,22 @@ export async function generateDemoData(
   chaptersCount: number
   daysCount: number
   answersCount: number
+  answerLinksCount: number
   cyclesCount: number
 }> {
   const seed = options.seed ?? 1024
   const rand = createSeededPRNG(seed)
+
+  // Ensure starter form pack is loaded in database
+  const qCount = await db.questions.count()
+  if (qCount === 0) {
+    await importFormPack(starterPack as any, 'replace', db)
+  }
+
+  // Pre-fetch items from workout types and study types for AnswerLinks
+  const allItems: Item[] = await db.items.toArray()
+  const workoutItems = allItems.filter((i) => i.libraryId === 'lib_workout_types')
+  const studyItems = allItems.filter((i) => i.libraryId === 'lib_study_types')
 
   const refDate = options.referenceDate || new Date().toISOString().slice(0, 10)
   const totalDays = options.daysCount ?? 75
@@ -216,9 +248,10 @@ export async function generateDemoData(
     })
   })
 
-  // 3. Generate Days and Answers
+  // 3. Generate Days, Answers, and AnswerLinks
   const days: Day[] = []
   const answers: Answer[] = []
+  const answerLinks: AnswerLink[] = []
 
   let currentDate = startDate
   let dayIdx = 0
@@ -244,6 +277,7 @@ export async function generateDemoData(
 
       // Planted effect: exercise
       const didExercise = rand() < 0.55
+      const didStudy = rand() < 0.7
 
       // Sleep duration influenced by caffeine
       const sleepHours = highCaffeine
@@ -255,6 +289,8 @@ export async function generateDemoData(
       if (didExercise) baseMood += 1.5
       if (sleepHours < 6) baseMood -= 1.5
       const moodVal = Math.min(10, Math.max(1, Math.round(baseMood * 2) / 2))
+      const energyVal = Math.min(10, Math.max(1, Math.round((moodVal - 0.5 + rand() * 1.5) * 10) / 10))
+      const happyVal = Math.min(10, Math.max(1, Math.round((moodVal + (rand() - 0.5)) * 10) / 10))
 
       // Memorability
       let memorability: 0 | 1 | 2 | 3 = 0
@@ -281,9 +317,43 @@ export async function generateDemoData(
       days.push(dayRecord)
 
       // Answers:
-      // p_mood_val
+      // 1. q_state (mood, energy, happy)
       answers.push({
         id: generateUUIDv7(dayTimestamp),
+        date: currentDate,
+        questionId: 'q_state',
+        partId: 'p_state_mood',
+        instance: 0,
+        value: moodVal,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 1),
+        date: currentDate,
+        questionId: 'q_state',
+        partId: 'p_state_energy',
+        instance: 0,
+        value: energyVal,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 2),
+        date: currentDate,
+        questionId: 'q_state',
+        partId: 'p_state_happy',
+        instance: 0,
+        value: happyVal,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      // Also retain q_mood.p_mood_val for backward compatibility with planted effect tests
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 3),
         date: currentDate,
         questionId: 'q_mood',
         partId: 'p_mood_val',
@@ -293,21 +363,55 @@ export async function generateDemoData(
         updatedAt: dayTimestamp,
       })
 
-      // p_sleep_hours
+      // 2. q_sleep: Timerange crossing midnight (e.g. 23:00 to 07:00)
+      const sleepStartHour = 22 + Math.floor(rand() * 2) // 22 or 23
+      const sleepEndHour = Math.floor(sleepHours) - (24 - sleepStartHour)
+      const sleepEndHourClamped = Math.max(6, Math.min(9, sleepEndHour))
+      const sleepWhenVal = {
+        start: `${sleepStartHour}:00`,
+        end: `0${sleepEndHourClamped}:15`,
+        crossesMidnight: true,
+      }
       answers.push({
-        id: generateUUIDv7(dayTimestamp + 1),
+        id: generateUUIDv7(dayTimestamp + 4),
         date: currentDate,
         questionId: 'q_sleep',
-        partId: 'p_sleep_hours',
+        partId: 'p_sleep_when',
         instance: 0,
-        value: sleepHours,
+        value: sleepWhenVal,
         createdAt: dayTimestamp,
         updatedAt: dayTimestamp,
       })
 
-      // p_caffeine_cups
+      // 3. q_sleep Dream sub-question:
+      const hadDream = rand() < 0.45
       answers.push({
-        id: generateUUIDv7(dayTimestamp + 2),
+        id: generateUUIDv7(dayTimestamp + 5),
+        date: currentDate,
+        questionId: 'q_sleep',
+        partId: 'p_dream_had',
+        instance: 0,
+        value: hadDream,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      if (hadDream) {
+        answers.push({
+          id: generateUUIDv7(dayTimestamp + 6),
+          date: currentDate,
+          questionId: 'q_sleep',
+          partId: 'p_dream_story',
+          instance: 0,
+          value: SAMPLE_DREAMS[Math.floor(rand() * SAMPLE_DREAMS.length)],
+          createdAt: dayTimestamp,
+          updatedAt: dayTimestamp,
+        })
+      }
+
+      // 4. q_diet: caffeine cups
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 7),
         date: currentDate,
         questionId: 'q_diet',
         partId: 'p_caffeine_cups',
@@ -317,9 +421,21 @@ export async function generateDemoData(
         updatedAt: dayTimestamp,
       })
 
-      // p_exercise_did
+      // 5. q_fitness:
       answers.push({
-        id: generateUUIDv7(dayTimestamp + 3),
+        id: generateUUIDv7(dayTimestamp + 8),
+        date: currentDate,
+        questionId: 'q_fitness',
+        partId: 'p_fitness_did',
+        instance: 0,
+        value: didExercise,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      // Also retain q_exercise.p_exercise_did for existing test suite
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 9),
         date: currentDate,
         questionId: 'q_exercise',
         partId: 'p_exercise_did',
@@ -328,6 +444,108 @@ export async function generateDemoData(
         createdAt: dayTimestamp,
         updatedAt: dayTimestamp,
       })
+
+      if (didExercise) {
+        // Workout time range (e.g. 17:30 to 18:30)
+        answers.push({
+          id: generateUUIDv7(dayTimestamp + 10),
+          date: currentDate,
+          questionId: 'q_fitness',
+          partId: 'p_fitness_when',
+          instance: 0,
+          value: { start: '17:30', end: '18:30', crossesMidnight: false },
+          createdAt: dayTimestamp,
+          updatedAt: dayTimestamp,
+        })
+
+        // Workout library picker & AnswerLink
+        if (workoutItems.length > 0) {
+          const pickedWorkout = workoutItems[Math.floor(rand() * workoutItems.length)]
+          const fitAnsId = generateUUIDv7(dayTimestamp + 11)
+          answers.push({
+            id: fitAnsId,
+            date: currentDate,
+            questionId: 'q_fitness',
+            partId: 'p_fitness_type',
+            instance: 0,
+            value: [pickedWorkout.id],
+            createdAt: dayTimestamp,
+            updatedAt: dayTimestamp,
+          })
+          answerLinks.push({
+            id: generateUUIDv7(dayTimestamp + 12),
+            answerId: fitAnsId,
+            date: currentDate,
+            libraryId: 'lib_workout_types',
+            itemId: pickedWorkout.id,
+            createdAt: dayTimestamp,
+            updatedAt: dayTimestamp,
+          })
+        }
+      }
+
+      // 6. q_studies:
+      answers.push({
+        id: generateUUIDv7(dayTimestamp + 13),
+        date: currentDate,
+        questionId: 'q_studies',
+        partId: 'p_studies_did',
+        instance: 0,
+        value: didStudy,
+        createdAt: dayTimestamp,
+        updatedAt: dayTimestamp,
+      })
+
+      if (didStudy) {
+        answers.push({
+          id: generateUUIDv7(dayTimestamp + 14),
+          date: currentDate,
+          questionId: 'q_studies',
+          partId: 'p_studies_when',
+          instance: 0,
+          value: { start: '10:00', end: '12:30', crossesMidnight: false },
+          createdAt: dayTimestamp,
+          updatedAt: dayTimestamp,
+        })
+
+        if (studyItems.length > 0) {
+          const pickedStudy = studyItems[Math.floor(rand() * studyItems.length)]
+          const studyAnsId = generateUUIDv7(dayTimestamp + 15)
+          answers.push({
+            id: studyAnsId,
+            date: currentDate,
+            questionId: 'q_studies',
+            partId: 'p_studies_type',
+            instance: 0,
+            value: [pickedStudy.id],
+            createdAt: dayTimestamp,
+            updatedAt: dayTimestamp,
+          })
+          answerLinks.push({
+            id: generateUUIDv7(dayTimestamp + 16),
+            answerId: studyAnsId,
+            date: currentDate,
+            libraryId: 'lib_study_types',
+            itemId: pickedStudy.id,
+            createdAt: dayTimestamp,
+            updatedAt: dayTimestamp,
+          })
+        }
+      }
+
+      // 7. Journal text prompt
+      if (rand() < 0.6) {
+        answers.push({
+          id: generateUUIDv7(dayTimestamp + 17),
+          date: currentDate,
+          questionId: 'q_prompts',
+          partId: 'p_prompt_grateful',
+          instance: 0,
+          value: SAMPLE_GRATITUDE[Math.floor(rand() * SAMPLE_GRATITUDE.length)],
+          createdAt: dayTimestamp,
+          updatedAt: dayTimestamp,
+        })
+      }
     }
 
     currentDate = addDays(currentDate, 1)
@@ -337,7 +555,7 @@ export async function generateDemoData(
   // Write all generated data into Dexie
   await db.transaction(
     'rw',
-    [db.chapters, db.chapterAnswers, db.cycles, db.days, db.answers],
+    [db.chapters, db.chapterAnswers, db.cycles, db.days, db.answers, db.answerLinks],
     async () => {
       // Clear existing records in these tables
       await db.chapters.clear()
@@ -345,6 +563,7 @@ export async function generateDemoData(
       await db.cycles.clear()
       await db.days.clear()
       await db.answers.clear()
+      await db.answerLinks.clear()
 
       // Add bulk
       await db.chapters.bulkAdd(chapters)
@@ -352,6 +571,7 @@ export async function generateDemoData(
       await db.cycles.bulkAdd(cycles)
       await db.days.bulkAdd(days)
       await db.answers.bulkAdd(answers)
+      await db.answerLinks.bulkAdd(answerLinks)
     }
   )
 
@@ -359,6 +579,7 @@ export async function generateDemoData(
     chaptersCount: chapters.length,
     daysCount: days.length,
     answersCount: answers.length,
+    answerLinksCount: answerLinks.length,
     cyclesCount: cycles.length,
   }
 }

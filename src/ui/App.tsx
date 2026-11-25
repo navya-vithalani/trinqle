@@ -48,7 +48,9 @@ export const App: React.FC = () => {
           {activeTab === 'home' && (
             <HomeScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
           )}
-          {activeTab === 'dashboard' && <DashboardScreen />}
+          {activeTab === 'dashboard' && (
+            <DashboardScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+          )}
           {activeTab === 'insights' && <InsightsScreen />}
           {activeTab === 'archive' && <ArchiveScreen />}
           {activeTab === 'profile' && (
