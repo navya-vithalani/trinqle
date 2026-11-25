@@ -89,6 +89,11 @@ export class DayRepository {
       for (const a of answers) {
         await this.db.answers.put({ ...a, deletedAt: now })
       }
+
+      const links = await this.db.answerLinks.where('date').equals(date).toArray()
+      for (const l of links) {
+        await this.db.answerLinks.put({ ...l, deletedAt: now })
+      }
     })
   }
 

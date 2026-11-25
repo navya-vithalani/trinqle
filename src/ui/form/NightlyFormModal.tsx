@@ -44,8 +44,9 @@ import {
 import {
   checkCompleteness,
   checkOverlappingTimeRanges,
+  isQuestionVisible,
 } from '../../core/formEngine'
-import { getStickerById } from '../../core/stickers'
+import { getStickerById, loadCustomStickerItems, type StickerItem } from '../../core/stickers'
 import { generateUUIDv7 } from '../../core/ids'
 import { getLocalTimeZone } from '../../core/logicalDay'
 
@@ -82,6 +83,8 @@ interface NightlyFormModalProps {
   chapterId: string
   todayLogicalDate: string
   readOnly?: boolean
+  lockedClosed?: boolean
+  timeFormat?: '12h' | '24h'
   onClose: () => void
   onSaved: () => void
 }
@@ -90,24 +93,27 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   isOpen,
   date,
   chapterId,
-  todayLogicalDate,
+  todayLogicalDate: _todayLogicalDate,
   readOnly = false,
+  lockedClosed = false,
+  timeFormat = '12h',
   onClose,
   onSaved,
 }) => {
   const [step, setStep] = useState<'header' | 'questions'>('header')
-  const [mode, setMode] = useState<EntryMode>('full')
+  const [mode, setMode] = useState<EntryMode>('quick')
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [expandedMore, setExpandedMore] = useState(false)
-  const [isReadOnly, setIsReadOnly] = useState<boolean>(readOnly)
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(readOnly || lockedClosed)
 
   // Day header state
   const [title, setTitle] = useState('')
   const [oneliner, setOneliner] = useState('')
   const [stickerId, setStickerId] = useState<string | undefined>(undefined)
-  const [overallRating, setOverallRating] = useState<number>(7.5)
+  const [overallRating, setOverallRating] = useState<number | undefined>(undefined)
   const [memorability, setMemorability] = useState<Memorability>(0)
   const [isStickerPickerOpen, setIsStickerPickerOpen] = useState(false)
+  const [customStickers, setCustomStickers] = useState<StickerItem[]>([])
 
   // Form schema state
   const [sections, setSections] = useState<Section[]>([])
@@ -125,27 +131,29 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
   const [existingDayRecord, setExistingDayRecord] = useState<Day | null>(null)
   const [initialSnapshotJson, setInitialSnapshotJson] = useState<string>('')
 
-  const isBackfill = date < todayLogicalDate
+  const isBackfill = date < _todayLogicalDate
 
   const formRepo = useMemo(() => new FormRepository(), [])
   const dayRepo = useMemo(() => new DayRepository(), [])
   const cycleRepo = useMemo(() => new CycleRepository(), [])
 
   useEffect(() => {
-    setIsReadOnly(readOnly)
-  }, [readOnly])
+    setIsReadOnly(readOnly || lockedClosed)
+  }, [readOnly, lockedClosed])
 
   // 1. Load schema and existing entry or draft
   useEffect(() => {
     if (!isOpen) return
 
     async function loadData() {
-      const [allSecs, allQs, allParts, cycle] = await Promise.all([
+      const [allSecs, allQs, allParts, cycle, customSts] = await Promise.all([
         formRepo.getSections(date),
         formRepo.getQuestions(date),
         formRepo.getParts(date),
         cycleRepo.getActiveCycle(),
+        loadCustomStickerItems(),
       ])
+      setCustomStickers(customSts)
 
       const [y, m, d] = date.split('-').map(Number)
       const dayOfWeek = new Date(y, m - 1, d).getDay()
@@ -175,7 +183,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         setTitle(existingDay.title || '')
         setOneliner(existingDay.oneliner || '')
         setStickerId(existingDay.stickerId)
-        setOverallRating(existingDay.overallRating ?? 7.5)
+        setOverallRating(existingDay.overallRating)
         setMemorability(existingDay.memorability)
         setMode(existingDay.mode)
         setExpandedMore(existingDay.expandedMore)
@@ -214,24 +222,38 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         setInitialSnapshotJson('')
         const draftKey = `trinqle_draft_${date}`
         const savedDraft = localStorage.getItem(draftKey)
+        const applyFreshDefaults = () => {
+          // Core yes/no toggles start visibly at "No" (false) per PRD F4
+          const defaultAnswers: Record<string, Record<number, AnswerValue>> = {}
+          const qMap = new Map(nightlyQuestions.map((nq) => [nq.id, nq]))
+          for (const p of allParts) {
+            const parentQ = qMap.get(p.questionId)
+            if (!parentQ) continue
+            if (p.kind === 'yesno' && p.level === 'core' && (!parentQ.repeats || p.gate)) {
+              defaultAnswers[p.id] = { 0: false }
+            }
+          }
+          setAnswersMap(defaultAnswers)
+          setRepeatingSessions(initSessions)
+          setStep('header')
+        }
+
         if (savedDraft) {
           try {
             const parsed = JSON.parse(savedDraft)
             setTitle(parsed.title || '')
             setOneliner(parsed.oneliner || '')
             setStickerId(parsed.stickerId)
-            setOverallRating(parsed.overallRating ?? 7.5)
+            setOverallRating(parsed.overallRating)
             setMemorability(parsed.memorability ?? 0)
             setMode(parsed.mode || 'full')
             setAnswersMap(parsed.answers || {})
             if (parsed.sessions) setRepeatingSessions(parsed.sessions)
           } catch {
-            // invalid draft
+            applyFreshDefaults()
           }
         } else {
-          setAnswersMap({})
-          setRepeatingSessions(initSessions)
-          setStep('header')
+          applyFreshDefaults()
         }
       }
     }
@@ -300,17 +322,26 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
     Boolean(activeCycle)
   )
 
-  const timeAnswers = currentAnswerArray
-    .filter((a) => a.value && typeof a.value === 'object' && 'start' in a.value && 'end' in a.value)
-    .map((a) => {
+  // Check overlapping time ranges per question (not across unrelated questions)
+  const overlappingQuestionIds = new Set<string>()
+  const timeRangesByQuestion = new Map<string, { start: string; end: string; crossesMidnight: boolean }[]>()
+  for (const a of currentAnswerArray) {
+    if (a.value && typeof a.value === 'object' && 'start' in a.value && 'end' in a.value) {
       const val = a.value as { start: string; end: string; crossesMidnight?: boolean }
-      return {
+      const list = timeRangesByQuestion.get(a.questionId) || []
+      list.push({
         start: val.start,
         end: val.end,
         crossesMidnight: Boolean(val.crossesMidnight),
-      }
-    })
-  const hasTimeOverlap = checkOverlappingTimeRanges(timeAnswers)
+      })
+      timeRangesByQuestion.set(a.questionId, list)
+    }
+  }
+  for (const [qId, list] of timeRangesByQuestion.entries()) {
+    if (checkOverlappingTimeRanges(list)) {
+      overlappingQuestionIds.add(qId)
+    }
+  }
 
   const handleAnswerChange = (partId: string, instance: number, value: AnswerValue) => {
     if (isReadOnly) return
@@ -356,10 +387,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   const handleToggleCycle = async () => {
     if (activeCycle) {
-      await cycleRepo.endCycle(activeCycle.id, todayLogicalDate)
+      await cycleRepo.endCycle(activeCycle.id, date)
       setActiveCycle(null)
     } else {
-      const newC = await cycleRepo.startCycle(todayLogicalDate)
+      const newC = await cycleRepo.startCycle(date)
       setActiveCycle(newC)
     }
   }
@@ -394,10 +425,15 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           updatedAt: now,
         })
 
-        if (part.kind === 'library' && Array.isArray(val)) {
+        if (part.kind === 'library') {
           const libId = (part.config as any)?.libraryId || ''
-          val.forEach((itemId) => {
-            if (typeof itemId === 'string') {
+          const idList = Array.isArray(val)
+            ? val
+            : typeof val === 'string' && val.trim()
+              ? [val.trim()]
+              : []
+          idList.forEach((itemId) => {
+            if (typeof itemId === 'string' && itemId) {
               finalLinks.push({
                 id: generateUUIDv7(now),
                 answerId: ansId,
@@ -450,16 +486,23 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   const currentSection = sections[currentSectionIndex]
   const currentSectionQuestions = questions.filter(
-    (q) => q.sectionId === currentSection?.id
+    (q) =>
+      !q.parentId &&
+      q.sectionId === currentSection?.id &&
+      isQuestionVisible(q, { sections, questions, parts }, currentAnswerArray, date, Boolean(activeCycle))
   )
 
   const quickQuestions = questions.filter((q) => {
+    if (q.parentId) return false
+    if (!isQuestionVisible(q, { sections, questions, parts }, currentAnswerArray, date, Boolean(activeCycle))) {
+      return false
+    }
     const qParts = parts.filter((p) => p.questionId === q.id)
     if (expandedMore) return true
     return qParts.some((p) => p.level === 'core')
   })
 
-  const selectedSticker = stickerId ? getStickerById(stickerId) : undefined
+  const selectedSticker = stickerId ? getStickerById(stickerId, customStickers) : undefined
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs">
@@ -481,14 +524,14 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
             )}
             {isReadOnly && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-line)] text-[var(--color-ink-soft)] font-semibold">
-                Browse Mode
+                {lockedClosed ? 'Archived (Read-Only)' : 'Browse Mode'}
               </span>
             )}
           </div>
 
           <div className="flex items-center space-x-1.5">
-            {/* Small Edit button to switch from Browse into Edit Mode (Item 5) */}
-            {isReadOnly && (
+            {/* Small Edit button to switch from Browse into Edit Mode (hidden if chapter closed) */}
+            {isReadOnly && !lockedClosed && (
               <button
                 type="button"
                 onClick={() => setIsReadOnly(false)}
@@ -504,8 +547,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
             {!isReadOnly && existingDayRecord && (
               <button
                 type="button"
+                disabled={!completeness.complete}
                 onClick={handleSave}
-                className="flex items-center space-x-1 px-3 py-1 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold active:scale-95 shadow-xs"
+                className="flex items-center space-x-1 px-3 py-1 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold active:scale-95 shadow-xs disabled:opacity-50"
                 title="Save changes"
               >
                 <Check size={12} />
@@ -602,16 +646,27 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   <span className="text-xs font-semibold text-[var(--color-ink)]">
                     Day Rating
                   </span>
-                  <span className="text-xs font-bold text-[var(--color-accent)]">
-                    {overallRating.toFixed(1)} / 10
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-[var(--color-accent)]">
+                      {overallRating !== undefined ? `${overallRating.toFixed(1)} / 10` : 'Unrated'}
+                    </span>
+                    {overallRating !== undefined && !isReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => setOverallRating(undefined)}
+                        className="text-[10px] text-[var(--color-ink-soft)] hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <input
                   type="range"
                   min={1}
                   max={10}
                   step={0.5}
-                  value={overallRating}
+                  value={overallRating ?? 5}
                   disabled={isReadOnly}
                   onChange={(e) => setOverallRating(parseFloat(e.target.value))}
                   className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)] bg-[var(--color-line)] disabled:opacity-75"
@@ -619,7 +674,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               </div>
 
               {/* Sticker & Memorability Picker */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-[var(--color-ink)] block">
                     Daily Sticker
@@ -631,9 +686,16 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     className="w-full h-12 flex items-center justify-center rounded-[var(--radius-m)] border-2 border-dashed border-[var(--color-line)] bg-[var(--color-bg)] text-xs text-[var(--color-ink-soft)] hover:border-[var(--color-accent)] disabled:opacity-75"
                   >
                     {selectedSticker ? (
-                      <span className="text-sm font-bold text-[var(--color-accent)]">
-                        {selectedSticker.name}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <img
+                          src={selectedSticker.url}
+                          alt={selectedSticker.name}
+                          className="w-7 h-7 object-contain"
+                        />
+                        <span className="text-xs font-bold text-[var(--color-accent)]">
+                          {selectedSticker.name}
+                        </span>
+                      </div>
                     ) : (
                       <div className="flex items-center space-x-1">
                         <Smile size={16} />
@@ -647,7 +709,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   <label className="text-xs font-semibold text-[var(--color-ink)] block">
                     Memorability
                   </label>
-                  <div className="grid grid-cols-3 gap-1 h-12">
+                  <div className="grid grid-cols-4 gap-1 h-11">
                     <button
                       type="button"
                       disabled={isReadOnly}
@@ -663,10 +725,10 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     <button
                       type="button"
                       disabled={isReadOnly}
-                      onClick={() => setMemorability(2)}
+                      onClick={() => setMemorability(1)}
                       className={`rounded-[var(--radius-m)] border text-[11px] font-semibold transition-all ${
-                        memorability === 2
-                          ? 'bg-indigo-600 text-white border-transparent'
+                        memorability === 1
+                          ? 'bg-blue-600 text-white border-transparent'
                           : 'bg-[var(--color-bg)] border-[var(--color-line)] text-[var(--color-ink-soft)]'
                       }`}
                     >
@@ -675,7 +737,20 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     <button
                       type="button"
                       disabled={isReadOnly}
+                      onClick={() => setMemorability(2)}
+                      className={`rounded-[var(--radius-m)] border text-[11px] font-semibold transition-all ${
+                        memorability === 2
+                          ? 'bg-indigo-600 text-white border-transparent'
+                          : 'bg-[var(--color-bg)] border-[var(--color-line)] text-[var(--color-ink-soft)]'
+                      }`}
+                    >
+                      Outst.
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isReadOnly}
                       onClick={() => setMemorability(3)}
+                      aria-label="Star day"
                       className={`rounded-[var(--radius-m)] border text-[11px] font-semibold flex items-center justify-center transition-all ${
                         memorability === 3
                           ? 'bg-amber-500 text-white border-transparent'
@@ -688,6 +763,47 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                       />
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Quick vs Full Mode Choice (PRD F2 / F2b) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--color-ink)] block">
+                  Logging Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      setMode('quick')
+                      setCurrentSectionIndex(0)
+                    }}
+                    className={`p-2.5 rounded-[var(--radius-m)] border-2 text-left transition-all ${
+                      mode === 'quick'
+                        ? 'border-[var(--color-accent)] bg-[var(--color-bg)] text-[var(--color-ink)] shadow-xs'
+                        : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]'
+                    }`}
+                  >
+                    <span className="text-xs font-bold block">Quick (~2 min)</span>
+                    <span className="text-[10px] opacity-80">Core questions only</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      setMode('full')
+                      setCurrentSectionIndex(0)
+                    }}
+                    className={`p-2.5 rounded-[var(--radius-m)] border-2 text-left transition-all ${
+                      mode === 'full'
+                        ? 'border-[var(--color-accent)] bg-[var(--color-bg)] text-[var(--color-ink)] shadow-xs'
+                        : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]'
+                    }`}
+                  >
+                    <span className="text-xs font-bold block">Full (~10 min)</span>
+                    <span className="text-[10px] opacity-80">All sections & extras</span>
+                  </button>
                 </div>
               </div>
 
@@ -775,9 +891,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     return null
                   }
 
-                  const hasOverlap =
-                    hasTimeOverlap &&
-                    parts.some((p) => p.questionId === q.id && p.kind === 'timerange')
+                  const hasOverlap = overlappingQuestionIds.has(q.id)
 
                   // Special Period question when active
                   if (isCycleQuestion && activeCycle) {
@@ -886,8 +1000,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                       </div>
 
                       {hasOverlap && (
-                        <div className="flex items-center space-x-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
-                          <AlertTriangle size={14} />
+                        <div className="flex items-center space-x-1.5 p-2 rounded-lg bg-[var(--color-warn)]/15 border border-[var(--color-warn)] text-[var(--color-ink)] text-[11px]">
+                          <AlertTriangle size={14} className="text-[var(--color-warn)] shrink-0" />
                           <span>Note: Time ranges for this question overlap.</span>
                         </div>
                       )}
@@ -973,7 +1087,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                         key={p.id}
                                         className={`space-y-1 ${
                                           isMissing
-                                            ? 'rounded-lg p-2 bg-red-50 border border-red-300'
+                                            ? 'rounded-lg p-2 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]'
                                             : ''
                                         }`}
                                       >
@@ -1020,6 +1134,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                             label={p.label}
                                             value={val as any}
                                             date={date}
+                                            timeFormat={timeFormat}
+                                            snapMinutes={(p.config as any)?.snapMinutes ?? 5}
                                             disabled={isReadOnly}
                                             onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                           />
@@ -1033,6 +1149,124 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                             onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                           />
                                         )}
+                                      </div>
+                                    )
+                                  })}
+
+                                {/* Nested Sub-questions per session instance (PRD F7, e.g. Dream per Sleep block) */}
+                                {questions
+                                  .filter(
+                                    (sq) =>
+                                      sq.parentId === q.id &&
+                                      isQuestionVisible(
+                                        sq,
+                                        { sections, questions, parts },
+                                        currentAnswerArray,
+                                        date,
+                                        Boolean(activeCycle)
+                                      )
+                                  )
+                                  .map((sq) => {
+                                    const sqParts = parts
+                                      .filter((sp) => sp.questionId === sq.id)
+                                      .filter((sp) =>
+                                        mode === 'quick' && !expandedMore ? sp.level === 'core' : true
+                                      )
+                                    if (sqParts.length === 0) return null
+                                    const sqGate = sqParts.find((sp) => sp.gate)
+                                    const sqGateOn = !sqGate || answersMap[sqGate.id]?.[instance] === true
+
+                                    return (
+                                      <div
+                                        key={`${sq.id}-${instance}`}
+                                        className="mt-2 pt-2 pl-3 border-l-2 border-[var(--color-accent)]/40 space-y-2"
+                                      >
+                                        <span className="text-xs font-bold text-[var(--color-ink)] block">
+                                          {sq.label}
+                                        </span>
+                                        {sqGate && (
+                                          <YesNoWidget
+                                            label={sqGate.label}
+                                            value={
+                                              typeof answersMap[sqGate.id]?.[instance] === 'boolean'
+                                                ? (answersMap[sqGate.id][instance] as boolean)
+                                                : undefined
+                                            }
+                                            required={sqGate.level === 'core'}
+                                            disabled={isReadOnly}
+                                            onChange={(v) =>
+                                              handleAnswerChange(sqGate.id, instance, v ?? false)
+                                            }
+                                          />
+                                        )}
+                                        {sqGateOn &&
+                                          sqParts
+                                            .filter((sp) => !sp.gate)
+                                            .map((sp) => {
+                                              const spVal = answersMap[sp.id]?.[instance]
+                                              return (
+                                                <div key={sp.id}>
+                                                  {sp.kind === 'yesno' && (
+                                                    <YesNoWidget
+                                                      label={sp.label}
+                                                      value={typeof spVal === 'boolean' ? spVal : undefined}
+                                                      required={sp.level === 'core'}
+                                                      disabled={isReadOnly}
+                                                      onChange={(v) =>
+                                                        handleAnswerChange(sp.id, instance, v ?? false)
+                                                      }
+                                                    />
+                                                  )}
+                                                  {sp.kind === 'scale' && (
+                                                    <ScaleWidget
+                                                      label={sp.label}
+                                                      value={spVal as number}
+                                                      required={sp.level === 'core'}
+                                                      disabled={isReadOnly}
+                                                      config={sp.config as any}
+                                                      onChange={(v) => handleAnswerChange(sp.id, instance, v)}
+                                                    />
+                                                  )}
+                                                  {sp.kind === 'number' && (
+                                                    <NumberWidget
+                                                      label={sp.label}
+                                                      value={spVal as number}
+                                                      disabled={isReadOnly}
+                                                      config={sp.config as any}
+                                                      onChange={(v) => handleAnswerChange(sp.id, instance, v)}
+                                                    />
+                                                  )}
+                                                  {sp.kind === 'text' && (
+                                                    <TextWidget
+                                                      label={sp.label}
+                                                      value={(spVal as string) ?? ''}
+                                                      disabled={isReadOnly}
+                                                      onChange={(v) => handleAnswerChange(sp.id, instance, v)}
+                                                    />
+                                                  )}
+                                                  {sp.kind === 'timerange' && (
+                                                    <TimeRangeWidget
+                                                      label={sp.label}
+                                                      value={spVal as any}
+                                                      date={date}
+                                                      timeFormat={timeFormat}
+                                                      snapMinutes={(sp.config as any)?.snapMinutes ?? 5}
+                                                      disabled={isReadOnly}
+                                                      onChange={(v) => handleAnswerChange(sp.id, instance, v)}
+                                                    />
+                                                  )}
+                                                  {sp.kind === 'library' && (
+                                                    <LibraryWidget
+                                                      label={sp.label}
+                                                      value={spVal as any}
+                                                      disabled={isReadOnly}
+                                                      config={sp.config as any}
+                                                      onChange={(v) => handleAnswerChange(sp.id, instance, v)}
+                                                    />
+                                                  )}
+                                                </div>
+                                              )
+                                            })}
                                       </div>
                                     )
                                   })}
@@ -1077,7 +1311,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   <button
                     type="button"
                     onClick={async () => {
-                      const newC = await cycleRepo.startCycle(todayLogicalDate)
+                      const newC = await cycleRepo.startCycle(date)
                       setActiveCycle(newC)
                     }}
                     className="flex items-center space-x-1 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-semibold active:scale-95 shadow-xs"
@@ -1115,8 +1349,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                   {existingDayRecord && !isReadOnly && (
                     <button
                       type="button"
+                      disabled={!completeness.complete}
                       onClick={handleSave}
-                      className="py-2.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-accent)] text-[var(--color-accent)] font-bold text-xs bg-[var(--color-surface)] active:scale-95"
+                      className="py-2.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-accent)] text-[var(--color-accent)] font-bold text-xs bg-[var(--color-surface)] active:scale-95 disabled:opacity-50"
                     >
                       Save
                     </button>
@@ -1158,8 +1393,9 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               {existingDayRecord && !isReadOnly && (
                 <button
                   type="button"
+                  disabled={!completeness.complete}
                   onClick={handleSave}
-                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button active:scale-95"
+                  className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-bold text-xs sticker-button active:scale-95 disabled:opacity-50"
                 >
                   Save changes
                 </button>
@@ -1181,8 +1417,14 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       <StickerPickerModal
         isOpen={isStickerPickerOpen}
         selectedStickerId={stickerId}
-        onClose={() => setIsStickerPickerOpen(false)}
-        onSelectSticker={(id) => setStickerId(id)}
+        onClose={() => {
+          setIsStickerPickerOpen(false)
+          loadCustomStickerItems().then(setCustomStickers).catch(() => {})
+        }}
+        onSelectSticker={(id) => {
+          setStickerId(id)
+          loadCustomStickerItems().then(setCustomStickers).catch(() => {})
+        }}
       />
     </div>
   )

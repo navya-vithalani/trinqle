@@ -15,6 +15,7 @@ interface CycleHealthViewProps {
   cycles: Cycle[]
   activeCycle?: Cycle
   todayLogicalDate: string
+  weekStart?: 'Monday' | 'Sunday'
   isUpdateModalOpen?: boolean
   onOpenUpdateModal?: () => void
   onCloseUpdateModal?: () => void
@@ -29,6 +30,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   cycles,
   activeCycle,
   todayLogicalDate,
+  weekStart = 'Monday',
   isUpdateModalOpen,
   onOpenUpdateModal,
   onCloseUpdateModal,
@@ -69,6 +71,12 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   const month = viewDate.getMonth()
   const monthName = viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })
   const firstDayWeekday = new Date(year, month, 1).getDay()
+  const leadingBlanks =
+    weekStart === 'Monday' ? (firstDayWeekday + 6) % 7 : firstDayWeekday
+  const weekdayHeaders =
+    weekStart === 'Monday'
+      ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+      : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
   // Load answers for the selected date inspector
@@ -122,7 +130,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   const lastCycleStart = sortedCycles.length > 0 ? sortedCycles[sortedCycles.length - 1].startDate : todayLogicalDate
 
   // Calendar cells
-  const blanks = Array.from({ length: firstDayWeekday })
+  const blanks = Array.from({ length: leadingBlanks })
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   const handleEndPeriodClick = () => {
@@ -187,7 +195,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
 
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[var(--color-ink-soft)]">
-        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+        {weekdayHeaders.map((d) => (
           <div key={d} className="py-0.5">
             {d}
           </div>
@@ -462,9 +470,10 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  // Per user guidance: does nothing for now, closes dialog
+                onClick={async () => {
+                  await onDeleteCycle(activeCycle.id)
                   setEarlyEndModalOpen(false)
+                  closeUpdateModal()
                 }}
                 className="w-full py-2 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs"
               >

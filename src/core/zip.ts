@@ -163,8 +163,13 @@ export function readZipArchive(data: Uint8Array): ExtractedZipFile[] {
   const totalEntries = view.getUint16(eocdOffset + 10, true)
   const cdOffset = view.getUint32(eocdOffset + 16, true)
 
+  if (totalEntries > 5000) {
+    throw new Error('ZIP archive exceeds maximum allowed entry count')
+  }
+
   let cursor = cdOffset
   for (let i = 0; i < totalEntries; i++) {
+    if (cursor + 46 > data.length) break
     const cdSig = view.getUint32(cursor, true)
     if (cdSig !== 0x02014b50) break
 
@@ -173,17 +178,146 @@ export function readZipArchive(data: Uint8Array): ExtractedZipFile[] {
     const commentLen = view.getUint16(cursor + 32, true)
     const localOffset = view.getUint32(cursor + 42, true)
 
+    if (cursor + 46 + nameLen > data.length) {
+      throw new Error('Corrupted ZIP entry header')
+    }
+
     const nameBytes = data.subarray(cursor + 46, cursor + 46 + nameLen)
     const filename = decoder.decode(nameBytes)
 
+    // Path traversal & null-byte guard
+    if (
+      filename.includes('\0') ||
+      filename.startsWith('/') ||
+      filename.startsWith('\\') ||
+      filename.split(/[/\\]/).includes('..')
+    ) {
+      throw new Error(`Unsafe ZIP entry path rejected: ${filename}`)
+    }
+
     // Read file data from local header
-    const lSig = view.getUint32(localOffset, true)
-    if (lSig === 0x04034b50) {
+    if (localOffset + 30 <= data.length) {
+      const lSig = view.getUint32(localOffset, true)
+      if (lSig === 0x04034b50) {
+        const compMethod = view.getUint16(localOffset + 8, true)
+        if (compMethod !== 0) {
+          throw new Error(`Unsupported synchronous compression method (${compMethod}) for ${filename}; use readZipArchiveAsync`)
+        }
+        const lNameLen = view.getUint16(localOffset + 26, true)
+        const lExtraLen = view.getUint16(localOffset + 28, true)
+        const compSize = view.getUint32(localOffset + 18, true)
+        const dataStart = localOffset + 30 + lNameLen + lExtraLen
+        if (dataStart + compSize > data.length) {
+          throw new Error(`Truncated ZIP entry data for ${filename}`)
+        }
+        const fileBytes = data.subarray(dataStart, dataStart + compSize)
+
+        files.push({
+          name: filename,
+          content: fileBytes,
+          text: () => decoder.decode(fileBytes),
+        })
+      }
+    }
+
+    cursor += 46 + nameLen + extraLen + commentLen
+  }
+
+  return files
+}
+
+async function inflateRawBytes(compressed: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream !== 'undefined') {
+    const ds = new DecompressionStream('deflate-raw')
+    const writer = ds.writable.getWriter()
+    writer.write(new Uint8Array(compressed))
+    writer.close()
+    const buf = await new Response(ds.readable).arrayBuffer()
+    return new Uint8Array(buf)
+  }
+  // Node.js fallback
+  const zlib = await import('zlib')
+  return new Uint8Array(zlib.inflateRawSync(compressed))
+}
+
+/**
+ * Async ZIP reader supporting both Store (method 0) and Deflate (method 8).
+ */
+export async function readZipArchiveAsync(data: Uint8Array): Promise<ExtractedZipFile[]> {
+  const decoder = new TextDecoder()
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  const files: ExtractedZipFile[] = []
+
+  let eocdOffset = -1
+  for (let i = data.length - 22; i >= 0; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i
+      break
+    }
+  }
+
+  if (eocdOffset === -1) {
+    throw new Error('Invalid ZIP file: End of Central Directory record not found')
+  }
+
+  const totalEntries = view.getUint16(eocdOffset + 10, true)
+  const cdOffset = view.getUint32(eocdOffset + 16, true)
+  if (totalEntries > 5000) {
+    throw new Error('ZIP archive exceeds maximum allowed entry count')
+  }
+
+  let cursor = cdOffset
+  for (let i = 0; i < totalEntries; i++) {
+    if (cursor + 46 > data.length) break
+    const cdSig = view.getUint32(cursor, true)
+    if (cdSig !== 0x02014b50) break
+
+    const nameLen = view.getUint16(cursor + 28, true)
+    const extraLen = view.getUint16(cursor + 30, true)
+    const commentLen = view.getUint16(cursor + 32, true)
+    const localOffset = view.getUint32(cursor + 42, true)
+    const cdCompSize = view.getUint32(cursor + 20, true)
+    const cdUncompSize = view.getUint32(cursor + 24, true)
+
+    if (cursor + 46 + nameLen > data.length) {
+      throw new Error('Corrupted ZIP entry header')
+    }
+
+    const filename = decoder.decode(data.subarray(cursor + 46, cursor + 46 + nameLen))
+    if (
+      filename.includes('\0') ||
+      filename.startsWith('/') ||
+      filename.startsWith('\\') ||
+      filename.split(/[/\\]/).includes('..')
+    ) {
+      throw new Error(`Unsafe ZIP entry path rejected: ${filename}`)
+    }
+
+    if (cdUncompSize > 50 * 1024 * 1024) {
+      throw new Error(`ZIP entry ${filename} exceeds 50 MB limit`)
+    }
+
+    if (localOffset + 30 <= data.length && view.getUint32(localOffset, true) === 0x04034b50) {
+      const compMethod = view.getUint16(localOffset + 8, true)
       const lNameLen = view.getUint16(localOffset + 26, true)
       const lExtraLen = view.getUint16(localOffset + 28, true)
-      const compSize = view.getUint32(localOffset + 18, true)
+      const localCompSize = view.getUint32(localOffset + 18, true)
+      const compSize = localCompSize > 0 ? localCompSize : cdCompSize
       const dataStart = localOffset + 30 + lNameLen + lExtraLen
-      const fileBytes = data.subarray(dataStart, dataStart + compSize)
+
+      if (dataStart + compSize > data.length) {
+        throw new Error(`Truncated ZIP entry data for ${filename}`)
+      }
+
+      const rawBytes = data.subarray(dataStart, dataStart + compSize)
+      let fileBytes: Uint8Array
+      if (compMethod === 0) {
+        fileBytes = rawBytes
+      } else if (compMethod === 8) {
+        fileBytes = await inflateRawBytes(rawBytes)
+      } else {
+        throw new Error(`Unsupported ZIP compression method (${compMethod}) for ${filename}`)
+      }
 
       files.push({
         name: filename,

@@ -29,7 +29,8 @@ import {
   Cpu,
 } from 'lucide-react'
 import type { TabId } from '../types'
-import { loadThemePreference } from '../../themes/registry'
+import { loadThemePreference, getTheme } from '../../themes/registry'
+import type { IconKey } from '../../themes/types'
 
 interface NavbarProps {
   activeTab: TabId
@@ -50,42 +51,37 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   { id: 'profile', label: 'Profile' },
 ]
 
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  Home,
+  LayoutDashboard,
+  Sparkles,
+  BookOpen,
+  User,
+  Trophy,
+  Timer,
+  Flame,
+  Medal,
+  Dumbbell,
+  Crown,
+  Gem,
+  Shield,
+  Newspaper,
+  FileSpreadsheet,
+  TrendingUp,
+  Archive,
+  PenTool,
+  Monitor,
+  Terminal,
+  Radio,
+  HardDrive,
+  Cpu,
+}
+
 function getNavIcon(tabId: TabId, themeId: string): React.ComponentType<{ size?: number; className?: string }> {
-  if (themeId === 'sports') {
-    switch (tabId) {
-      case 'home': return Trophy
-      case 'dashboard': return Timer
-      case 'insights': return Flame
-      case 'archive': return Medal
-      case 'profile': return Dumbbell
-    }
-  }
-  if (themeId === 'royal') {
-    switch (tabId) {
-      case 'home': return Crown
-      case 'dashboard': return Gem
-      case 'insights': return Sparkles
-      case 'archive': return BookOpen
-      case 'profile': return Shield
-    }
-  }
-  if (themeId === 'newspaper') {
-    switch (tabId) {
-      case 'home': return Newspaper
-      case 'dashboard': return FileSpreadsheet
-      case 'insights': return TrendingUp
-      case 'archive': return Archive
-      case 'profile': return PenTool
-    }
-  }
-  if (themeId === 'retro') {
-    switch (tabId) {
-      case 'home': return Monitor
-      case 'dashboard': return Terminal
-      case 'insights': return Radio
-      case 'archive': return HardDrive
-      case 'profile': return Cpu
-    }
+  const theme = getTheme(themeId)
+  const iconKey = theme.iconSet[tabId as IconKey]
+  if (iconKey && ICON_MAP[iconKey]) {
+    return ICON_MAP[iconKey]
   }
   switch (tabId) {
     case 'home': return Home

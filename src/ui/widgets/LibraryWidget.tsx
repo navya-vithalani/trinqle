@@ -7,7 +7,7 @@ interface LibraryWidgetProps {
   label: string
   value: string | string[] | undefined
   config?: LibraryConfig
-  onChange: (val: string | string[]) => void
+  onChange: (val: string[]) => void
   disabled?: boolean
 }
 
@@ -23,15 +23,27 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
   const isCreatable = config?.creatable ?? true
 
   const [items, setItems] = useState<Item[]>([])
+  const [recentIds, setRecentIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const libRepo = new LibraryRepository()
+  const libRepo = useRef(new LibraryRepository()).current
 
   useEffect(() => {
     if (!libraryId) return
-    libRepo.getItems(libraryId).then(setItems)
-  }, [libraryId])
+    let active = true
+    Promise.all([
+      libRepo.getItems(libraryId),
+      libRepo.getRecentItemIds(libraryId, 4),
+    ]).then(([allItems, recIds]) => {
+      if (!active) return
+      setItems(allItems)
+      setRecentIds(recIds)
+    })
+    return () => {
+      active = false
+    }
+  }, [libraryId, libRepo])
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -44,35 +56,45 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [])
 
-  const selectedList: string[] = Array.isArray(value)
-    ? value
-    : value
+  const itemById = new Map(items.map((i) => [i.id, i]))
+  const itemByNameLower = new Map(items.map((i) => [i.name.toLowerCase(), i]))
+
+  // Normalize incoming value (IDs or legacy item names) into Item IDs
+  const rawTokens: string[] = Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v.length > 0)
+    : typeof value === 'string' && value.length > 0
       ? [value]
       : []
 
-  const toggleItem = (name: string) => {
+  const selectedIds: string[] = rawTokens.map((tok) => {
+    if (itemById.has(tok)) return tok
+    const byName = itemByNameLower.get(tok.toLowerCase())
+    return byName ? byName.id : tok
+  })
+
+  const toggleItem = (itemId: string) => {
     if (disabled) return
 
     if (isMulti) {
-      if (selectedList.includes(name)) {
-        onChange(selectedList.filter((n) => n !== name))
+      if (selectedIds.includes(itemId)) {
+        onChange(selectedIds.filter((id) => id !== itemId))
       } else {
-        onChange([...selectedList, name])
+        onChange([...selectedIds, itemId])
       }
     } else {
-      onChange(name)
-      setIsOpen(false)
+      if (selectedIds.includes(itemId)) {
+        onChange([])
+      } else {
+        onChange([itemId])
+        setIsOpen(false)
+      }
     }
     setSearch('')
   }
 
-  const removeItem = (name: string) => {
+  const removeItem = (itemId: string) => {
     if (disabled) return
-    if (isMulti) {
-      onChange(selectedList.filter((n) => n !== name))
-    } else {
-      onChange('')
-    }
+    onChange(selectedIds.filter((id) => id !== itemId))
   }
 
   const handleCreate = async () => {
@@ -81,7 +103,7 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
 
     const newItem = await libRepo.createItem(libraryId, trimmed)
     setItems((prev) => [...prev, newItem])
-    toggleItem(trimmed)
+    toggleItem(newItem.id)
     setSearch('')
   }
 
@@ -93,31 +115,57 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
     (i) => i.name.toLowerCase() === search.trim().toLowerCase()
   )
 
+  const quickRecentItems = recentIds
+    .map((id) => itemById.get(id))
+    .filter((it): it is Item => Boolean(it && !selectedIds.includes(it.id)))
+
   return (
     <div className="py-2.5 space-y-1.5" ref={containerRef}>
       <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
 
-      {/* Selected Items Chips (only show what is currently picked) */}
-      {selectedList.length > 0 && (
+      {/* Selected Items Chips */}
+      {selectedIds.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pb-1">
-          {selectedList.map((itemName) => (
-            <span
-              key={itemName}
-              className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-full bg-[var(--color-accent)] text-white text-xs font-semibold shadow-xs"
-            >
-              <span>{itemName}</span>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeItem(itemName)
-                }}
-                className="hover:opacity-80"
+          {selectedIds.map((itemId) => {
+            const resolvedName = itemById.get(itemId)?.name || itemId
+            return (
+              <span
+                key={itemId}
+                className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-full bg-[var(--color-accent)] text-white text-xs font-semibold shadow-xs"
               >
-                <X size={12} />
-              </button>
-            </span>
+                <span>{resolvedName}</span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeItem(itemId)
+                  }}
+                  className="hover:opacity-80"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 1-tap Recent Items Chips */}
+      {!disabled && quickRecentItems.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 pb-0.5">
+          <span className="text-[10px] font-semibold text-[var(--color-ink-soft)] mr-0.5">
+            Recent:
+          </span>
+          {quickRecentItems.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => toggleItem(it.id)}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] active:scale-95 transition-all"
+            >
+              + {it.name}
+            </button>
           ))}
         </div>
       )}
@@ -132,7 +180,7 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
             type="text"
             value={search}
             disabled={disabled}
-            placeholder={selectedList.length === 0 ? 'Select or type to add...' : 'Add more...'}
+            placeholder={selectedIds.length === 0 ? 'Select or type to add...' : 'Add more...'}
             onFocus={() => setIsOpen(true)}
             onChange={(e) => {
               setSearch(e.target.value)
@@ -144,7 +192,7 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
                 if (!exactMatchExists && search.trim() && isCreatable) {
                   handleCreate()
                 } else if (filteredItems.length > 0) {
-                  toggleItem(filteredItems[0].name)
+                  toggleItem(filteredItems[0].id)
                 }
               }
             }}
@@ -168,12 +216,12 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
             )}
 
             {filteredItems.map((item) => {
-              const isSelected = selectedList.includes(item.name)
+              const isSelected = selectedIds.includes(item.id)
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => toggleItem(item.name)}
+                  onClick={() => toggleItem(item.id)}
                   className={`w-full text-left p-2.5 text-xs font-medium flex items-center justify-between hover:bg-[var(--color-bg)] transition-colors ${
                     isSelected ? 'font-bold text-[var(--color-accent)]' : 'text-[var(--color-ink)]'
                   }`}

@@ -47,6 +47,13 @@ import {
   saveCharacterPreference,
 } from '../../characters/registry'
 import { CharacterImportDialog } from '../dialogs/CharacterImportDialog'
+import {
+  BUILTIN_STICKERS,
+  loadCustomStickerItems,
+  saveCustomStickerFromFile,
+  deleteCustomSticker,
+  type StickerItem,
+} from '../../core/stickers'
 import { deleteAllData } from '../../data/reset'
 import {
   exportChapterZip,
@@ -58,10 +65,8 @@ import {
 import { exportFormPack } from '../../data/formPack/exporter'
 import { ImportDialog } from '../dialogs/ImportDialog'
 import { FormEditorScreen } from '../editor/FormEditorScreen'
-import { NightlyFormModal } from '../form/NightlyFormModal'
 import { generateDemoData } from '../../tools/demoData'
 import { db } from '../../data/db'
-import { logicalDate, DEFAULT_WINDOW } from '../../core/logicalDay'
 import {
   SettingsRepository,
   ChapterRepository,
@@ -70,13 +75,17 @@ import {
 import type { Chapter, Day } from '../../data/types'
 
 interface ProfileScreenProps {
-  initialInspectDate?: string | null
-  onClearInspectDate?: () => void
+  archiveReadOnly?: boolean
+  onExitArchive?: () => void
+  onInspectDate?: (date: string) => void
+  onSettingsChanged?: () => void
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
-  initialInspectDate,
-  onClearInspectDate,
+  archiveReadOnly = false,
+  onExitArchive,
+  onInspectDate,
+  onSettingsChanged,
 }) => {
   const [selectedThemeId, setSelectedThemeId] = useState('cutesy')
   const [isDark, setIsDark] = useState(false)
@@ -93,13 +102,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [openChapter, setOpenChapter] = useState<Chapter | null>(null)
   const [openChapterDays, setOpenChapterDays] = useState<Day[]>([])
   const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false)
-  const [inspectDate, setInspectDate] = useState<string | null>(initialInspectDate || null)
 
   // Other modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isCharacterImportOpen, setIsCharacterImportOpen] = useState(false)
+  const [customStickers, setCustomStickers] = useState<StickerItem[]>([])
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -118,12 +127,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const settingsRepo = new SettingsRepository()
   const chapterRepo = new ChapterRepository()
   const dayRepo = new DayRepository()
-
-  useEffect(() => {
-    if (initialInspectDate) {
-      setInspectDate(initialInspectDate)
-    }
-  }, [initialInspectDate])
 
   useEffect(() => {
     const { themeId, isDark: dark } = loadThemePreference()
@@ -156,6 +159,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     const persisted = await isStoragePersisted()
     setIsPersisted(persisted)
+
+    loadCustomStickerItems().then(setCustomStickers).catch(() => {})
 
     // Load Push Notification state
     const supported = isPushSupported()
@@ -234,6 +239,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const handleSaveUserName = async (name: string) => {
     setUserName(name)
     await settingsRepo.setSetting('user_name', name.trim())
+    onSettingsChanged?.()
   }
 
   const handleSaveFormWindow = async (start: string, end: string) => {
@@ -242,18 +248,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     await settingsRepo.setSetting('form_window_start', start)
     await settingsRepo.setSetting('form_window_end', end)
     showToast('Form window updated')
+    onSettingsChanged?.()
   }
 
   const handleSaveWeekStart = async (val: 'Monday' | 'Sunday') => {
     setWeekStart(val)
     await settingsRepo.setSetting('week_start', val)
     showToast(`Week start set to ${val}`)
+    onSettingsChanged?.()
   }
 
   const handleSaveTimeFormat = async (fmt: '12-hour' | '24-hour') => {
     setTimeFormat(fmt)
     await settingsRepo.setSetting('time_format', fmt)
     showToast(`Time format set to ${fmt}`)
+    onSettingsChanged?.()
   }
 
   const handleThemeChange = (themeId: string) => {
@@ -375,6 +384,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <div className="space-y-4 pb-20">
+      {archiveReadOnly && (
+        <div className="sticker-card p-4 border-2 border-[var(--color-line)] flex items-center justify-between gap-2">
+          <div className="text-xs">
+            <span className="font-bold text-[var(--color-ink)] block">
+              Archive Mode (Read-Only)
+            </span>
+            <span className="text-[11px] text-[var(--color-ink-soft)]">
+              Settings, form editing, and data deletion are locked while viewing a closed chapter.
+            </span>
+          </div>
+          {onExitArchive && (
+            <button
+              type="button"
+              onClick={onExitArchive}
+              className="px-3 py-1.5 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold shrink-0"
+            >
+              Exit Archive
+            </button>
+          )}
+        </div>
+      )}
+
+      <fieldset disabled={archiveReadOnly} className={archiveReadOnly ? 'opacity-60 pointer-events-none space-y-4' : 'space-y-4'}>
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[var(--color-ink)] text-white text-xs font-semibold py-1.5 px-4 rounded-full shadow-lg">
@@ -810,6 +842,76 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       </div>
 
+      {/* Stickers Library Card */}
+      <div className="sticker-card p-4 space-y-3">
+        <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+          <div className="space-y-0.5">
+            <h2 className="text-base font-bold text-[var(--color-ink)]">Stickers</h2>
+            <p className="text-[11px] text-[var(--color-ink-soft)]">
+              12 built-in SVG stickers + custom SVG or raster uploads (auto-resized to 256px)
+            </p>
+          </div>
+          <label className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-bold text-[var(--color-accent)] hover:border-[var(--color-accent)] active:scale-95 transition-all shrink-0 cursor-pointer">
+            <Upload size={12} />
+            <span>Add Sticker</span>
+            <input
+              type="file"
+              accept=".svg,image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                try {
+                  const created = await saveCustomStickerFromFile(file)
+                  setCustomStickers((prev) => [...prev, created])
+                  showToast(`Added sticker "${created.name}"`)
+                } catch (err: unknown) {
+                  showToast(err instanceof Error ? err.message : 'Invalid sticker file')
+                }
+              }}
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+          {BUILTIN_STICKERS.map((st) => (
+            <div
+              key={st.id}
+              className="flex flex-col items-center p-2 rounded-[var(--radius-m)] border border-[var(--color-line)] bg-[var(--color-bg)]/50"
+            >
+              <img src={st.url} alt={st.name} className="w-8 h-8 object-contain" />
+              <span className="text-[9px] text-[var(--color-ink-soft)] mt-1 truncate max-w-full">
+                {st.name}
+              </span>
+            </div>
+          ))}
+          {customStickers.map((st) => (
+            <div
+              key={st.id}
+              className="flex flex-col items-center p-2 rounded-[var(--radius-m)] border-2 border-[var(--color-accent)]/40 bg-[var(--color-bg)] relative group"
+            >
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteCustomSticker(st.id)
+                  setCustomStickers((prev) => prev.filter((item) => item.id !== st.id))
+                  showToast('Custom sticker removed')
+                }}
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center opacity-85 hover:opacity-100"
+                title="Remove custom sticker"
+              >
+                <X size={10} />
+              </button>
+              <img src={st.url} alt={st.name} className="w-8 h-8 object-contain" />
+              <span className="text-[9px] font-semibold text-[var(--color-ink)] mt-1 truncate max-w-full">
+                {st.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* SECTION 4: DATA & BACKUP TOOLS */}
       <div className="sticker-card p-4 space-y-3">
         <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
@@ -988,8 +1090,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       key={d.date}
                       type="button"
                       onClick={() => {
-                        setInspectDate(d.date)
                         setIsBrowseModalOpen(false)
+                        onInspectDate?.(d.date)
                       }}
                       className="w-full p-2.5 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] flex items-center justify-between text-left hover:border-[var(--color-accent)] active:scale-95 transition-all"
                     >
@@ -1025,27 +1127,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
           </div>
         </div>
-      )}
-
-      {/* Inspect Past Form in Locked Browse Mode (Items 4 & 5) */}
-      {inspectDate && openChapter && (
-        <NightlyFormModal
-          isOpen={Boolean(inspectDate)}
-          date={inspectDate}
-          chapterId={openChapter.id}
-          todayLogicalDate={logicalDate(new Date(), undefined, DEFAULT_WINDOW.endHour)}
-          readOnly={true} // Default to locked Browse Mode! (Item 4)
-          onClose={() => {
-            setInspectDate(null)
-            if (onClearInspectDate) onClearInspectDate()
-          }}
-          onSaved={() => {
-            showToast('Changes saved')
-            setInspectDate(null)
-            if (onClearInspectDate) onClearInspectDate()
-            loadProfileData()
-          }}
-        />
       )}
 
       {/* Delete Confirmation Modal */}
@@ -1095,7 +1176,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <ImportDialog
           isOpen={isImportOpen}
           onClose={() => setIsImportOpen(false)}
-          onSuccess={() => showToast('Form pack imported!')}
+          onSuccess={() => showToast('Imported successfully!')}
         />
       )}
 
@@ -1118,6 +1199,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           }}
         />
       )}
+      </fieldset>
     </div>
   )
 }

@@ -82,36 +82,64 @@ function fuzzyMatchWord(word: string, queryWord: string): boolean {
   return levenshteinDistance(word, queryWord) <= maxDist
 }
 
+const MARK_OPEN = '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">'
+const MARK_CLOSE = '</mark>'
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 /**
- * Highlights matches in text using a bold span tag without emojis.
+ * Highlights matches in text safely by HTML-escaping content and escaping RegExp tokens.
  */
 function highlightText(text: string, queryWords: string[]): { highlighted: string; score: number } {
   let score = 0
   const lower = text.toLowerCase()
+  const matchedTerms: string[] = []
 
-  // Find occurrences of query words
-  let highlighted = text
   for (const qw of queryWords) {
     if (!qw) continue
-    const regex = new RegExp(`(${qw})`, 'gi')
-    if (regex.test(highlighted)) {
+    const safeQw = escapeRegex(qw)
+    const regex = new RegExp(safeQw, 'i')
+    if (regex.test(text)) {
       score += 10
-      highlighted = highlighted.replace(regex, '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">$1</mark>')
+      matchedTerms.push(qw)
     } else {
-      // Fuzzy test against individual words
       const words = lower.split(/[\s,.;:!?]+/)
       for (const w of words) {
-        if (fuzzyMatchWord(w, qw)) {
+        if (w && fuzzyMatchWord(w, qw)) {
           score += 5
-          const fuzzyReg = new RegExp(`(${w})`, 'gi')
-          highlighted = highlighted.replace(fuzzyReg, '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">$1</mark>')
+          matchedTerms.push(w)
           break
         }
       }
     }
   }
 
+  let highlighted = escapeHtml(text)
+  if (matchedTerms.length > 0) {
+    const uniqueEscaped = Array.from(new Set(matchedTerms.map((t) => escapeRegex(escapeHtml(t)))))
+    const combinedRegex = new RegExp(`(${uniqueEscaped.join('|')})`, 'gi')
+    highlighted = highlighted.replace(combinedRegex, `${MARK_OPEN}$1${MARK_CLOSE}`)
+  }
+
   return { highlighted, score }
+}
+
+function highlightExactPhrase(text: string, cleanQuery: string): string {
+  const safeEscapedText = escapeHtml(text)
+  const safeEscapedQuery = escapeRegex(escapeHtml(cleanQuery))
+  if (!safeEscapedQuery) return safeEscapedText
+  return safeEscapedText.replace(new RegExp(`(${safeEscapedQuery})`, 'gi'), `${MARK_OPEN}$1${MARK_CLOSE}`)
 }
 
 export interface SearchIndexData {
@@ -198,10 +226,7 @@ export function searchArchive(
         if (lowerText.includes(cleanQuery)) {
           matched = true
           hitScore = 20
-          highlighted = textVal.replace(
-            new RegExp(`(${cleanQuery})`, 'gi'),
-            '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">$1</mark>'
-          )
+          highlighted = highlightExactPhrase(textVal, cleanQuery)
         }
       } else {
         const hRes = highlightText(textVal, queryWords)
@@ -254,6 +279,7 @@ export function searchArchive(
       }
 
       if (matched) {
+        const safeItemName = escapeHtml(itemName)
         hits.push({
           id: link.id,
           date: link.date,
@@ -261,7 +287,7 @@ export function searchArchive(
           sourceKind: 'library',
           sourceLabel: `Tag: ${itemName}`,
           snippet: itemName,
-          highlightedSnippet: `<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">${itemName}</mark>`,
+          highlightedSnippet: `${MARK_OPEN}${safeItemName}${MARK_CLOSE}`,
           score: hitScore,
           dayTitle: day?.title,
           memorability: day?.memorability,
@@ -289,10 +315,7 @@ export function searchArchive(
         if (lowerHeader.includes(cleanQuery)) {
           matched = true
           hitScore = 25
-          highlighted = combinedHeader.replace(
-            new RegExp(`(${cleanQuery})`, 'gi'),
-            '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">$1</mark>'
-          )
+          highlighted = highlightExactPhrase(combinedHeader, cleanQuery)
         }
       } else {
         const hRes = highlightText(combinedHeader, queryWords)
@@ -338,10 +361,7 @@ export function searchArchive(
         if (lowerVal.includes(cleanQuery)) {
           matched = true
           hitScore = 15
-          highlighted = textVal.replace(
-            new RegExp(`(${cleanQuery})`, 'gi'),
-            '<mark class="bg-amber-200 dark:bg-amber-900/60 font-semibold px-0.5 rounded">$1</mark>'
-          )
+          highlighted = highlightExactPhrase(textVal, cleanQuery)
         }
       } else {
         const hRes = highlightText(textVal, queryWords)

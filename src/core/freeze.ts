@@ -2,10 +2,13 @@ import type {
   Chapter,
   Day,
   Answer,
+  AnswerLink,
   Question,
   Part,
   Library,
+  Item,
   Section,
+  Insight,
   FrozenChapter,
   FrozenChartModel,
 } from '../data/types'
@@ -14,12 +17,17 @@ import {
   calculateScaleNumberStats,
   calculateTimeRangeStats,
   calculateStreak,
+  calculateLibraryStats,
+  calculateMemorabilityStats,
 } from './metrics'
 
 export interface FreezeChapterOptions {
   chapter: Chapter
   days: Day[]
   answers: Answer[]
+  answerLinks?: AnswerLink[]
+  items?: Item[]
+  insights?: Insight[]
   sections: Section[]
   questions: Question[]
   parts: Part[]
@@ -50,6 +58,9 @@ export function buildFrozenChapter(options: FreezeChapterOptions): FrozenChapter
     chapter,
     days,
     answers,
+    answerLinks = [],
+    items = [],
+    insights = [],
     sections,
     questions,
     parts,
@@ -170,7 +181,79 @@ export function buildFrozenChapter(options: FreezeChapterOptions): FrozenChapter
           },
         ],
       })
+    } else if (metric.partKind === 'library') {
+      const partAnswerIds = new Set(
+        answers
+          .filter((a) => a.questionId === metric.questionId && a.partId === metric.partId)
+          .map((a) => a.id)
+      )
+      const partLinks = answerLinks.filter((l) => partAnswerIds.has(l.answerId))
+      const libStats = calculateLibraryStats(partLinks, items)
+      chartModels.push({
+        chartId: `chart_${metric.key}`,
+        type: 'library_frequency',
+        rendererVersion: 1,
+        labels: libStats.topItems.slice(0, 10).map((it) => it.name),
+        series: [
+          {
+            name: metric.label,
+            totalUsages: libStats.totalUsages,
+            uniqueItemCount: libStats.uniqueItemCount,
+            topItems: libStats.topItems.slice(0, 10).map((it) => ({
+              name: it.name,
+              count: it.count,
+              firstUsed: it.firstUsed,
+              lastUsed: it.lastUsed,
+            })),
+          },
+        ],
+      })
+    } else if (metric.partKind === 'text' && metric.metric === 'written') {
+      const textStreak = calculateStreak(
+        points.map((p) => ({
+          date: p.date,
+          done: p.value === 1,
+          isSkipped: p.isMissing,
+        }))
+      )
+      chartModels.push({
+        chartId: `chart_${metric.key}`,
+        type: 'text_summary',
+        rendererVersion: 1,
+        labels: points.map((p) => p.date),
+        series: [
+          {
+            name: `${metric.questionLabel} - ${metric.label}`,
+            totalEntries: textStreak.totalDone,
+            completionRate: textStreak.completionRate,
+            currentStreak: textStreak.currentStreak,
+            longestStreak: textStreak.longestStreak,
+          },
+        ],
+      })
     }
+  }
+
+  // Freeze Memorability distribution summary
+  const memStats = calculateMemorabilityStats(sortedDays)
+  if (sortedDays.length > 0) {
+    chartModels.push({
+      chartId: 'chart_derived.memorability',
+      type: 'memorability',
+      rendererVersion: 1,
+      labels: ['Normal', 'Notable', 'Outstanding', 'Star'],
+      series: [
+        {
+          name: 'Day Memorability & Ratings',
+          normalCount: memStats.normalCount,
+          notableCount: memStats.notableCount,
+          outstandingCount: memStats.outstandingCount,
+          starCount: memStats.starCount,
+          avgRating: memStats.avgRating,
+          totalRatedDays: memStats.totalRatedDays,
+        },
+      ],
+    })
   }
 
   return {
@@ -181,7 +264,7 @@ export function buildFrozenChapter(options: FreezeChapterOptions): FrozenChapter
       libraries,
     },
     dashboard: chartModels,
-    insights: [],
+    insights,
     themeId: chapter.themeId,
     characterId: chapter.characterId,
     stats: metricStats,

@@ -8,6 +8,7 @@ interface HeatmapCalendarProps {
   chapter: Chapter
   days: Day[]
   todayLogicalDate: string
+  weekStart?: 'Monday' | 'Sunday'
   onSelectDate: (date: string) => void
 }
 
@@ -15,11 +16,21 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({
   chapter,
   days,
   todayLogicalDate,
+  weekStart = 'Monday',
   onSelectDate,
 }) => {
   const totalDays = calculateChapterDuration(chapter.startDate, chapter.plannedEndDate)
   const daysMap = new Map<string, Day>()
   days.forEach((d) => daysMap.set(d.date, d))
+
+  const [sy, sm, sd] = chapter.startDate.split('-').map(Number)
+  const startWeekday = new Date(sy, sm - 1, sd).getDay() // 0=Sun..6=Sat
+  const leadingBlanks =
+    weekStart === 'Monday' ? (startWeekday + 6) % 7 : startWeekday
+  const weekdayHeaders =
+    weekStart === 'Monday'
+      ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+      : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
   const cells: {
     date: string
@@ -77,8 +88,20 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({
         </div>
       </div>
 
+      {/* Weekday Headers */}
+      <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-[10px] font-bold text-[var(--color-ink-soft)]">
+        {weekdayHeaders.map((wd) => (
+          <div key={wd} className="py-0.5">
+            {wd}
+          </div>
+        ))}
+      </div>
+
       {/* Grid */}
       <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        {Array.from({ length: leadingBlanks }).map((_, i) => (
+          <div key={`blank-${i}`} className="aspect-square" />
+        ))}
         {cells.map(({ date, dayNumber, day, isToday, isFuture }) => {
           let bgClass =
             'bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-[var(--color-ink)]'

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import type { TabId } from './types'
 import { Navbar } from './components/Navbar'
 import { PWAUpdateBanner } from './components/PWAUpdateBanner'
@@ -9,6 +9,7 @@ import { ArchiveScreen } from './screens/ArchiveScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { ArchiveHomeScreen } from './archive/ArchiveHomeScreen'
 import { FrozenDashboardView } from './archive/FrozenDashboardView'
+import { NightlyFormModal } from './form/NightlyFormModal'
 import {
   loadThemePreference,
   applyThemeById,
@@ -17,30 +18,72 @@ import {
 } from '../themes/registry'
 import type { Chapter, ChapterAnswer } from '../data/types'
 import { ChapterRepository } from '../data/repositories'
+import { migrateLegacyLibraryAnswersIfNeeded } from '../data/migrations'
+import { loadAppSettings, type AppSettings } from '../core/settings'
+import { logicalDate, DEFAULT_WINDOW } from '../core/logicalDay'
 import { ArrowLeft, Lock } from 'lucide-react'
 
+const VALID_TABS: TabId[] = ['home', 'dashboard', 'insights', 'archive', 'profile']
+
+function getInitialTabFromUrl(): TabId {
+  if (typeof window === 'undefined') return 'home'
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab') as TabId | null
+    if (tab && VALID_TABS.includes(tab)) return tab
+  } catch {
+    // Ignore URL errors
+  }
+  return 'home'
+}
+
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabId>('home')
-  const [profileInspectDate, setProfileInspectDate] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTabFromUrl)
+  const [refreshTick, setRefreshTick] = useState(0)
+
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    userName: '',
+    formWindowStart: '21:00',
+    formWindowEnd: '03:00',
+    windowStartHour: DEFAULT_WINDOW.startHour,
+    windowEndHour: DEFAULT_WINDOW.endHour,
+    weekStart: 'Monday',
+    timeFormat: '12h',
+  })
+
+  // Global Day Inspector Modal state (opens over any tab without detouring to Profile)
+  const [inspectTarget, setInspectTarget] = useState<{
+    date: string
+    chapterId: string
+    lockedClosed: boolean
+  } | null>(null)
 
   // Archive Mode State (TRD 12 & PRD 5.6)
   const [archiveViewingChapter, setArchiveViewingChapter] = useState<Chapter | null>(null)
   const [chapterAnswers, setChapterAnswers] = useState<ChapterAnswer[]>([])
 
+  const refreshSettings = useCallback(async () => {
+    try {
+      const loaded = await loadAppSettings()
+      setAppSettings(loaded)
+    } catch {
+      // Ignore DB read errors during early boot/SSR
+    }
+  }, [])
+
   useEffect(() => {
-    // Initialize saved theme and dark mode preference
     const { themeId, isDark } = loadThemePreference()
     applyThemeById(themeId, isDark)
-  }, [])
+    migrateLegacyLibraryAnswersIfNeeded().catch(() => {})
+    refreshSettings()
+  }, [refreshSettings])
 
   // Manage monochrome archive theme vs full-colour Home in archive mode
   useEffect(() => {
     if (archiveViewingChapter) {
       if (activeTab === 'home') {
-        // TRD 12: Archive mode Home stays in full colour!
         applyThemeById(archiveViewingChapter.themeId, false)
       } else {
-        // Other tabs switch to monochrome archive variant
         applyArchiveTheme(archiveViewingChapter.themeId)
       }
     } else {
@@ -62,16 +105,26 @@ export const App: React.FC = () => {
     restoreLiveTheme()
   }
 
-  const handleNavigateToProfileBrowse = (date: string) => {
-    setProfileInspectDate(date)
-    setActiveTab('profile')
+  const handleInspectDay = async (date: string) => {
+    const chapterRepo = new ChapterRepository()
+    const targetChapter =
+      (await chapterRepo.getChapterForDate(date)) || (await chapterRepo.getOpenChapter())
+    const isClosed =
+      Boolean(archiveViewingChapter) || targetChapter?.status === 'closed'
+
+    setInspectTarget({
+      date,
+      chapterId: targetChapter?.id || archiveViewingChapter?.id || '',
+      lockedClosed: isClosed,
+    })
   }
+
+  const todayLogicalStr = logicalDate(new Date(), undefined, appSettings.windowEndHour)
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] flex justify-center">
       {/* Mobile container constraint: phone-only (max 440px wide) */}
       <div className="w-full max-w-[440px] min-h-screen bg-[var(--color-bg)] flex flex-col relative">
-        {/* PWA Update Banner (renders if a new service worker / deployment is waiting) */}
         <PWAUpdateBanner />
 
         {/* Top bar with safe area inset */}
@@ -80,6 +133,11 @@ export const App: React.FC = () => {
             <span className="text-lg font-bold tracking-tight text-[var(--color-accent)]">
               Trinqle
             </span>
+            {appSettings.userName && (
+              <span className="text-xs font-medium text-[var(--color-ink-soft)] truncate max-w-[140px]">
+                · {appSettings.userName}
+              </span>
+            )}
           </div>
           <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-line)] text-[var(--color-ink)] font-medium">
             v0.2
@@ -112,11 +170,13 @@ export const App: React.FC = () => {
                 chapter={archiveViewingChapter}
                 chapterAnswers={chapterAnswers}
                 onExitArchive={handleExitArchiveMode}
-                onNavigateToDay={handleNavigateToProfileBrowse}
+                onNavigateToDay={handleInspectDay}
               />
             ) : (
               <HomeScreen
-                onNavigateToProfileBrowse={handleNavigateToProfileBrowse}
+                key={`home-${refreshTick}`}
+                appSettings={appSettings}
+                onNavigateToDay={handleInspectDay}
                 onNavigateToInsights={() => setActiveTab('insights')}
               />
             ))}
@@ -128,30 +188,60 @@ export const App: React.FC = () => {
                 onExitArchive={handleExitArchiveMode}
               />
             ) : (
-              <DashboardScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+              <DashboardScreen
+                key={`dash-${refreshTick}`}
+                windowEndHour={appSettings.windowEndHour}
+                onNavigateToProfileBrowse={handleInspectDay}
+              />
             ))}
 
           {activeTab === 'insights' && (
-            <InsightsScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+            <InsightsScreen
+              key={`ins-${refreshTick}`}
+              frozenChapter={archiveViewingChapter || undefined}
+              onExitArchive={handleExitArchiveMode}
+              onNavigateToProfileBrowse={handleInspectDay}
+            />
           )}
 
           {activeTab === 'archive' && (
             <ArchiveScreen
+              key={`arch-${refreshTick}`}
               onSelectArchiveChapter={handleSelectArchiveChapter}
-              onNavigateToDay={handleNavigateToProfileBrowse}
+              onNavigateToDay={handleInspectDay}
             />
           )}
 
           {activeTab === 'profile' && (
             <ProfileScreen
-              initialInspectDate={profileInspectDate}
-              onClearInspectDate={() => setProfileInspectDate(null)}
+              archiveReadOnly={Boolean(archiveViewingChapter)}
+              onExitArchive={handleExitArchiveMode}
+              onInspectDate={handleInspectDay}
+              onSettingsChanged={refreshSettings}
             />
           )}
         </main>
 
         {/* Bottom Navigation Bar */}
         <Navbar activeTab={activeTab} onSelectTab={setActiveTab} />
+
+        {/* Global Day Inspector / Editor Modal */}
+        {inspectTarget && (
+          <NightlyFormModal
+            isOpen={true}
+            date={inspectTarget.date}
+            chapterId={inspectTarget.chapterId}
+            todayLogicalDate={todayLogicalStr}
+            readOnly={true}
+            lockedClosed={inspectTarget.lockedClosed}
+            timeFormat={appSettings.timeFormat}
+            onClose={() => setInspectTarget(null)}
+            onSaved={() => {
+              setInspectTarget(null)
+              setRefreshTick((t) => t + 1)
+            }}
+          />
+        )}
       </div>
     </div>
   )

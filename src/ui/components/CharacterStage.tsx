@@ -6,11 +6,13 @@ import { Sparkles, Eye } from 'lucide-react'
 interface CharacterStageProps {
   characterId: string
   greetingText?: string
+  ambientMood?: 'normal' | 'sleepy' | 'excited'
 }
 
 export const CharacterStage: React.FC<CharacterStageProps> = ({
   characterId,
   greetingText,
+  ambientMood = 'normal',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const animatorRef = useRef<AnimatorControls | null>(null)
@@ -67,13 +69,19 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
       },
     })
 
+    if (ambientMood === 'sleepy') {
+      animatorRef.current.playClip('sleep')
+    } else if (ambientMood === 'excited') {
+      animatorRef.current.playClip('sparkle')
+    }
+
     return () => {
       if (animatorRef.current) {
         animatorRef.current.destroy()
         animatorRef.current = null
       }
     }
-  }, [currentSvg, activeView, characterId, character.hasMultiView, sideSvgContent])
+  }, [currentSvg, activeView, characterId, character.hasMultiView, sideSvgContent, ambientMood])
 
   const handleStageTap = () => {
     if (animatorRef.current) {

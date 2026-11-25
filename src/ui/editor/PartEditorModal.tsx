@@ -156,7 +156,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
         break
       case 'timerange':
         config = {
-          snapMinutes: 15,
+          snapMinutes: (part?.config as any)?.snapMinutes ?? 5,
         }
         break
       case 'library':
@@ -217,6 +217,11 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
           {/* Kind Selector */}
           <div className="space-y-1.5">
             <label className="font-bold text-[var(--color-ink)] block">Input Kind</label>
+            {part?.id && kind !== part.kind && (
+              <p className="text-[10px] text-[var(--color-warn)] font-semibold">
+                Changing input kind will retire the old part and create a new part to protect historical data.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               {PART_KINDS.map((pk) => {
                 const Icon = pk.icon

@@ -3,6 +3,8 @@ import type { TrinqleDB } from '../data/db'
 import { db as defaultDb } from '../data/db'
 import { addDays, DEFAULT_WINDOW, isWindowOpen, logicalDate } from './logicalDay'
 import { calculateChapterDuration } from './chapters'
+import { loadAppSettings } from './settings'
+import { buildDailyMetricsTable } from './metrics/calculator'
 
 export interface GreetingContext {
   daysOfData: number
@@ -142,7 +144,17 @@ export async function buildGreetingContext(
   now: Date,
   db: TrinqleDB = defaultDb
 ): Promise<{ context: GreetingContext; dateStr: string }> {
-  const dateStr = logicalDate(now, undefined, DEFAULT_WINDOW.endHour)
+  const settings = await loadAppSettings(db).catch(() => ({
+    userName: '',
+    formWindowStart: '21:00',
+    formWindowEnd: '03:00',
+    windowStartHour: DEFAULT_WINDOW.startHour,
+    windowEndHour: DEFAULT_WINDOW.endHour,
+    weekStart: 'Monday' as const,
+    timeFormat: '12h' as const,
+  }))
+
+  const dateStr = logicalDate(now, undefined, settings.windowEndHour)
   const [year, month, day] = dateStr.split('-').map(Number)
   const weekday = new Date(year, month - 1, day).getDay()
 
@@ -153,8 +165,8 @@ export async function buildGreetingContext(
   else if (currentHour >= 17 && currentHour < 22) timeOfDay = 'evening'
   else timeOfDay = 'night'
 
-  const formOpen = isWindowOpen(now, DEFAULT_WINDOW.startHour, DEFAULT_WINDOW.endHour)
-  const windowEnd = '03:00'
+  const formOpen = isWindowOpen(now, settings.windowStartHour, settings.windowEndHour)
+  const windowEnd = settings.formWindowEnd || '03:00'
 
   // DB queries
   const allDays = await db.days.filter((d) => !d.deletedAt).toArray()
@@ -224,6 +236,86 @@ export async function buildGreetingContext(
     backupDaysAgo = Math.round((Date.now() - backupSetting.value) / 86400000)
   }
 
+  // Alias-derived 3-day metrics vs baseline (TRD 11a)
+  const aliasStats: Record<string, number> = {}
+  try {
+    const aliasRec = await db.settings.get('form_aliases')
+    const aliases = (aliasRec?.value as Record<string, string>) || {}
+    if (Object.keys(aliases).length > 0 && allDays.length > 0) {
+      const [allAnswers, allQuestions, allParts] = await Promise.all([
+        db.answers.filter((a) => !a.deletedAt).toArray(),
+        db.questions.filter((q) => !q.deletedAt).toArray(),
+        db.parts.filter((p) => !p.deletedAt).toArray(),
+      ])
+      const table = buildDailyMetricsTable(allDays, allAnswers, allQuestions, allParts)
+      const recentDates = new Set([
+        dateStr,
+        addDays(dateStr, -1),
+        addDays(dateStr, -2),
+        addDays(dateStr, -3),
+      ])
+      const recentRows = table.rows.filter((r) => recentDates.has(r.date)).slice(-3)
+
+      const avgKey = (metricKey?: string) => {
+        if (!metricKey) return undefined
+        const vals = recentRows
+          .map((r) => r.values[metricKey])
+          .filter((v): v is number => v !== null && v !== undefined && !isNaN(v))
+        if (vals.length === 0) return undefined
+        return vals.reduce((a, b) => a + b, 0) / vals.length
+      }
+
+      const baselineAvgKey = (metricKey?: string) => {
+        if (!metricKey) return undefined
+        const vals = table.rows
+          .map((r) => r.values[metricKey])
+          .filter((v): v is number => v !== null && v !== undefined && !isNaN(v))
+        if (vals.length === 0) return undefined
+        return vals.reduce((a, b) => a + b, 0) / vals.length
+      }
+
+      const moodAvg3 = avgKey(aliases.mood)
+      const moodBase = baselineAvgKey(aliases.mood)
+      if (moodAvg3 !== undefined) {
+        aliasStats.mood3 = Number(moodAvg3.toFixed(1))
+        if (moodBase !== undefined) {
+          aliasStats.moodDelta = Number((moodAvg3 - moodBase).toFixed(1))
+        }
+      }
+
+      if (aliases.sleepMinutes) {
+        const sleepVals = recentRows
+          .map((r) => r.values[aliases.sleepMinutes])
+          .filter((v): v is number => v !== null && v !== undefined && !isNaN(v))
+        if (sleepVals.length > 0) {
+          const avgHours = sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length / 60
+          aliasStats.sleep3Hours = Number(avgHours.toFixed(1))
+          aliasStats.sleepLowDays3 = sleepVals.filter((m) => m < 360).length
+        }
+      }
+
+      if (aliases.exercise) {
+        aliasStats.exerciseDays3 = recentRows.filter((r) => (r.values[aliases.exercise] ?? 0) > 0).length
+      }
+
+      if (aliases.study) {
+        aliasStats.studyDays3 = recentRows.filter((r) => (r.values[aliases.study] ?? 0) > 0).length
+      }
+
+      const studyMinAvg = avgKey(aliases.studyMinutes)
+      if (studyMinAvg !== undefined) {
+        aliasStats.studyMinutes3 = Math.round(studyMinAvg)
+      }
+
+      const waterAvg = avgKey(aliases.water)
+      if (waterAvg !== undefined) {
+        aliasStats.water3avg = Number(waterAvg.toFixed(1))
+      }
+    }
+  } catch {
+    // Ignore optional alias derivation errors
+  }
+
   const context: GreetingContext = {
     daysOfData,
     loggingStreak,
@@ -241,6 +333,8 @@ export async function buildGreetingContext(
     periodDay,
     memorableDayLast3,
     backupDaysAgo,
+    userName: settings.userName || undefined,
+    ...aliasStats,
   }
 
   return { context, dateStr }

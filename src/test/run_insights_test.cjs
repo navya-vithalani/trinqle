@@ -187,7 +187,49 @@ async function run() {
   if (found) throw new Error('Discarded signature was not suppressed!')
   console.log(`Pass: Discarded signature ${topSig} was cleanly suppressed`)
 
-  console.log('\nALL 5 VALIDATION HARNESS TESTS PASSED SUCCESSFULLY!')
+  // Test 6: Cycle-phase effects, search cap (truncated flag), and workerClient fallback
+  console.log('\n--- Test 6: Cycle-Phase Effects, MaxTests Cap & Async Client ---')
+  const { runInsightsAsync } = jiti('../core/engine/workerClient.ts')
+  const cycleDates = denseDataset.days.map((d) => d.date).sort()
+  const mockCycles = [
+    { id: 'c1', startDate: cycleDates[10], endDate: cycleDates[14], createdAt: 1, updatedAt: 1 },
+    { id: 'c2', startDate: cycleDates[38], endDate: cycleDates[42], createdAt: 1, updatedAt: 1 },
+    { id: 'c3', startDate: cycleDates[66], endDate: cycleDates[70], createdAt: 1, updatedAt: 1 },
+  ]
+  const flowSet = new Set([
+    ...cycleDates.slice(10, 15),
+    ...cycleDates.slice(38, 43),
+    ...cycleDates.slice(66, 71),
+  ])
+  const cycleDays = denseDataset.days.map((d) =>
+    flowSet.has(d.date) ? { ...d, overallRating: Math.max(1, (d.overallRating || 6) - 3) } : d
+  )
+  const cycleRun = await runInsightsAsync({
+    days: cycleDays,
+    answers: denseDataset.answers,
+    questions: denseDataset.questions,
+    parts: denseDataset.parts,
+    items: denseDataset.items,
+    answerLinks: denseDataset.answerLinks,
+    cycles: mockCycles,
+    options: { bar: 6.5, minShow: 20 },
+  })
+  const cycleFinding = cycleRun.insights.find((i) => i.test.testType === 'cycle_phase')
+  if (!cycleFinding) throw new Error('Expected cycle_phase insight to be detected')
+
+  const cappedRun = generateInsights({
+    days: denseDataset.days,
+    answers: denseDataset.answers,
+    questions: denseDataset.questions,
+    parts: denseDataset.parts,
+    items: denseDataset.items,
+    answerLinks: denseDataset.answerLinks,
+    options: { maxTests: 10, minShow: 5 },
+  })
+  if (!cappedRun.truncated) throw new Error('Expected truncated=true when maxTests cap is exceeded')
+  console.log(`Pass: Detected ${cycleFinding.signature} and respected maxTests truncation guard`)
+
+  console.log('\nALL 6 VALIDATION HARNESS TESTS PASSED SUCCESSFULLY!')
 }
 
 run().catch((err) => {

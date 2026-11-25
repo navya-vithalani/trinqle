@@ -190,15 +190,13 @@ html[data-theme='cyberpunk'].dark::before {
   border-radius: var(--radius-m);
 }
 
-[data-theme="retro"] .sticker-button,
-[data-theme="retro"] button:not(.sticker-plain) {
+[data-theme="retro"] .sticker-button {
   box-shadow: var(--shadow-button);
   border-radius: var(--radius-pill);
   transition: transform 60ms linear, box-shadow 60ms linear;
 }
 
-[data-theme="retro"] .sticker-button:active,
-[data-theme="retro"] button:not(.sticker-plain):active {
+[data-theme="retro"] .sticker-button:active {
   transform: translate(1.5px, 1.5px) !important;
   box-shadow: var(--shadow-pressed) !important;
 }

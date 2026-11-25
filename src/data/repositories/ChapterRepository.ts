@@ -11,6 +11,8 @@ import { generateUUIDv7 } from '../../core/ids'
 import { addDays } from '../../core/logicalDay'
 import { isPlannedEndDateValid } from '../../core/chapters'
 import { buildFrozenChapter } from '../../core/freeze'
+import { buildDailyMetricsTable } from '../../core/metrics/calculator'
+import { mean, standardDeviation } from '../../core/engine/stats'
 
 export class ChapterRepository {
   constructor(private db: TrinqleDB = defaultDb) {}
@@ -77,6 +79,10 @@ export class ChapterRepository {
   }
 
   async updateChapter(chapter: Chapter): Promise<Chapter> {
+    const existing = await this.getChapterById(chapter.id)
+    if (existing && existing.status === 'closed') {
+      throw new Error('Chapter is closed and write-protected')
+    }
     await this.db.chapters.put(chapter)
     return chapter
   }
@@ -207,20 +213,38 @@ export class ChapterRepository {
       .filter((d) => !d.deletedAt)
       .toArray()
 
-    // 2. Gather form snapshot & answers
+    // 2. Gather form snapshot, answers, links, items & insights
     const sections = await this.db.sections.filter((s) => !s.deletedAt).toArray()
     const questions = await this.db.questions.filter((q) => !q.deletedAt).toArray()
     const parts = await this.db.parts.filter((p) => !p.deletedAt).toArray()
     const libraries = await this.db.libraries.filter((l) => !l.deletedAt).toArray()
+    const items = await this.db.items.filter((i) => !i.deletedAt).toArray()
 
     const dayDates = new Set(days.map((d) => d.date))
     const allAnswers = await this.db.answers.filter((a) => !a.deletedAt).toArray()
     const chapterAnswers = allAnswers.filter((a) => dayDates.has(a.date))
+    const allLinks = await this.db.answerLinks.filter((l) => !l.deletedAt).toArray()
+    const chapterLinks = allLinks.filter((l) => dayDates.has(l.date))
+
+    // Gather latest run's insights overlapping this chapter (or latest run overall)
+    const allRuns = await this.db.runs.filter((r) => !r.deletedAt).toArray()
+    allRuns.sort((a, b) => b.at - a.at)
+    const latestRun = allRuns[0]
+    const chapterInsights = latestRun
+      ? await this.db.insights
+          .where('runId')
+          .equals(latestRun.id)
+          .filter((ins) => !ins.deletedAt && ins.status === 'active')
+          .toArray()
+      : []
 
     const frozen: FrozenChapter = buildFrozenChapter({
       chapter,
       days,
       answers: chapterAnswers,
+      answerLinks: chapterLinks,
+      items,
+      insights: chapterInsights,
       sections,
       questions,
       parts,
@@ -231,7 +255,7 @@ export class ChapterRepository {
       endDate: params.endDate,
     })
 
-    // 3. Close current chapter
+    // 3. Close current chapter & persist updated weekday baselines
     const closedChapter = await this.closeChapter(
       chapter.id,
       frozen,
@@ -240,6 +264,59 @@ export class ChapterRepository {
       params.photos,
       params.endDate
     )
+
+    try {
+      const table = buildDailyMetricsTable(days, chapterAnswers, questions, parts)
+      const now = Date.now()
+      const metricBuckets = new Map<string, number[][]>()
+
+      // Overall rating baseline
+      const ratingBuckets: number[][] = [[], [], [], [], [], [], []]
+      for (const d of days) {
+        if (typeof d.overallRating === 'number') {
+          const wd = new Date(d.date + 'T00:00:00').getDay()
+          ratingBuckets[wd].push(d.overallRating)
+        }
+      }
+      metricBuckets.set('derived.overallRating', ratingBuckets)
+
+      for (const m of table.metrics) {
+        if (m.partKind !== 'scale' && m.partKind !== 'number' && m.partKind !== 'timerange') {
+          continue
+        }
+        const buckets: number[][] = [[], [], [], [], [], [], []]
+        for (const row of table.rows) {
+          const val = row.values[m.key]
+          if (typeof val === 'number' && !Number.isNaN(val)) {
+            const wd = new Date(row.date + 'T00:00:00').getDay()
+            buckets[wd].push(val)
+          }
+        }
+        metricBuckets.set(m.key, buckets)
+      }
+
+      for (const [metricKey, buckets] of metricBuckets.entries()) {
+        const totalN = buckets.reduce((acc, b) => acc + b.length, 0)
+        if (totalN === 0) continue
+        const weekdayMean = buckets.map((b) => (b.length > 0 ? Number(mean(b).toFixed(2)) : 0))
+        const weekdaySd = buckets.map((b) =>
+          b.length > 1 ? Number(standardDeviation(b).toFixed(2)) : 0
+        )
+        const existing = await this.db.baselines.where('metricKey').equals(metricKey).first()
+        await this.db.baselines.put({
+          id: existing?.id || generateUUIDv7(now),
+          metricKey,
+          weekdayMean,
+          weekdaySd,
+          n: totalN,
+          asOfChapterId: closedChapter.id,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        })
+      }
+    } catch {
+      // Non-fatal baseline update failure must not block chapter close
+    }
 
     // 4. Auto-create next chapter starting the day after previous chapter's end date
     const nextStartDate = addDays(params.endDate, 1)

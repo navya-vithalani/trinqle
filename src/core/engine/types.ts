@@ -4,6 +4,8 @@ export type CandidateTestType =
   | 'binary_outcome' // Mann-Whitney U test (binary driver vs numeric outcome)
   | 'numeric_outcome' // Spearman rank correlation (numeric driver vs numeric outcome)
   | 'weekday_effect' // Day of week vs outcome
+  | 'cycle_phase' // Menstrual cycle phase vs outcome
+  | 'compound_rule' // 2-to-3-way conjunction driver vs outcome
   | 'library_lag' // Item A at day d and Item B at day d+k
   | 'anomaly_outlier' // Robust z single day outlier
   | 'anomaly_stretch' // Consecutive rough or best stretch
@@ -16,7 +18,7 @@ export interface CandidateTest {
   testType: CandidateTestType
   driverKey: string
   driverLabel: string
-  driverKind: PartKind | 'derived' | 'item' | 'weekday'
+  driverKind: PartKind | 'derived' | 'item' | 'weekday' | 'cycle'
   outcomeKey: string
   outcomeLabel: string
   outcomeKind: 'scale' | 'number' | 'timerange' | 'rating' | 'memorability'
@@ -53,6 +55,8 @@ export interface EngineOptions {
   bar?: number // default 6.5
   minShow?: number // default 20
   minN?: number // default 5
+  maxTests?: number // default 50000
+  windowLabel?: string
   discardedSignatures?: string[]
   knownSignatures?: string[]
 }
@@ -64,5 +68,6 @@ export interface EngineRunOutput {
   nGenerated: number
   nAboveBar: number
   bar: number
+  truncated?: boolean
   insights: CandidateResult[]
 }

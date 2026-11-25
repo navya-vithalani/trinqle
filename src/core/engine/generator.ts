@@ -6,7 +6,7 @@
  * Zero emojis.
  */
 
-import type { Day, Answer, Question, Part, AnswerLink, Item, Library } from '../../data/types'
+import type { Day, Answer, Question, Part, AnswerLink, Item, Library, Cycle } from '../../data/types'
 import { buildDailyMetricsTable } from '../metrics/calculator'
 import type { CandidateTest, CandidateResult, EngineOptions, EngineRunOutput, EvidenceDay } from './types'
 import {
@@ -15,11 +15,13 @@ import {
   benjaminiHochberg,
   calculateRobustZ,
   detectChangePoints,
+  detrendWeekday,
   mean,
   standardDeviation,
   normalTwoTailedP,
   twoProportionZTest,
 } from './stats'
+import { formatValue } from './phrasing'
 import {
   composeBinaryDriverPhrasing,
   composeNumericDriverPhrasing,
@@ -40,6 +42,7 @@ export interface GenerateInsightsInput {
   answerLinks?: AnswerLink[]
   items?: Item[]
   libraries?: Library[]
+  cycles?: Cycle[]
   options?: EngineOptions
 }
 
@@ -64,20 +67,25 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
     parts,
     answerLinks = [],
     items = [],
+    cycles = [],
     options = {},
   } = input
 
   const bar = options.bar ?? 6.5
   const minShow = options.minShow ?? 20
   const minN = options.minN ?? 5
+  const maxTests = options.maxTests ?? 50000
   const discardedSet = new Set(options.discardedSignatures || [])
+  let testsEvaluated = 0
+  let truncated = false
 
   // Sort days chronologically
   const sortedDays = [...days].sort((a, b) => a.date.localeCompare(b.date))
   const dates = sortedDays.map((d) => d.date)
   const windowStart = dates[0] || ''
   const windowEnd = dates[dates.length - 1] || ''
-  const windowLabel = dates.length > 0 ? `${windowStart} to ${windowEnd}` : 'Empty'
+  const windowLabel =
+    options.windowLabel || (dates.length > 0 ? `${windowStart} to ${windowEnd}` : 'Empty')
   const effectiveMinN = Math.min(minN, dates.length)
 
   if (sortedDays.length === 0) {
@@ -132,6 +140,27 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
     kind: 'scale' | 'number' | 'timerange' | 'rating' | 'memorability'
     unit?: string
     values: (number | null)[]
+    detrendedValues: (number | null)[]
+    isWeekdayDetrended: boolean
+  }
+
+  const pushOutcome = (
+    key: string,
+    label: string,
+    kind: OutcomeSeries['kind'],
+    values: (number | null)[],
+    unit?: string
+  ) => {
+    const dt = detrendWeekday(dates, values)
+    outcomes.push({
+      key,
+      label,
+      kind,
+      unit,
+      values,
+      detrendedValues: dt.hasEnoughData ? dt.detrendedValues : values,
+      isWeekdayDetrended: dt.hasEnoughData,
+    })
   }
 
   const outcomes: OutcomeSeries[] = []
@@ -139,23 +168,12 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
   // Add overallRating and memorability
   const ratingVals = dates.map((d) => dayByDate.get(d)?.overallRating ?? null)
   if (ratingVals.some((v) => v !== null)) {
-    outcomes.push({
-      key: 'derived.overallRating',
-      label: 'Overall Day Rating',
-      kind: 'rating',
-      unit: '/10',
-      values: ratingVals,
-    })
+    pushOutcome('derived.overallRating', 'Overall Day Rating', 'rating', ratingVals, '/10')
   }
 
   const memorabilityVals = dates.map((d) => dayByDate.get(d)?.memorability ?? null)
   if (memorabilityVals.some((v) => v !== null && v > 0)) {
-    outcomes.push({
-      key: 'derived.memorability',
-      label: 'Day Memorability',
-      kind: 'memorability',
-      values: memorabilityVals,
-    })
+    pushOutcome('derived.memorability', 'Day Memorability', 'memorability', memorabilityVals)
   }
 
   // Add registered metrics suitable as outcomes
@@ -165,13 +183,13 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
         const row = rowsByDate.get(d)
         return row?.values[m.key] ?? null
       })
-      outcomes.push({
-        key: m.key,
-        label: `${m.questionLabel} (${m.label})`,
-        kind: m.partKind === 'timerange' ? 'timerange' : m.partKind === 'scale' ? 'scale' : 'number',
-        unit: m.unit,
-        values: vals,
-      })
+      pushOutcome(
+        m.key,
+        `${m.questionLabel} (${m.label})`,
+        m.partKind === 'timerange' ? 'timerange' : m.partKind === 'scale' ? 'scale' : 'number',
+        vals,
+        m.unit
+      )
     }
   }
 
@@ -260,41 +278,61 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
 
   // 1. Binary Driver vs Outcome (Mann-Whitney U) across lags 0..3
   for (const driver of binaryDrivers) {
+    if (testsEvaluated >= maxTests) {
+      truncated = true
+      break
+    }
     for (const outcome of outcomes) {
       if (driver.key === outcome.key) continue
+      if (testsEvaluated >= maxTests) {
+        truncated = true
+        break
+      }
 
       for (let lag = 0; lag <= 3; lag++) {
+        if (testsEvaluated >= maxTests) {
+          truncated = true
+          break
+        }
         const group1: number[] = []
         const group0: number[] = []
+        const rawGroup1: number[] = []
+        const rawGroup0: number[] = []
         const evidencePairs: EvidenceDay[] = []
 
         for (let i = 0; i < dates.length - lag; i++) {
           const dVal = driver.values[i]
-          const oVal = outcome.values[i + lag]
-          if (dVal === null || oVal === null) continue
+          const oVal = outcome.detrendedValues[i + lag]
+          const rawOVal = outcome.values[i + lag]
+          if (dVal === null || oVal === null || rawOVal === null) continue
 
           const curDate = dates[i]
           const curDay = dayByDate.get(curDate)
 
           if (dVal) {
             group1.push(oVal)
+            rawGroup1.push(rawOVal)
             evidencePairs.push({
               date: curDate,
               title: curDay?.title,
               oneliner: curDay?.oneliner,
               driverValue: true,
-              outcomeValue: oVal,
+              outcomeValue: rawOVal,
             })
           } else {
             group0.push(oVal)
+            rawGroup0.push(rawOVal)
           }
         }
 
         const totalN = group1.length + group0.length
         if (totalN < Math.min(2, effectiveMinN) || group1.length < 1 || group0.length < 1) continue
 
+        testsEvaluated++
         const mwu = mannWhitneyU(group1, group0)
-        const diff = mwu.mean1 - mwu.mean0
+        const rawMean1 = mean(rawGroup1)
+        const rawMean0 = mean(rawGroup0)
+        const diff = rawMean1 - rawMean0
         const dir = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral'
 
         const signature = `binary|${driver.key}|${outcome.key}|lag:${lag}|${dir}`
@@ -303,10 +341,10 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
         const phrasing = composeBinaryDriverPhrasing(
           driver.label,
           outcome.label,
-          mwu.mean1,
-          mwu.mean0,
-          group1.length,
-          group0.length,
+          rawMean1,
+          rawMean0,
+          rawGroup1.length,
+          rawGroup0.length,
           lag,
           outcome.unit
         )
@@ -343,10 +381,25 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
 
   // 2. Continuous Driver vs Outcome (Spearman Rank Correlation) across lags 0..3
   for (const driver of continuousDrivers) {
+    if (testsEvaluated >= maxTests) {
+      truncated = true
+      break
+    }
+    const driverDetrend = detrendWeekday(dates, driver.values)
+    const driverSeries = driverDetrend.hasEnoughData ? driverDetrend.detrendedValues : driver.values
+
     for (const outcome of outcomes) {
       if (driver.key === outcome.key) continue
+      if (testsEvaluated >= maxTests) {
+        truncated = true
+        break
+      }
 
       for (let lag = 0; lag <= 3; lag++) {
+        if (testsEvaluated >= maxTests) {
+          truncated = true
+          break
+        }
         // At lag 0, avoid mirror duplicates when both are continuous metrics
         if (lag === 0 && continuousDrivers.some((d) => d.key === outcome.key) && driver.key > outcome.key) {
           continue
@@ -357,9 +410,11 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
         const evidencePairs: EvidenceDay[] = []
 
         for (let i = 0; i < dates.length - lag; i++) {
-          const x = driver.values[i]
-          const y = outcome.values[i + lag]
-          if (x === null || y === null) continue
+          const x = driverSeries[i]
+          const y = outcome.detrendedValues[i + lag]
+          const rawX = driver.values[i]
+          const rawY = outcome.values[i + lag]
+          if (x === null || y === null || rawX === null || rawY === null) continue
 
           xVals.push(x)
           yVals.push(y)
@@ -370,13 +425,14 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
             date: curDate,
             title: curDay?.title,
             oneliner: curDay?.oneliner,
-            driverValue: x,
-            outcomeValue: y,
+            driverValue: rawX,
+            outcomeValue: rawY,
           })
         }
 
         if (xVals.length < Math.min(2, effectiveMinN)) continue
 
+        testsEvaluated++
         const spearman = spearmanCorrelation(xVals, yVals)
         const dir = spearman.rho > 0 ? 'positive' : spearman.rho < 0 ? 'negative' : 'neutral'
 
@@ -867,6 +923,270 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
     }
   }
 
+  // 7.5 Cycle-Phase Effects (when cycles are tracked)
+  if (cycles.length > 0 && testsEvaluated < maxTests) {
+    const activeCycles = [...cycles]
+      .filter((c) => !c.deletedAt)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+
+    const toUtcMs = (ymd: string) => new Date(ymd + 'T00:00:00Z').getTime()
+    const dayDiff = (fromYmd: string, toYmd: string) =>
+      Math.round((toUtcMs(toYmd) - toUtcMs(fromYmd)) / 86400000)
+
+    const phaseDefs: Array<{ key: string; label: string }> = [
+      { key: 'menstrual', label: 'Menstrual (Flow) days' },
+      { key: 'luteal', label: 'Pre-period (5 days before)' },
+      { key: 'follicular', label: 'Post-period week' },
+    ]
+
+    const getDatePhase = (dStr: string): string | null => {
+      for (let idx = 0; idx < activeCycles.length; idx++) {
+        const c = activeCycles[idx]
+        const flowEndOffset = c.endDate ? Math.max(0, dayDiff(c.startDate, c.endDate)) : 4
+        const sinceStart = dayDiff(c.startDate, dStr)
+        if (sinceStart >= 0 && sinceStart <= flowEndOffset) {
+          return 'menstrual'
+        }
+        if (sinceStart > flowEndOffset && sinceStart <= flowEndOffset + 7) {
+          return 'follicular'
+        }
+        const daysUntilStart = dayDiff(dStr, c.startDate)
+        if (daysUntilStart >= 1 && daysUntilStart <= 5) {
+          return 'luteal'
+        }
+      }
+      return null
+    }
+
+    for (const phase of phaseDefs) {
+      if (testsEvaluated >= maxTests) {
+        truncated = true
+        break
+      }
+      for (const outcome of outcomes) {
+        if (testsEvaluated >= maxTests) {
+          truncated = true
+          break
+        }
+        const phaseVals: number[] = []
+        const otherVals: number[] = []
+        const evidencePairs: EvidenceDay[] = []
+
+        for (let i = 0; i < dates.length; i++) {
+          const val = outcome.values[i]
+          if (val === null) continue
+          if (getDatePhase(dates[i]) === phase.key) {
+            phaseVals.push(val)
+            const curDay = dayByDate.get(dates[i])
+            evidencePairs.push({
+              date: dates[i],
+              title: curDay?.title,
+              oneliner: curDay?.oneliner,
+              outcomeValue: val,
+            })
+          } else {
+            otherVals.push(val)
+          }
+        }
+
+        if (phaseVals.length >= 3 && otherVals.length >= 5) {
+          testsEvaluated++
+          const mwu = mannWhitneyU(phaseVals, otherVals)
+          const diff = mwu.mean1 - mwu.mean0
+          const dir = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral'
+          const signature = `cycle|${phase.key}|${outcome.key}|${dir}`
+          if (discardedSet.has(signature)) continue
+
+          const diffStr = formatValue(Math.abs(diff), outcome.unit)
+          const mean1Str = formatValue(mwu.mean1, outcome.unit)
+          const mean0Str = formatValue(mwu.mean0, outcome.unit)
+          const dirWord = diff >= 0 ? 'higher' : 'lower'
+          const headline = `${phase.label}: ${outcome.label} averages ${diffStr} ${dirWord}`
+          const facts = [
+            `During ${phase.label.toLowerCase()}, ${outcome.label} averaged ${mean1Str} across ${phaseVals.length} days versus ${mean0Str} across ${otherVals.length} other days.`,
+            `Difference of ${diff >= 0 ? '+' : '-'}${diffStr} (${dir}).`,
+          ]
+
+          rawCandidates.push({
+            test: {
+              id: signature,
+              testType: 'cycle_phase',
+              driverKey: `cycle:${phase.key}`,
+              driverLabel: phase.label,
+              driverKind: 'cycle',
+              outcomeKey: outcome.key,
+              outcomeLabel: outcome.label,
+              outcomeKind: outcome.kind,
+              unit: outcome.unit,
+              lag: 0,
+            },
+            n: phaseVals.length + otherVals.length,
+            pValue: mwu.pValue,
+            effectSize: mwu.cliffsDelta,
+            direction: dir,
+            headline,
+            facts,
+            evidenceDays: evidencePairs.slice(0, 5),
+            surprise: Math.min(10.0, Math.max(1.0, Math.abs(mwu.cliffsDelta) * 10.0)),
+            signature,
+          })
+        }
+      }
+    }
+  }
+
+  // 7.6 Compound 2-to-3-way Conjunction Rules (greedy synergy search)
+  if (dates.length >= 12 && testsEvaluated < maxTests) {
+    const candidateBinary = binaryDrivers
+      .filter((d) => {
+        const trueCount = d.values.filter((v) => v === true).length
+        const falseCount = d.values.filter((v) => v === false).length
+        return trueCount >= 4 && falseCount >= 5
+      })
+      .slice(0, 10)
+    const primaryOutcomes = outcomes.slice(0, 4)
+
+    for (const outcome of primaryOutcomes) {
+      if (testsEvaluated >= maxTests) {
+        truncated = true
+        break
+      }
+      for (let i = 0; i < candidateBinary.length; i++) {
+        for (let j = i + 1; j < candidateBinary.length; j++) {
+          if (testsEvaluated >= maxTests) {
+            truncated = true
+            break
+          }
+          const dA = candidateBinary[i]
+          const dB = candidateBinary[j]
+          const g1: number[] = []
+          const g0: number[] = []
+          const evDays: EvidenceDay[] = []
+
+          for (let k = 0; k < dates.length; k++) {
+            const ov = outcome.detrendedValues[k]
+            const rawOv = outcome.values[k]
+            if (ov === null || rawOv === null) continue
+            if (dA.values[k] === true && dB.values[k] === true) {
+              g1.push(ov)
+              const curDay = dayByDate.get(dates[k])
+              evDays.push({
+                date: dates[k],
+                title: curDay?.title,
+                oneliner: curDay?.oneliner,
+                outcomeValue: rawOv,
+              })
+            } else if (dA.values[k] !== null && dB.values[k] !== null) {
+              g0.push(ov)
+            }
+          }
+
+          if (g1.length < 4 || g0.length < 5) continue
+          testsEvaluated++
+          const pairMwu = mannWhitneyU(g1, g0)
+          if (pairMwu.pValue >= 0.05 || Math.abs(pairMwu.cliffsDelta) < 0.35) continue
+
+          const pairDiff = pairMwu.mean1 - pairMwu.mean0
+          const pairDir = pairDiff > 0 ? 'positive' : pairDiff < 0 ? 'negative' : 'neutral'
+          const pairSig = `compound|${dA.key}+${dB.key}|${outcome.key}|${pairDir}`
+          if (!discardedSet.has(pairSig)) {
+            const diffStr = formatValue(Math.abs(pairDiff), outcome.unit)
+            const m1Str = formatValue(pairMwu.mean1, outcome.unit)
+            const m0Str = formatValue(pairMwu.mean0, outcome.unit)
+            rawCandidates.push({
+              test: {
+                id: pairSig,
+                testType: 'compound_rule',
+                driverKey: `${dA.key}+${dB.key}`,
+                driverLabel: `${dA.label} + ${dB.label}`,
+                driverKind: 'derived',
+                outcomeKey: outcome.key,
+                outcomeLabel: outcome.label,
+                outcomeKind: outcome.kind,
+                unit: outcome.unit,
+                lag: 0,
+              },
+              n: g1.length + g0.length,
+              pValue: pairMwu.pValue,
+              effectSize: pairMwu.cliffsDelta,
+              direction: pairDir,
+              headline: `When ${dA.label} and ${dB.label} happen together, ${outcome.label} shifts by ${pairDiff >= 0 ? '+' : '-'}${diffStr}`,
+              facts: [
+                `Combined (${g1.length} days): ${outcome.label} averaged ${m1Str} vs ${m0Str} across ${g0.length} other days.`,
+              ],
+              evidenceDays: evDays.slice(0, 5),
+              surprise: Math.min(10.0, Math.max(1.5, Math.abs(pairMwu.cliffsDelta) * 10.0)),
+              signature: pairSig,
+            })
+          }
+
+          // Greedy 3-way extension
+          for (let m = j + 1; m < candidateBinary.length; m++) {
+            if (testsEvaluated >= maxTests) {
+              truncated = true
+              break
+            }
+            const dC = candidateBinary[m]
+            const t1: number[] = []
+            const t0: number[] = []
+            const tEv: EvidenceDay[] = []
+            for (let k = 0; k < dates.length; k++) {
+              const ov = outcome.detrendedValues[k]
+              const rawOv = outcome.values[k]
+              if (ov === null || rawOv === null) continue
+              if (dA.values[k] === true && dB.values[k] === true && dC.values[k] === true) {
+                t1.push(ov)
+                const curDay = dayByDate.get(dates[k])
+                tEv.push({ date: dates[k], title: curDay?.title, oneliner: curDay?.oneliner, outcomeValue: rawOv })
+              } else if (dA.values[k] !== null && dB.values[k] !== null && dC.values[k] !== null) {
+                t0.push(ov)
+              }
+            }
+            if (t1.length < 4 || t0.length < 5) continue
+            testsEvaluated++
+            const triMwu = mannWhitneyU(t1, t0)
+            if (
+              triMwu.pValue < pairMwu.pValue &&
+              Math.abs(triMwu.cliffsDelta) >= Math.abs(pairMwu.cliffsDelta) + 0.05
+            ) {
+              const triDiff = triMwu.mean1 - triMwu.mean0
+              const triDir = triDiff > 0 ? 'positive' : 'negative'
+              const triSig = `compound|${dA.key}+${dB.key}+${dC.key}|${outcome.key}|${triDir}`
+              if (!discardedSet.has(triSig)) {
+                const diffStr = formatValue(Math.abs(triDiff), outcome.unit)
+                rawCandidates.push({
+                  test: {
+                    id: triSig,
+                    testType: 'compound_rule',
+                    driverKey: `${dA.key}+${dB.key}+${dC.key}`,
+                    driverLabel: `${dA.label} + ${dB.label} + ${dC.label}`,
+                    driverKind: 'derived',
+                    outcomeKey: outcome.key,
+                    outcomeLabel: outcome.label,
+                    outcomeKind: outcome.kind,
+                    unit: outcome.unit,
+                    lag: 0,
+                  },
+                  n: t1.length + t0.length,
+                  pValue: triMwu.pValue,
+                  effectSize: triMwu.cliffsDelta,
+                  direction: triDir,
+                  headline: `3-factor pattern: ${dA.label} + ${dB.label} + ${dC.label} shifts ${outcome.label} by ${triDiff >= 0 ? '+' : '-'}${diffStr}`,
+                  facts: [
+                    `All three combined (${t1.length} days): ${outcome.label} averaged ${formatValue(triMwu.mean1, outcome.unit)} vs ${formatValue(triMwu.mean0, outcome.unit)}.`,
+                  ],
+                  evidenceDays: tEv.slice(0, 5),
+                  surprise: Math.min(10.0, Math.max(2.0, Math.abs(triMwu.cliffsDelta) * 10.0)),
+                  signature: triSig,
+                })
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Early baseline & observational padding if under minShow (e.g. tiny data 2 to 5 days)
   if (rawCandidates.length < minShow) {
     for (const m of dailyTable.metrics) {
@@ -952,14 +1272,11 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
     const n = cand.n
 
     // Sureness calculation per TRD Section 7 & Plan Phase 7:
-    // tiny n (< 8): strictly < 1.0 by construction.
-    // tiny data 2 to 5 days: strictly < 2.0.
-    // large n (>= 90) with high significance: sureness > 6.0!
+    // Monotonically increases with sample size n; strictly < 1.0 for n < 8,
+    // < 2.0 for tiny data (2..5 days), and > 6.0 for large n (>= 90) with strong significance.
     let sureness = 0
 
-    if (n < 5) {
-      sureness = Math.min(1.8, Math.max(0.1, (1.0 - qVal) * (n / 5.0) * 1.5))
-    } else if (n < 8) {
+    if (n < 8) {
       sureness = Math.min(0.95, Math.max(0.1, (1.0 - qVal) * (n / 8.0) * 0.95))
     } else {
       const confidence = Math.max(0.0, 1.0 - qVal)
@@ -1018,6 +1335,7 @@ export function generateInsights(input: GenerateInsightsInput): EngineRunOutput 
     nGenerated,
     nAboveBar,
     bar,
+    truncated,
     insights: selected,
   }
 }

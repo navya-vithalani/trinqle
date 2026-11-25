@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Clock, Check, X } from 'lucide-react'
 import type { TimeRangeValue } from '../../data/types'
+import { formatTimeByPreference } from '../../core/settings'
 
 interface TimeRangeWidgetProps {
   label: string
   value?: TimeRangeValue
   date?: string // Logical day YYYY-MM-DD
+  timeFormat?: '12h' | '24h'
+  snapMinutes?: number
   onChange: (val: TimeRangeValue) => void
   disabled?: boolean
 }
@@ -89,6 +92,8 @@ interface DualClockModalProps {
   isOpen: boolean
   label: string
   date?: string
+  timeFormat?: '12h' | '24h'
+  snapMinutes?: number
   initialStart: string
   initialEnd: string
   initialOffset: number
@@ -100,6 +105,8 @@ export const DualClockModal: React.FC<DualClockModalProps> = ({
   isOpen,
   label,
   date,
+  timeFormat = '12h',
+  snapMinutes = 5,
   initialStart,
   initialEnd,
   initialOffset,
@@ -168,8 +175,9 @@ export const DualClockModal: React.FC<DualClockModalProps> = ({
     if (!startClockRef.current) return
     const angle = getAngleFromEvent(e, startClockRef.current)
 
-    // Snap to 15-minute intervals (360 deg = 720 min, so 15 min = 7.5 deg)
-    const snappedAngle = Math.round(angle / 7.5) * 7.5
+    // Snap to snapMinutes (default 5 min: 360 deg = 720 min => 0.5 deg/min)
+    const stepDeg = (snapMinutes / 720) * 360
+    const snappedAngle = Math.round(angle / stepDeg) * stepDeg
     const total12hMin = Math.round((snappedAngle / 360) * 720) % 720
     const rawH = Math.floor(total12hMin / 60)
     const rawM = total12hMin % 60
@@ -223,7 +231,8 @@ export const DualClockModal: React.FC<DualClockModalProps> = ({
     if (!endClockRef.current) return
     const angle = getAngleFromEvent(e, endClockRef.current)
 
-    const snappedAngle = Math.round(angle / 7.5) * 7.5
+    const stepDeg = (snapMinutes / 720) * 360
+    const snappedAngle = Math.round(angle / stepDeg) * stepDeg
     const total12hMin = Math.round((snappedAngle / 360) * 720) % 720
     const rawH = Math.floor(total12hMin / 60)
     const rawM = total12hMin % 60
@@ -287,22 +296,50 @@ export const DualClockModal: React.FC<DualClockModalProps> = ({
           </button>
         </div>
 
-        {/* Timestamp Readout & Day Abbreviations */}
+        {/* Timestamp Readout & Direct Time Input Fallback */}
         <div className="flex items-center justify-between px-3 py-2 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs font-bold text-[var(--color-ink)]">
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center space-y-0.5">
             <span className="text-[10px] text-[var(--color-accent)] uppercase">
               {startDayLabel}
             </span>
-            <span className="text-sm">{formatTime12h(start)}</span>
+            <input
+              type="time"
+              aria-label="Start time"
+              value={start}
+              onChange={(e) => {
+                if (!e.target.value) return
+                setStart(e.target.value)
+                const m = timeToMinutes(e.target.value)
+                setStartPhase(startOffset < 0 ? 'prev_pm' : m >= 720 ? 'today_pm' : 'today_am')
+              }}
+              className="bg-transparent text-xs font-bold text-center text-[var(--color-ink)] focus:outline-none"
+            />
+            <span className="text-[10px] text-[var(--color-ink-soft)]">
+              {formatTimeByPreference(start, timeFormat)}
+            </span>
           </div>
 
           <div className="text-[11px] font-semibold text-[var(--color-ink-soft)]">to</div>
 
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center space-y-0.5">
             <span className="text-[10px] text-[var(--color-accent2)] uppercase">
               {endDayLabel}
             </span>
-            <span className="text-sm">{formatTime12h(end)}</span>
+            <input
+              type="time"
+              aria-label="End time"
+              value={end}
+              onChange={(e) => {
+                if (!e.target.value) return
+                setEnd(e.target.value)
+                const m = timeToMinutes(e.target.value)
+                setEndPhase(m >= 720 ? 'today_pm' : endPhase === 'next_am' ? 'next_am' : 'today_am')
+              }}
+              className="bg-transparent text-xs font-bold text-center text-[var(--color-ink)] focus:outline-none"
+            />
+            <span className="text-[10px] text-[var(--color-ink-soft)]">
+              {formatTimeByPreference(end, timeFormat)}
+            </span>
           </div>
         </div>
 
@@ -508,6 +545,22 @@ export const DualClockModal: React.FC<DualClockModalProps> = ({
               >
                 PM
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEndPhase('next_am')
+                  const [h, m] = end.split(':')
+                  const newH = parseInt(h, 10) % 12
+                  setEnd(`${String(newH).padStart(2, '0')}:${m}`)
+                }}
+                className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                  endPhase === 'next_am'
+                    ? 'bg-[var(--color-accent2)] text-white'
+                    : 'bg-[var(--color-bg)] text-[var(--color-ink-soft)] border border-[var(--color-line)]'
+                }`}
+              >
+                Next AM
+              </button>
             </div>
           </div>
         </div>
@@ -547,14 +600,24 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
   label,
   value,
   date,
+  timeFormat = '12h',
+  snapMinutes = 5,
   onChange,
   disabled,
 }) => {
-  // Default to 4:00 PM (16:00) to 6:00 PM (18:00)
+  // Default to 4:00 PM (16:00) to 6:00 PM (18:00), syncing when async value loads
   const [start, setStart] = useState(value?.start || '16:00')
   const [end, setEnd] = useState(value?.end || '18:00')
   const [startDayOffset, setStartDayOffset] = useState(value?.startDayOffset ?? 0)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (value) {
+      setStart(value.start || '16:00')
+      setEnd(value.end || '18:00')
+      setStartDayOffset(value.startDayOffset ?? 0)
+    }
+  }, [value?.start, value?.end, value?.startDayOffset])
 
   const { durationMinutes } = calculateTimeRangeDuration(
     start,
@@ -635,20 +698,22 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
               Start ({startDayLabel})
             </span>
             <span className="text-sm font-bold text-[var(--color-ink)]">
-              {formatTime12h(start)}
+              {formatTimeByPreference(start, timeFormat)}
             </span>
           </div>
 
           <div className="flex items-center space-x-1.5 text-[11px] text-[var(--color-ink-soft)] font-medium">
             <Clock size={12} className="text-[var(--color-accent)]" />
-            <span>Tap bar to scrub clock times</span>
+            <span>Tap bar to scrub or type times</span>
           </div>
 
           <div className="space-y-0.5">
             <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
               End ({endDayLabel})
             </span>
-            <span className="text-sm font-bold text-[var(--color-ink)]">{formatTime12h(end)}</span>
+            <span className="text-sm font-bold text-[var(--color-ink)]">
+              {formatTimeByPreference(end, timeFormat)}
+            </span>
           </div>
         </div>
       </div>
@@ -659,6 +724,8 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
           isOpen={isModalOpen}
           label={label}
           date={date}
+          timeFormat={timeFormat}
+          snapMinutes={snapMinutes}
           initialStart={start}
           initialEnd={end}
           initialOffset={startDayOffset}

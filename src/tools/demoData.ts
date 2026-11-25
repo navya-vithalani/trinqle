@@ -1,7 +1,8 @@
 import type { TrinqleDB } from '../data/db'
 import { db as defaultDb } from '../data/db'
 import { generateUUIDv7 } from '../core/ids'
-import { addDays } from '../core/logicalDay'
+import { addDays, logicalDate, DEFAULT_WINDOW } from '../core/logicalDay'
+import { buildFrozenChapter } from '../core/freeze'
 import type {
   Chapter,
   Day,
@@ -101,7 +102,7 @@ export async function generateDemoData(
   const workoutItems = allItems.filter((i) => i.libraryId === 'lib_workout_types')
   const studyItems = allItems.filter((i) => i.libraryId === 'lib_study_types')
 
-  const refDate = options.referenceDate || new Date().toISOString().slice(0, 10)
+  const refDate = options.referenceDate || logicalDate(new Date(), undefined, DEFAULT_WINDOW.endHour)
   const totalDays = options.daysCount ?? 75
 
   // Start date = totalDays - 1 days before refDate
@@ -550,6 +551,30 @@ export async function generateDemoData(
 
     currentDate = addDays(currentDate, 1)
     dayIdx++
+  }
+
+  // Build real frozen snapshots & chart models for the two closed demo chapters
+  const allSections = await db.sections.filter((s) => !s.deletedAt).toArray()
+  const allQuestions = await db.questions.filter((q) => !q.deletedAt).toArray()
+  const allParts = await db.parts.filter((p) => !p.deletedAt).toArray()
+  const allLibraries = await db.libraries.filter((l) => !l.deletedAt).toArray()
+
+  for (const closedCh of [chapter1, chapter2]) {
+    const chDays = days.filter((d) => d.chapterId === closedCh.id)
+    const chDateSet = new Set(chDays.map((d) => d.date))
+    const chAnswers = answers.filter((a) => chDateSet.has(a.date))
+    closedCh.frozen = buildFrozenChapter({
+      chapter: closedCh,
+      days: chDays,
+      answers: chAnswers,
+      sections: allSections,
+      questions: allQuestions,
+      parts: allParts,
+      libraries: allLibraries,
+      title: closedCh.title,
+      summary: closedCh.summary,
+      endDate: closedCh.endDate,
+    })
   }
 
   // Write all generated data into Dexie

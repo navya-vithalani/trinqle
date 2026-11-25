@@ -119,24 +119,22 @@ export class SubscriptionStore {
         if (res.ok) {
           const data = await res.json()
           const keys: string[] = data.result || []
-          const subs: StoredSubscription[] = []
-
-          for (const key of keys) {
-            const subRes = await fetch(`${kvUrl}/get/${key}`, {
-              headers: { Authorization: `Bearer ${kvToken}` },
-            })
-            if (subRes.ok) {
+          const fetched = await Promise.all(
+            keys.map(async (key) => {
+              const subRes = await fetch(`${kvUrl}/get/${key}`, {
+                headers: { Authorization: `Bearer ${kvToken}` },
+              })
+              if (!subRes.ok) return null
               const subData = await subRes.json()
-              if (subData && subData.result) {
-                const parsed =
-                  typeof subData.result === 'string'
-                    ? JSON.parse(subData.result)
-                    : subData.result
-                subs.push(parsed)
-              }
-            }
-          }
-          return subs
+              if (!subData || !subData.result) return null
+              return (
+                typeof subData.result === 'string'
+                  ? JSON.parse(subData.result)
+                  : subData.result
+              ) as StoredSubscription
+            })
+          )
+          return fetched.filter((s): s is StoredSubscription => s !== null)
         }
       } catch {
         // Fallback to local

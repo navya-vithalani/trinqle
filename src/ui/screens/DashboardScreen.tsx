@@ -22,6 +22,7 @@ import type {
   Day,
   Answer,
   AnswerLink,
+  Section,
   Question,
   Part,
   Library,
@@ -53,15 +54,17 @@ import { MemorabilityCard } from '../dashboard/MemorabilityCard'
 import { LibrariesListView } from '../dashboard/LibrariesListView'
 import { MetricDetailModal } from '../dashboard/MetricDetailModal'
 import { ItemHistoryModal } from '../dashboard/ItemHistoryModal'
-import { addDays } from '../../core/logicalDay'
+import { addDays, logicalDate, DEFAULT_WINDOW } from '../../core/logicalDay'
 
 interface DashboardScreenProps {
+  windowEndHour?: number
   onNavigateToProfileBrowse?: (date: string) => void
 }
 
 type DashboardTab = 'questions' | 'libraries'
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
+  windowEndHour = DEFAULT_WINDOW.endHour,
   onNavigateToProfileBrowse,
 }) => {
   const [activeTab, setActiveTab] = useState<DashboardTab>('questions')
@@ -75,6 +78,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [days, setDays] = useState<Day[]>([])
   const [answers, setAnswers] = useState<Answer[]>([])
   const [answerLinks, setAnswerLinks] = useState<AnswerLink[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [questions, setQuestions] = useState<Question[]>([])
   const [parts, setParts] = useState<Part[]>([])
   const [libraries, setLibraries] = useState<Library[]>([])
@@ -100,15 +104,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       const formRepo = new FormRepository()
       const libraryRepo = new LibraryRepository()
 
-      const [, currentOpenCh, allQs, allParts, allLibs] = await Promise.all([
+      const [, currentOpenCh, allSecs, allQs, allParts, allLibs] = await Promise.all([
         chapterRepo.getAllChapters(),
         chapterRepo.getOpenChapter(),
+        formRepo.getSections(),
         formRepo.getQuestions(),
         formRepo.getParts(),
         libraryRepo.getLibraries(),
       ])
 
       setOpenChapter(currentOpenCh || null)
+      setSections(allSecs)
       setQuestions(allQs)
       setParts(allParts)
       setLibraries(allLibs)
@@ -149,7 +155,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       return { filteredDays: [], filteredAnswers: [], filteredLinks: [] }
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = logicalDate(new Date(), undefined, windowEndHour)
     let minDate = '2000-01-01'
     let maxDate = '2099-12-31'
 
@@ -185,10 +191,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return buildDailyMetricsTable(filteredDays, filteredAnswers, questions, parts)
   }, [filteredDays, filteredAnswers, questions, parts])
 
-  // Extract Journal text entries
+  // Extract Journal text entries (filtered by section and search query)
   const journalEntries = useMemo(() => {
-    return extractJournalEntries(filteredDays, filteredAnswers, questions, parts)
-  }, [filteredDays, filteredAnswers, questions, parts])
+    const raw = extractJournalEntries(filteredDays, filteredAnswers, questions, parts)
+    const qMap = new Map(questions.map((q) => [q.id, q]))
+    const qClean = searchQuery.toLowerCase().trim()
+
+    return raw.filter((entry) => {
+      if (selectedSectionId !== 'ALL') {
+        const q = qMap.get(entry.questionId)
+        if (q?.sectionId !== selectedSectionId) return false
+      }
+      if (qClean) {
+        const matchText = entry.text.toLowerCase().includes(qClean)
+        const matchTitle = (entry.dayTitle || '').toLowerCase().includes(qClean)
+        const matchQ = entry.questionLabel.toLowerCase().includes(qClean)
+        const matchP = entry.partLabel.toLowerCase().includes(qClean)
+        if (!matchText && !matchTitle && !matchQ && !matchP) return false
+      }
+      return true
+    })
+  }, [filteredDays, filteredAnswers, questions, parts, selectedSectionId, searchQuery])
 
   // Memorability & Rating summary
   const memorabilityStats = useMemo(() => {
@@ -226,16 +249,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     })
   }, [dailyTable.metrics, partKindFilter, selectedSectionId, searchQuery])
 
-  // Quick lookup of distinct sections
+  // Quick lookup of distinct sections using real section labels
   const sectionsList = useMemo(() => {
-    const map = new Map<string, string>()
+    const secMap = new Map(sections.map((s) => [s.id, s.name]))
+    const usedIds = new Set<string>()
     for (const q of questions) {
-      if (q.sectionId) {
-        map.set(q.sectionId, q.sectionId.replace('s_', '').replace(/_/g, ' '))
-      }
+      if (q.sectionId) usedIds.add(q.sectionId)
     }
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
-  }, [questions])
+    return Array.from(usedIds).map((id) => ({
+      id,
+      name: secMap.get(id) || id.replace('s_', '').replace(/_/g, ' '),
+    }))
+  }, [sections, questions])
 
   return (
     <div className="space-y-4 pb-20">
@@ -417,6 +442,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           libraries={libraries}
           items={items}
           answerLinks={filteredLinks}
+          answers={filteredAnswers}
           days={filteredDays}
           questions={questions}
           parts={parts}
@@ -534,7 +560,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   if (metric.partKind === 'library') {
                     // Find links associated with this question & part
                     const links = filteredLinks.filter((l) => {
-                      // Lookup through answer
                       const ans = filteredAnswers.find((a) => a.id === l.answerId)
                       return (
                         ans &&
@@ -542,7 +567,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         ans.partId === metric.partId
                       )
                     })
-                    const stats = calculateLibraryStats(links.length > 0 ? links : filteredLinks, items)
+                    const stats = calculateLibraryStats(links, items)
                     return (
                       <LibraryMetricCard
                         key={metric.key}

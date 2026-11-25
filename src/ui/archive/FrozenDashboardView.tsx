@@ -6,6 +6,9 @@ import {
   Lock,
   ArrowLeft,
   Flame,
+  BookOpen,
+  FileText,
+  Award,
 } from 'lucide-react'
 import type { Chapter, FrozenChartModel } from '../../data/types'
 
@@ -213,6 +216,124 @@ export const FrozenDashboardView: React.FC<FrozenDashboardViewProps> = ({
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            )
+          }
+
+          if (chart.type === 'library_frequency') {
+            const series = (chart.series[0] as any) || {}
+            const topItems: Array<{ name: string; count: number; firstUsed?: string; lastUsed?: string }> =
+              series.topItems || []
+            const maxCount = Math.max(...topItems.map((it) => it.count), 1)
+
+            return (
+              <div key={chart.chartId} className="sticker-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                    <BookOpen size={16} className="text-[var(--color-accent)]" />
+                    {series.name || 'Library Items'}
+                  </h3>
+                  <span className="text-xs font-bold text-[var(--color-accent)]">
+                    {series.uniqueItemCount ?? topItems.length} unique · {series.totalUsages ?? 0} uses
+                  </span>
+                </div>
+
+                {topItems.length === 0 ? (
+                  <p className="text-xs text-[var(--color-ink-soft)]">No items logged.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {topItems.map((it) => (
+                      <div key={it.name} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[var(--color-ink)] truncate">
+                            {it.name}
+                          </span>
+                          <span className="text-[11px] font-bold text-[var(--color-ink-soft)]">
+                            {it.count}x
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-[var(--color-bg)] overflow-hidden">
+                          <div
+                            className="h-full bg-[var(--color-accent)] rounded-full"
+                            style={{ width: `${Math.max(8, Math.round((it.count / maxCount) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          if (chart.type === 'text_summary') {
+            const series = (chart.series[0] as any) || {}
+            return (
+              <div key={chart.chartId} className="sticker-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                    <FileText size={16} className="text-[var(--color-accent)]" />
+                    {series.name || 'Journal Notes'}
+                  </h3>
+                  <span className="text-xs font-bold text-[var(--color-accent)]">
+                    {series.totalEntries ?? 0} entries
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs py-1.5 px-3 rounded-xl bg-[var(--color-bg)]">
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Fill rate</span>
+                    <span className="font-bold text-[var(--color-ink)]">
+                      {series.completionRate ?? 0}%
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">End streak</span>
+                    <span className="font-bold text-[var(--color-ink)]">
+                      {series.currentStreak ?? 0}d
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Longest</span>
+                    <span className="font-bold text-[var(--color-ink)]">
+                      {series.longestStreak ?? 0}d
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          if (chart.type === 'memorability') {
+            const series = (chart.series[0] as any) || {}
+            return (
+              <div key={chart.chartId} className="sticker-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                    <Award size={16} className="text-[var(--color-accent)]" />
+                    {series.name || 'Memorability & Rating'}
+                  </h3>
+                  <span className="text-xs font-bold text-[var(--color-accent)]">
+                    Avg {series.avgRating ?? 0}/10 ({series.totalRatedDays ?? 0}d)
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center text-xs py-1.5 px-2 rounded-xl bg-[var(--color-bg)]">
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Normal</span>
+                    <span className="font-bold text-[var(--color-ink)]">{series.normalCount ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Notable</span>
+                    <span className="font-bold text-[var(--color-ink)]">{series.notableCount ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Outst.</span>
+                    <span className="font-bold text-[var(--color-ink)]">{series.outstandingCount ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-ink-soft)] block">Star</span>
+                    <span className="font-bold text-[var(--color-accent)]">{series.starCount ?? 0}</span>
+                  </div>
                 </div>
               </div>
             )

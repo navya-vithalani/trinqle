@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Calendar,
   Image as ImageIcon,
@@ -24,9 +24,34 @@ export const ArchiveHomeScreen: React.FC<ArchiveHomeScreenProps> = ({
   onExitArchive,
 }) => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
 
   const meta = chapter.frozen?.metadata
   const photos = chapter.photos || []
+
+  useEffect(() => {
+    const urls = photos.map((blob) => URL.createObjectURL(blob))
+    setPhotoUrls(urls)
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [chapter.id, photos.length])
+
+  const promptLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    const snap = chapter.frozen?.formSnapshot
+    if (snap) {
+      const qMap = new Map(snap.questions.map((q) => [q.id, q.label]))
+      for (const p of snap.parts) {
+        const qLabel = qMap.get(p.questionId)
+        map.set(p.id, qLabel ? `${qLabel} - ${p.label}` : p.label)
+      }
+    }
+    for (const cp of chapter.customPrompts || []) {
+      map.set(cp.id, cp.label)
+    }
+    return map
+  }, [chapter])
 
   return (
     <div className="space-y-4 pb-20">
@@ -129,22 +154,19 @@ export const ArchiveHomeScreen: React.FC<ArchiveHomeScreenProps> = ({
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            {photos.map((photoBlob, idx) => {
-              const url = URL.createObjectURL(photoBlob)
-              return (
-                <div
-                  key={idx}
-                  onClick={() => setSelectedPhotoIndex(idx)}
-                  className="aspect-square rounded-xl overflow-hidden bg-[var(--color-bg)] border border-[var(--color-line)] cursor-pointer hover:border-[var(--color-accent)] transition-all"
-                >
-                  <img
-                    src={url}
-                    alt={`Chapter memory ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )
-            })}
+            {photoUrls.map((url, idx) => (
+              <div
+                key={idx}
+                onClick={() => setSelectedPhotoIndex(idx)}
+                className="aspect-square rounded-xl overflow-hidden bg-[var(--color-bg)] border border-[var(--color-line)] cursor-pointer hover:border-[var(--color-accent)] transition-all"
+              >
+                <img
+                  src={url}
+                  alt={`Chapter memory ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -163,7 +185,8 @@ export const ArchiveHomeScreen: React.FC<ArchiveHomeScreenProps> = ({
                 className="p-3 rounded-xl bg-[var(--color-bg)] border border-[var(--color-line)]/60 space-y-1"
               >
                 <span className="text-[10px] font-bold text-[var(--color-accent)] uppercase tracking-wider">
-                  {ca.promptId.replace(/^(q_|p_)/, '').replace(/_/g, ' ')}
+                  {promptLabelMap.get(ca.promptId) ||
+                    ca.promptId.replace(/^(q_|p_)/, '').replace(/_/g, ' ')}
                 </span>
                 <p className="text-xs text-[var(--color-ink)] leading-relaxed whitespace-pre-wrap">
                   {String(ca.value)}
@@ -175,7 +198,7 @@ export const ArchiveHomeScreen: React.FC<ArchiveHomeScreenProps> = ({
       )}
 
       {/* Photo Lightbox Modal */}
-      {selectedPhotoIndex !== null && photos[selectedPhotoIndex] && (
+      {selectedPhotoIndex !== null && photoUrls[selectedPhotoIndex] && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fadeIn">
           <div className="relative max-w-lg w-full max-h-[85vh] flex flex-col items-center">
             <button
@@ -186,7 +209,7 @@ export const ArchiveHomeScreen: React.FC<ArchiveHomeScreenProps> = ({
               <X size={20} />
             </button>
             <img
-              src={URL.createObjectURL(photos[selectedPhotoIndex])}
+              src={photoUrls[selectedPhotoIndex]}
               alt="Full view"
               className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
             />

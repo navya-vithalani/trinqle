@@ -1,6 +1,11 @@
-import React from 'react'
-import { X, Check } from 'lucide-react'
-import { BUILTIN_STICKERS, type StickerItem } from '../../core/stickers'
+import React, { useState, useEffect } from 'react'
+import { X, Check, Upload } from 'lucide-react'
+import {
+  BUILTIN_STICKERS,
+  loadCustomStickerItems,
+  saveCustomStickerFromFile,
+  type StickerItem,
+} from '../../core/stickers'
 
 interface StickerPickerModalProps {
   isOpen: boolean
@@ -15,24 +20,68 @@ export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({
   selectedStickerId,
   onSelectSticker,
 }) => {
+  const [customStickers, setCustomStickers] = useState<StickerItem[]>([])
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      loadCustomStickerItems().then(setCustomStickers).catch(() => {})
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
+
+  const allStickers = [...BUILTIN_STICKERS, ...customStickers]
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setErrorMsg(null)
+    try {
+      const item = await saveCustomStickerFromFile(file)
+      setCustomStickers((prev) => [...prev, item])
+      onSelectSticker(item.id)
+      onClose()
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not import sticker')
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
       <div className="w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] p-4 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-sm text-[var(--color-ink)]">Choose a sticker</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-bg)]"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <label className="px-2.5 py-1 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[11px] font-semibold text-[var(--color-accent)] flex items-center gap-1 cursor-pointer active:scale-95">
+              <Upload size={11} />
+              <span>Add</span>
+              <input
+                type="file"
+                accept=".svg,image/*"
+                className="hidden"
+                onChange={handleUpload}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-bg)]"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
+        {errorMsg && (
+          <p className="text-[11px] text-rose-600 bg-rose-500/10 border border-rose-500/30 rounded-lg px-2.5 py-1.5">
+            {errorMsg}
+          </p>
+        )}
+
         <div className="grid grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
-          {BUILTIN_STICKERS.map((s: StickerItem) => {
+          {allStickers.map((s: StickerItem) => {
             const isSelected = selectedStickerId === s.id
             return (
               <button

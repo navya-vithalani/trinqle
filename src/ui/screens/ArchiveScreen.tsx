@@ -12,7 +12,7 @@ import {
   FolderArchive,
   Eye,
 } from 'lucide-react'
-import type { Chapter, Day, Answer, AnswerLink, Question, Part, Library, Item, ChapterAnswer } from '../../data/types'
+import type { Chapter, Day, Answer, AnswerLink, Section, Question, Part, Library, Item, ChapterAnswer } from '../../data/types'
 import {
   ChapterRepository,
   DayRepository,
@@ -46,6 +46,7 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
   const [days, setDays] = useState<Day[]>([])
   const [answers, setAnswers] = useState<Answer[]>([])
   const [answerLinks, setAnswerLinks] = useState<AnswerLink[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [questions, setQuestions] = useState<Question[]>([])
   const [parts, setParts] = useState<Part[]>([])
   const [libraries, setLibraries] = useState<Library[]>([])
@@ -79,14 +80,16 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
       const formRepo = new FormRepository()
       const libraryRepo = new LibraryRepository()
 
-      const [allChs, allQs, allParts, allLibs] = await Promise.all([
+      const [allChs, allSecs, allQs, allParts, allLibs] = await Promise.all([
         chapterRepo.getAllChapters(),
+        formRepo.getSections(),
         formRepo.getQuestions(),
         formRepo.getParts(),
         libraryRepo.getLibraries(),
       ])
 
       setChapters(allChs)
+      setSections(allSecs)
       setQuestions(allQs)
       setParts(allParts)
       setLibraries(allLibs)
@@ -555,12 +558,11 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
                 className="text-[10px] font-semibold py-0.5 px-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)]"
               >
                 <option value="ALL">All Sections</option>
-                <option value="s_activities">Activities</option>
-                <option value="s_routine">Routine</option>
-                <option value="s_inner">Inner State</option>
-                <option value="s_outside">Outside World</option>
-                <option value="s_weekly">Weekly Review</option>
-                <option value="s_chapter">Chapter Reflection</option>
+                {sections.map((sec) => (
+                  <option key={sec.id} value={sec.id}>
+                    {sec.name}
+                  </option>
+                ))}
               </select>
             </div>
 

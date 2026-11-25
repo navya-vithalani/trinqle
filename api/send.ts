@@ -26,27 +26,15 @@ function getVapidKeys(): VapidKeys {
     }
   }
 
+  const isProd = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production'
+  if (isProd) {
+    throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables must be set in production')
+  }
+
   return DEFAULT_VAPID_KEYS
 }
 
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
-  // Verify Cron authorization if CRON_SECRET is configured
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
-    // If not a test notification request from local client
-    let isTest = false
-    try {
-      if (req.body?.test) isTest = true
-    } catch {}
-
-    if (!isTest) {
-      res.statusCode = 401
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Unauthorized' }))
-      return
-    }
-  }
-
   try {
     let bodyData: any = req.body
 
@@ -59,11 +47,34 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       bodyData = raw ? JSON.parse(raw) : {}
     }
 
+    const isDirectTestRequest =
+      bodyData?.test === true &&
+      typeof bodyData?.endpoint === 'string' &&
+      bodyData.endpoint.trim().length > 0
+
+    // Verify Cron authorization for scheduler runs (never allow test flag without endpoint to bypass)
+    const cronSecret = process.env.CRON_SECRET
+    if (!isDirectTestRequest) {
+      if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
+        res.statusCode = 401
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Unauthorized' }))
+        return
+      }
+    }
+
     const vapidKeys = getVapidKeys()
     const subject = process.env.VAPID_SUBJECT || 'mailto:hello@trinqle.app'
 
-    // 1. Direct Test Notification
-    if (bodyData?.test && bodyData?.endpoint) {
+    // 1. Direct Test Notification (always returns here; never falls through to cron broadcast)
+    if (bodyData?.test) {
+      if (!isDirectTestRequest) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing subscription endpoint for test notification' }))
+        return
+      }
+
       const sub = await subscriptionStore.get(bodyData.endpoint)
       if (!sub) {
         res.statusCode = 404

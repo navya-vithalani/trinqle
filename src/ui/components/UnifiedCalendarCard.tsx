@@ -8,6 +8,7 @@ interface UnifiedCalendarCardProps {
   chapter: Chapter
   days: Day[]
   todayLogicalDate: string
+  weekStart?: 'Monday' | 'Sunday'
   cycles: Cycle[]
   activeCycle?: Cycle
   onSelectDate: (date: string) => void
@@ -22,6 +23,7 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
   chapter,
   days,
   todayLogicalDate,
+  weekStart = 'Monday',
   cycles,
   activeCycle,
   onSelectDate,
@@ -84,6 +86,7 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
           chapter={chapter}
           days={days}
           todayLogicalDate={todayLogicalDate}
+          weekStart={weekStart}
           onSelectDate={onSelectDate}
         />
       )}
@@ -94,6 +97,7 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
           cycles={cycles}
           activeCycle={activeCycle}
           todayLogicalDate={todayLogicalDate}
+          weekStart={weekStart}
           isUpdateModalOpen={isUpdateCycleOpen}
           onOpenUpdateModal={() => setIsUpdateCycleOpen(true)}
           onCloseUpdateModal={() => setIsUpdateCycleOpen(false)}

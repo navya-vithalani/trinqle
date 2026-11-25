@@ -138,4 +138,28 @@ export class LibraryRepository {
       })
     }
   }
+
+  /**
+   * Returns up to `limit` recently used active Item IDs for a given library.
+   */
+  async getRecentItemIds(libraryId: string, limit = 4): Promise<string[]> {
+    const links = await this.db.answerLinks
+      .where('libraryId')
+      .equals(libraryId)
+      .filter((l) => !l.deletedAt)
+      .toArray()
+
+    links.sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt - a.updatedAt)
+
+    const seen = new Set<string>()
+    const recent: string[] = []
+    for (const l of links) {
+      if (!seen.has(l.itemId)) {
+        seen.add(l.itemId)
+        recent.push(l.itemId)
+        if (recent.length >= limit) break
+      }
+    }
+    return recent
+  }
 }

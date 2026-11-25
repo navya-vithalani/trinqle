@@ -1,7 +1,16 @@
 import type { TrinqleDB } from '../data/db'
 import { db as defaultDb } from '../data/db'
-import type { Chapter, Day, Answer } from '../data/types'
-import { createZipArchive, readZipArchive, type ZipFileInput } from './zip'
+import type {
+  Chapter,
+  Day,
+  Answer,
+  ChapterAnswer,
+  Cycle,
+  Run,
+  Insight,
+  Sticker,
+} from '../data/types'
+import { createZipArchive, readZipArchiveAsync, type ZipFileInput } from './zip'
 import { buildDailyMetricsTable } from './metrics'
 
 export interface ChapterManifest {
@@ -10,11 +19,29 @@ export interface ChapterManifest {
   chapterId: string
   exportedAt: number
   filesCount: number
+  photoMeta?: { name: string; mime: string }[]
+}
+
+function extensionForMime(mime: string): string {
+  const m = mime.toLowerCase()
+  if (m.includes('png')) return 'png'
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg'
+  if (m.includes('gif')) return 'gif'
+  return 'webp'
+}
+
+function mimeForFilename(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  return 'image/webp'
 }
 
 /**
  * Exports a Chapter (or Open Chapter Backup) as a standard .zip archive.
- * Includes manifest.json, chapter.json, days.json, answers.json, libraries.json.
+ * Lossless export including manifest.json, chapter.json, days.json, answers.json,
+ * libraries.json, chapterAnswers.json, cycles.json, insights.json, stickers.json, and photos.
  */
 export async function exportChapterZip(
   chapterId: string,
@@ -35,6 +62,26 @@ export async function exportChapterZip(
   const allowedDates = new Set(days.map((d) => d.date))
   const answers = (await db.answers.toArray()).filter((a) => !a.deletedAt && allowedDates.has(a.date))
   const answerLinks = (await db.answerLinks.toArray()).filter((l) => !l.deletedAt && allowedDates.has(l.date))
+  const chapterAnswers = (await db.chapterAnswers.where('chapterId').equals(chapterId).toArray()).filter(
+    (ca) => !ca.deletedAt
+  )
+
+  const chapterEnd = chapter.endDate || chapter.plannedEndDate
+  const cycles = (await db.cycles.toArray()).filter(
+    (c) =>
+      !c.deletedAt &&
+      c.startDate <= chapterEnd &&
+      (!c.endDate || c.endDate >= chapter.startDate)
+  )
+
+  const allRuns = (await db.runs.toArray()).filter((r) => !r.deletedAt)
+  const relevantRuns = allRuns.filter(
+    (r) => r.windowEnd >= chapter.startDate && r.windowStart <= chapterEnd
+  )
+  const relevantRunIds = new Set(relevantRuns.map((r) => r.id))
+  const insights = (await db.insights.toArray()).filter(
+    (ins) => !ins.deletedAt && relevantRunIds.has(ins.runId)
+  )
 
   // Fetch referenced libraries and items
   const referencedItemIds = new Set(answerLinks.map((l) => l.itemId))
@@ -48,23 +95,55 @@ export async function exportChapterZip(
   const allLibraries = await db.libraries.toArray()
   const referencedLibraries = allLibraries.filter((l) => referencedLibIds.has(l.id))
 
-  const now = Date.now()
-  const manifest: ChapterManifest = {
-    formatVersion: 1,
-    kind: isBackup ? 'backup' : 'chapter',
-    chapterId,
-    exportedAt: now,
-    filesCount: 5,
+  // Fetch referenced custom stickers
+  const usedStickerIds = new Set(days.map((d) => d.stickerId).filter((s): s is string => Boolean(s)))
+  const customStickers = (await db.stickers.toArray()).filter(
+    (s) => !s.deletedAt && !s.builtin && usedStickerIds.has(s.id)
+  )
+
+  const serializedChapter: Omit<Chapter, 'photos'> & { photosCount?: number } = {
+    ...chapter,
+    photosCount: chapter.photos?.length || 0,
+  }
+  delete (serializedChapter as Partial<Chapter>).photos
+
+  const photoMeta: { name: string; mime: string }[] = []
+  const extraFiles: ZipFileInput[] = []
+
+  if (chapter.photos && chapter.photos.length > 0) {
+    for (let i = 0; i < chapter.photos.length; i++) {
+      const p = chapter.photos[i]
+      if (!(p instanceof Blob)) continue
+      const mime = p.type || 'image/jpeg'
+      const ext = extensionForMime(mime)
+      const name = `images/photo_${i + 1}.${ext}`
+      const arrayBuffer = await p.arrayBuffer()
+      photoMeta.push({ name, mime })
+      extraFiles.push({
+        name,
+        content: new Uint8Array(arrayBuffer),
+      })
+    }
   }
 
-  const files: ZipFileInput[] = [
-    {
-      name: 'manifest.json',
-      content: JSON.stringify(manifest, null, 2),
-    },
+  // Export custom stickers safely (string payloads stay in stickers.json; Blob payloads written as files)
+  const stickerPayload: Array<Omit<Sticker, 'blob'> & { blob?: string; fileRef?: string }> = []
+  for (const st of customStickers) {
+    if (st.blob instanceof Blob) {
+      const ext = st.mime.includes('svg') ? 'svg' : extensionForMime(st.mime || 'image/png')
+      const fileRef = `stickers/${st.id}.${ext}`
+      const ab = await st.blob.arrayBuffer()
+      extraFiles.push({ name: fileRef, content: new Uint8Array(ab) })
+      stickerPayload.push({ ...st, blob: undefined, fileRef })
+    } else {
+      stickerPayload.push({ ...st, blob: typeof st.blob === 'string' ? st.blob : undefined })
+    }
+  }
+
+  const baseFiles: ZipFileInput[] = [
     {
       name: 'chapter.json',
-      content: JSON.stringify(chapter, null, 2),
+      content: JSON.stringify(serializedChapter, null, 2),
     },
     {
       name: 'days.json',
@@ -86,19 +165,42 @@ export async function exportChapterZip(
         2
       ),
     },
+    {
+      name: 'chapterAnswers.json',
+      content: JSON.stringify(chapterAnswers, null, 2),
+    },
+    {
+      name: 'cycles.json',
+      content: JSON.stringify(cycles, null, 2),
+    },
+    {
+      name: 'insights.json',
+      content: JSON.stringify({ runs: relevantRuns, insights }, null, 2),
+    },
+    {
+      name: 'stickers.json',
+      content: JSON.stringify(stickerPayload, null, 2),
+    },
   ]
 
-  // Add photos if present
-  if (chapter.photos && chapter.photos.length > 0) {
-    for (let i = 0; i < chapter.photos.length; i++) {
-      const p = chapter.photos[i]
-      const arrayBuffer = await p.arrayBuffer()
-      files.push({
-        name: `images/photo_${i + 1}.webp`,
-        content: new Uint8Array(arrayBuffer),
-      })
-    }
+  const now = Date.now()
+  const manifest: ChapterManifest = {
+    formatVersion: 1,
+    kind: isBackup ? 'backup' : 'chapter',
+    chapterId,
+    exportedAt: now,
+    filesCount: 1 + baseFiles.length + extraFiles.length,
+    photoMeta,
   }
+
+  const files: ZipFileInput[] = [
+    {
+      name: 'manifest.json',
+      content: JSON.stringify(manifest, null, 2),
+    },
+    ...baseFiles,
+    ...extraFiles,
+  ]
 
   const zipBytes = createZipArchive(files)
   const zipBlob = new Blob([zipBytes.buffer as ArrayBuffer], { type: 'application/zip' })
@@ -145,19 +247,78 @@ export async function downloadOrShareFile(filename: string, blob: Blob): Promise
   URL.revokeObjectURL(url)
 }
 
+export interface ChapterZipPreview {
+  manifest: ChapterManifest
+  chapter: Chapter
+  daysCount: number
+  answersCount: number
+  photosCount: number
+  chapterAnswersCount: number
+  cyclesCount: number
+}
+
+/**
+ * Inspects a Chapter ZIP archive without mutating IndexedDB.
+ */
+export async function inspectChapterZip(zipData: Uint8Array): Promise<ChapterZipPreview> {
+  const extractedFiles = await readZipArchiveAsync(zipData)
+  const textMap = new Map<string, string>()
+
+  for (const f of extractedFiles) {
+    if (f.name.endsWith('.json')) {
+      textMap.set(f.name, f.text())
+    }
+  }
+
+  const manifestStr = textMap.get('manifest.json')
+  if (!manifestStr) throw new Error('Invalid archive: manifest.json missing')
+  const manifest = JSON.parse(manifestStr) as ChapterManifest
+  if (manifest.formatVersion !== 1) {
+    throw new Error(`Unsupported formatVersion: ${manifest.formatVersion}`)
+  }
+
+  const chapterStr = textMap.get('chapter.json')
+  const daysStr = textMap.get('days.json')
+  const answersStr = textMap.get('answers.json')
+  if (!chapterStr || !daysStr || !answersStr) {
+    throw new Error('Corrupted archive: missing essential JSON data files')
+  }
+
+  const chapter = JSON.parse(chapterStr) as Chapter
+  const days = JSON.parse(daysStr) as Day[]
+  const answers = JSON.parse(answersStr) as Answer[]
+  const chapterAnswersStr = textMap.get('chapterAnswers.json')
+  const cyclesStr = textMap.get('cycles.json')
+  const photoFiles = extractedFiles.filter((f) => f.name.startsWith('images/'))
+
+  return {
+    manifest,
+    chapter,
+    daysCount: days.length,
+    answersCount: answers.length,
+    photosCount: photoFiles.length,
+    chapterAnswersCount: chapterAnswersStr ? (JSON.parse(chapterAnswersStr) as ChapterAnswer[]).length : 0,
+    cyclesCount: cyclesStr ? (JSON.parse(cyclesStr) as Cycle[]).length : 0,
+  }
+}
+
 /**
  * Imports a Chapter ZIP archive into the database with schema/version validation.
  */
 export async function importChapterZip(
   zipData: Uint8Array,
-  db: TrinqleDB = defaultDb
-): Promise<{ chapter: Chapter; daysCount: number; answersCount: number }> {
-  const extractedFiles = readZipArchive(zipData)
+  db: TrinqleDB = defaultDb,
+  options?: { conflictMode?: 'replace' | 'skip' }
+): Promise<{ chapter: Chapter; daysCount: number; answersCount: number; skipped?: boolean }> {
+  const extractedFiles = await readZipArchiveAsync(zipData)
   const fileMap = new Map<string, string>()
+  const binaryMap = new Map<string, Uint8Array>()
 
   for (const f of extractedFiles) {
     if (f.name.endsWith('.json')) {
       fileMap.set(f.name, f.text())
+    } else {
+      binaryMap.set(f.name, f.content)
     }
   }
 
@@ -175,33 +336,78 @@ export async function importChapterZip(
   const daysStr = fileMap.get('days.json')
   const answersStr = fileMap.get('answers.json')
   const librariesStr = fileMap.get('libraries.json')
+  const chapterAnswersStr = fileMap.get('chapterAnswers.json')
+  const cyclesStr = fileMap.get('cycles.json')
+  const insightsStr = fileMap.get('insights.json')
+  const stickersStr = fileMap.get('stickers.json')
 
   if (!chapterStr || !daysStr || !answersStr) {
     throw new Error('Corrupted archive: missing essential JSON data files')
   }
 
-  const chapter = JSON.parse(chapterStr) as Chapter
+  const chapter = JSON.parse(chapterStr) as Chapter & { photosCount?: number }
+  delete chapter.photosCount
   const days = JSON.parse(daysStr) as Day[]
   const answers = JSON.parse(answersStr) as Answer[]
 
+  const existingChapter = await db.chapters.get(chapter.id)
+  if (options?.conflictMode === 'skip' && existingChapter && !existingChapter.deletedAt) {
+    return {
+      chapter: existingChapter,
+      daysCount: 0,
+      answersCount: 0,
+      skipped: true,
+    }
+  }
+
+  // Rehydrate photos as typed Blobs
+  const photoBlobs: Blob[] = []
+  if (manifest.photoMeta && manifest.photoMeta.length > 0) {
+    for (const pm of manifest.photoMeta) {
+      const bytes = binaryMap.get(pm.name)
+      if (bytes) {
+        photoBlobs.push(new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], { type: pm.mime }))
+      }
+    }
+  } else {
+    const imgEntries = extractedFiles
+      .filter((f) => f.name.startsWith('images/'))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    for (const f of imgEntries) {
+      const mime = mimeForFilename(f.name)
+      photoBlobs.push(new Blob([f.content.buffer.slice(f.content.byteOffset, f.content.byteOffset + f.content.byteLength) as ArrayBuffer], { type: mime }))
+    }
+  }
+  chapter.photos = photoBlobs
+
   await db.transaction(
     'rw',
-    [db.chapters, db.days, db.answers, db.libraries, db.items, db.answerLinks],
+    [
+      db.chapters,
+      db.days,
+      db.answers,
+      db.libraries,
+      db.items,
+      db.answerLinks,
+      db.chapterAnswers,
+      db.cycles,
+      db.runs,
+      db.insights,
+      db.stickers,
+    ],
     async () => {
       // 1. Put Chapter
       await db.chapters.put(chapter)
 
-      // 2. Put Days
+      // 2. Put Days & Answers
       if (days.length > 0) {
         await db.days.bulkPut(days)
       }
-
-      // 3. Put Answers
       if (answers.length > 0) {
         await db.answers.bulkPut(answers)
       }
 
-      // 4. Merge Libraries and Items if present
+      // 3. Merge Libraries, Items (by id then normalized name), and AnswerLinks
       if (librariesStr) {
         const libData = JSON.parse(librariesStr)
         if (libData.libraries) {
@@ -210,14 +416,63 @@ export async function importChapterZip(
             if (!existing) await db.libraries.put(l)
           }
         }
+        const itemIdRemap = new Map<string, string>()
         if (libData.items) {
+          const currentItems = await db.items.toArray()
           for (const it of libData.items) {
-            const existing = await db.items.get(it.id)
-            if (!existing) await db.items.put(it)
+            const existingById = currentItems.find((c) => c.id === it.id)
+            if (existingById) continue
+            const existingByName = currentItems.find(
+              (c) =>
+                c.libraryId === it.libraryId &&
+                c.name.trim().toLowerCase() === String(it.name).trim().toLowerCase()
+            )
+            if (existingByName) {
+              itemIdRemap.set(it.id, existingByName.id)
+            } else {
+              await db.items.put(it)
+            }
           }
         }
         if (libData.answerLinks) {
-          await db.answerLinks.bulkPut(libData.answerLinks)
+          const links = libData.answerLinks.map((lnk: any) => ({
+            ...lnk,
+            itemId: itemIdRemap.get(lnk.itemId) || lnk.itemId,
+          }))
+          await db.answerLinks.bulkPut(links)
+        }
+      }
+
+      // 4. Put ChapterAnswers, Cycles, Insights/Runs, and Custom Stickers
+      if (chapterAnswersStr) {
+        const cas = JSON.parse(chapterAnswersStr) as ChapterAnswer[]
+        if (cas.length > 0) await db.chapterAnswers.bulkPut(cas)
+      }
+      if (cyclesStr) {
+        const cyc = JSON.parse(cyclesStr) as Cycle[]
+        if (cyc.length > 0) await db.cycles.bulkPut(cyc)
+      }
+      if (insightsStr) {
+        const insBundle = JSON.parse(insightsStr) as { runs?: Run[]; insights?: Insight[] }
+        if (insBundle.runs && insBundle.runs.length > 0) {
+          await db.runs.bulkPut(insBundle.runs)
+        }
+        if (insBundle.insights && insBundle.insights.length > 0) {
+          await db.insights.bulkPut(insBundle.insights)
+        }
+      }
+      if (stickersStr) {
+        const importedStickers = JSON.parse(stickersStr) as Array<
+          Omit<Sticker, 'blob'> & { blob?: string; fileRef?: string }
+        >
+        for (const st of importedStickers) {
+          let resolvedBlob: Blob | string | undefined = st.blob
+          if (st.fileRef && binaryMap.has(st.fileRef)) {
+            const b = binaryMap.get(st.fileRef)!
+            resolvedBlob = new Blob([b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer], { type: st.mime || 'image/png' })
+          }
+          const { fileRef: _ignored, ...clean } = st
+          await db.stickers.put({ ...clean, blob: resolvedBlob })
         }
       }
     }

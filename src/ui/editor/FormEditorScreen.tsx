@@ -16,15 +16,22 @@ import {
   Sparkles,
   ArrowRightLeft,
   X,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Zap,
 } from 'lucide-react'
 import type {
   Section,
   Question,
   Part,
   Library,
+  Item,
   PartKind,
   PartLevel,
   PartConfig,
+  ShowWhenRule,
+  QuestionSchedule,
   Chapter,
 } from '../../data/types'
 import {
@@ -32,7 +39,9 @@ import {
   LibraryRepository,
   ChapterRepository,
 } from '../../data/repositories'
-import { addDays } from '../../core/logicalDay'
+import { addDays, logicalDate } from '../../core/logicalDay'
+import { loadAppSettings } from '../../core/settings'
+import { isActiveOnDate } from '../../core/effectiveDating'
 import { ScopePromptModal, type EditScope } from './ScopePromptModal'
 import { PartEditorModal } from './PartEditorModal'
 import { LibraryManagerModal } from './LibraryManagerModal'
@@ -64,6 +73,16 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const [parts, setParts] = useState<Part[]>([])
   const [libraries, setLibraries] = useState<Library[]>([])
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
+  const [logicalToday, setLogicalToday] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [showRetired, setShowRetired] = useState(false)
+  const [noticeMsg, setNoticeMsg] = useState<string | null>(null)
+  const [upgradeCandidate, setUpgradeCandidate] = useState<{
+    item: Item
+    activeDays: number
+  } | null>(null)
+  const [dismissedItemIds, setDismissedItemIds] = useState<string[]>([])
 
   // Modals
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false)
@@ -91,10 +110,21 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const [newQuestionLabel, setNewQuestionLabel] = useState('')
   const [newQuestionIcon, setNewQuestionIcon] = useState('Sparkles')
 
-  // Inline Question editing (Item 10)
+  // Inline Sub-question creation
+  const [addingSubForQuestionId, setAddingSubForQuestionId] = useState<string | null>(null)
+  const [newSubLabel, setNewSubLabel] = useState('')
+
+  // Inline Question editing (label, icon, repeats, schedule, showWhen)
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
   const [editingQuestionLabel, setEditingQuestionLabel] = useState('')
   const [editingQuestionIcon, setEditingQuestionIcon] = useState('Sparkles')
+  const [editingQuestionRepeats, setEditingQuestionRepeats] = useState(false)
+  const [editingQuestionWeekdays, setEditingQuestionWeekdays] = useState<number[]>([])
+  const [editingQuestionShowWhenMode, setEditingQuestionShowWhenMode] = useState<
+    'always' | 'truthy' | 'eq' | 'cycleActive'
+  >('always')
+  const [editingQuestionShowWhenPartId, setEditingQuestionShowWhenPartId] = useState('')
+  const [editingQuestionShowWhenValue, setEditingQuestionShowWhenValue] = useState('')
 
   // Move Question state
   const [movingQuestionId, setMovingQuestionId] = useState<string | null>(null)
@@ -103,15 +133,26 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const libRepo = new LibraryRepository()
   const chapterRepo = new ChapterRepository()
 
-  const loadData = async () => {
-    const [ch, secList, qList, pList, libList] = await Promise.all([
-      chapterRepo.getOpenChapter(),
-      formRepo.getSections(),
-      formRepo.getQuestions(),
-      formRepo.getParts(),
-      libRepo.getLibraries(),
-    ])
+  const showNotice = (msg: string) => {
+    setNoticeMsg(msg)
+    setTimeout(() => setNoticeMsg(null), 4000)
+  }
 
+  const loadData = async () => {
+    const [appSettings, ch, secList, qList, pList, libList, allItems, allLinks] =
+      await Promise.all([
+        loadAppSettings(),
+        chapterRepo.getOpenChapter(),
+        formRepo.getSections(),
+        formRepo.getQuestions(),
+        formRepo.getParts(),
+        libRepo.getLibraries(),
+        libRepo.getAllItems(),
+        formRepo.getAllAnswerLinks(),
+      ])
+
+    const todayStr = logicalDate(new Date(), undefined, appSettings.windowEndHour)
+    setLogicalToday(todayStr)
     setActiveChapter(ch || null)
     setSections(secList)
     if (secList.length > 0 && !selectedSectionId) {
@@ -120,6 +161,37 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
     setQuestions(qList)
     setParts(pList)
     setLibraries(libList)
+
+    // Detect frequent activity (>= 4 days/week across 12 weeks -> >= 48 days in last 84 days)
+    const start84 = addDays(todayStr, -84)
+    const datesByItem = new Map<string, Set<string>>()
+    for (const link of allLinks) {
+      if (link.date >= start84 && link.date <= todayStr) {
+        if (!datesByItem.has(link.itemId)) datesByItem.set(link.itemId, new Set())
+        datesByItem.get(link.itemId)!.add(link.date)
+      }
+    }
+    const existingLabels = new Set(
+      qList
+        .filter((q) => isActiveOnDate(q, todayStr))
+        .map((q) => q.label.toLowerCase())
+    )
+    let bestCandidate: { item: Item; activeDays: number } | null = null
+    for (const item of allItems) {
+      if (item.deletedAt || dismissedItemIds.includes(item.id)) continue
+      const activeCount = datesByItem.get(item.id)?.size || 0
+      const alreadyDedicated = Array.from(existingLabels).some((lbl) =>
+        lbl.includes(item.name.toLowerCase())
+      )
+      if (
+        activeCount >= 48 &&
+        !alreadyDedicated &&
+        (!bestCandidate || activeCount > bestCandidate.activeDays)
+      ) {
+        bestCandidate = { item, activeDays: activeCount }
+      }
+    }
+    setUpgradeCandidate(bestCandidate)
   }
 
   useEffect(() => {
@@ -131,13 +203,46 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   if (!isOpen) return null
 
   // Helpers for effective dating dates
-  const getScopeDates = (scope: EditScope) => {
-    if (!activeChapter) return { validFrom: null }
-    if (scope === 'thisChapter') {
-      return { validFrom: activeChapter.startDate }
+  // For additions: 'thisChapter' starts from logicalToday (so past filled days remain valid);
+  // 'nextChapter' starts the day after activeChapter.plannedEndDate.
+  // For retirements: validTo is exclusive (validTo <= date hides item), so 'thisChapter' hides starting logicalToday.
+  const getScopeDates = (scope: EditScope, mode: 'add' | 'retire' = 'add') => {
+    const nextStart = activeChapter
+      ? addDays(activeChapter.plannedEndDate, 1)
+      : addDays(logicalToday, 1)
+
+    if (scope === 'nextChapter') {
+      return { validFrom: nextStart, retireDate: nextStart }
     }
-    // nextChapter: starts day after plannedEndDate
-    return { validFrom: addDays(activeChapter.plannedEndDate, 1) }
+    if (mode === 'retire') {
+      return { validFrom: logicalToday, retireDate: logicalToday }
+    }
+    return { validFrom: logicalToday, retireDate: logicalToday }
+  }
+
+  const startEditingQuestion = (q: Question) => {
+    setEditingQuestionId(q.id)
+    setEditingQuestionLabel(q.label)
+    setEditingQuestionIcon(q.icon || 'Sparkles')
+    setEditingQuestionRepeats(Boolean(q.repeats))
+    setEditingQuestionWeekdays(q.schedule?.weekdays || [])
+    if (q.showWhen?.cycleActive) {
+      setEditingQuestionShowWhenMode('cycleActive')
+      setEditingQuestionShowWhenPartId('')
+      setEditingQuestionShowWhenValue('')
+    } else if (q.showWhen?.partId && q.showWhen.op === 'eq' && q.showWhen.value !== undefined) {
+      setEditingQuestionShowWhenMode('eq')
+      setEditingQuestionShowWhenPartId(q.showWhen.partId)
+      setEditingQuestionShowWhenValue(String(q.showWhen.value))
+    } else if (q.showWhen?.partId && q.showWhen.op === 'truthy') {
+      setEditingQuestionShowWhenMode('truthy')
+      setEditingQuestionShowWhenPartId(q.showWhen.partId)
+      setEditingQuestionShowWhenValue('')
+    } else {
+      setEditingQuestionShowWhenMode('always')
+      setEditingQuestionShowWhenPartId('')
+      setEditingQuestionShowWhenValue('')
+    }
   }
 
   // --- SECTION ACTIONS ---
@@ -164,8 +269,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
       title: 'Retire Section',
       description: 'Retiring a section hides all its questions from future forms. Historical logs remain fully intact.',
       onConfirm: async (scope) => {
-        const { validFrom } = getScopeDates(scope)
-        const retireDate = validFrom || new Date().toISOString().slice(0, 10)
+        const { retireDate } = getScopeDates(scope, 'retire')
         await formRepo.retireSection(secId, retireDate)
         await loadData()
         if (selectedSectionId === secId && sections.length > 1) {
@@ -209,14 +313,108 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
     })
   }
 
+  const handleCreateSubQuestion = async (parentQ: Question) => {
+    const label = newSubLabel.trim()
+    if (!label) return
+    setAddingSubForQuestionId(null)
+    setNewSubLabel('')
+    setScopeModal({
+      isOpen: true,
+      title: 'Add Sub-question',
+      description: `Add follow-up "${label}" under "${parentQ.label}".`,
+      onConfirm: async (scope) => {
+        const { validFrom } = getScopeDates(scope, 'add')
+        const created = await formRepo.createQuestion({
+          sectionId: parentQ.sectionId,
+          parentId: parentQ.id,
+          label,
+          icon: parentQ.icon || 'Sparkles',
+          validFrom,
+        })
+        await formRepo.createPart({
+          questionId: created.id,
+          kind: 'text',
+          label: 'Notes',
+          level: 'extra',
+          validFrom,
+        })
+        await loadData()
+      },
+    })
+  }
+
+  const handlePromoteUpgradeCandidate = async () => {
+    if (!upgradeCandidate) return
+    const item = upgradeCandidate.item
+    const targetSection =
+      sections.find((s) => s.id === selectedSectionId && s.scope !== 'chapterEnd') ||
+      sections.find((s) => s.scope !== 'chapterEnd')
+    if (!targetSection) return
+
+    setScopeModal({
+      isOpen: true,
+      title: `Promote "${item.name}" to Routine`,
+      description: `Creates a dedicated daily yes/no question for "${item.name}" in "${targetSection.name}".`,
+      onConfirm: async (scope) => {
+        const { validFrom } = getScopeDates(scope, 'add')
+        const createdQ = await formRepo.createQuestion({
+          sectionId: targetSection.id,
+          label: item.name,
+          icon: 'Activity',
+          validFrom,
+        })
+        await formRepo.createPart({
+          questionId: createdQ.id,
+          kind: 'yesno',
+          label: `Did you do ${item.name} today?`,
+          level: 'core',
+          gate: true,
+          validFrom,
+        })
+        setDismissedItemIds((prev) => [...prev, item.id])
+        setSelectedSectionId(targetSection.id)
+        await loadData()
+        showNotice(`Promoted "${item.name}" to its own question.`)
+      },
+    })
+  }
+
   const handleUpdateQuestion = async (qId: string) => {
     if (!editingQuestionLabel.trim()) return
     const q = questions.find((item) => item.id === qId)
     if (!q) return
+
+    const schedule: QuestionSchedule | undefined =
+      editingQuestionWeekdays.length > 0 && editingQuestionWeekdays.length < 7
+        ? { weekdays: [...editingQuestionWeekdays].sort((a, b) => a - b) }
+        : undefined
+
+    let showWhen: ShowWhenRule | undefined
+    if (editingQuestionShowWhenMode === 'cycleActive') {
+      showWhen = { op: 'truthy', cycleActive: true }
+    } else if (editingQuestionShowWhenMode === 'truthy' && editingQuestionShowWhenPartId) {
+      showWhen = { partId: editingQuestionShowWhenPartId, op: 'truthy' }
+    } else if (editingQuestionShowWhenMode === 'eq' && editingQuestionShowWhenPartId) {
+      const raw = editingQuestionShowWhenValue.trim()
+      const parsedVal: string | number | boolean =
+        raw === 'true'
+          ? true
+          : raw === 'false'
+            ? false
+            : raw !== '' && !Number.isNaN(Number(raw))
+              ? Number(raw)
+              : raw
+      showWhen = { partId: editingQuestionShowWhenPartId, op: 'eq', value: parsedVal }
+    }
+
     await formRepo.saveQuestion({
       ...q,
       label: editingQuestionLabel.trim(),
       icon: editingQuestionIcon,
+      repeats: editingQuestionRepeats,
+      schedule,
+      showWhen,
+      updatedAt: Date.now(),
     })
     setEditingQuestionId(null)
     await loadData()
@@ -256,8 +454,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
       title: 'Retire Question',
       description: 'Hides this question from new daily forms while preserving all historical logs.',
       onConfirm: async (scope) => {
-        const { validFrom } = getScopeDates(scope)
-        const retireDate = validFrom || new Date().toISOString().slice(0, 10)
+        const { retireDate } = getScopeDates(scope, 'retire')
         await formRepo.retireQuestion(qId, retireDate)
         await loadData()
       },
@@ -265,6 +462,41 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   }
 
   // --- PART ACTIONS ---
+  const ensureGateCoreIfNeeded = async (
+    qId: string,
+    targetLevel: PartLevel,
+    excludePartId?: string,
+    effectiveFrom?: string | null
+  ) => {
+    if (targetLevel !== 'core') return
+    const extraGate = parts.find(
+      (p) =>
+        p.questionId === qId &&
+        p.id !== excludePartId &&
+        !p.deletedAt &&
+        isActiveOnDate(p, logicalToday) &&
+        p.gate &&
+        p.level === 'extra'
+    )
+    if (extraGate) {
+      if (effectiveFrom && effectiveFrom > logicalToday) {
+        await formRepo.retirePart(extraGate.id, effectiveFrom)
+        await formRepo.createPart({
+          questionId: qId,
+          kind: extraGate.kind,
+          label: extraGate.label,
+          level: 'core',
+          order: extraGate.order,
+          gate: true,
+          config: extraGate.config,
+          validFrom: effectiveFrom,
+        })
+      } else {
+        await formRepo.savePart({ ...extraGate, level: 'core', updatedAt: Date.now() })
+      }
+    }
+  }
+
   const handleSavePart = async (partData: {
     questionId: string
     kind: PartKind
@@ -276,38 +508,164 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
     const qId = partData.questionId || editingPartModal.questionId
     const existingPart = editingPartModal.part
 
+    // Gate invariant: if this part is gate and another active part is Core, this gate must be Core
+    let resolvedLevel = partData.level
+    const activeSiblings = parts.filter(
+      (p) =>
+        p.questionId === qId &&
+        p.id !== existingPart?.id &&
+        !p.deletedAt &&
+        isActiveOnDate(p, logicalToday)
+    )
+    if (partData.gate && resolvedLevel === 'extra' && activeSiblings.some((s) => s.level === 'core')) {
+      resolvedLevel = 'core'
+      showNotice('Gate part kept Core because this question has other Core parts.')
+    }
+
     if (existingPart?.id) {
-      // Edits (kind, label, config, gate, level) apply immediately
+      const kindChanged = partData.kind !== existingPart.kind
+      const levelChanged = resolvedLevel !== existingPart.level
+
+      if (kindChanged) {
+        // Changing input kind retires old part and creates a fresh part so history stays type-safe
+        setScopeModal({
+          isOpen: true,
+          title: 'Change Input Kind',
+          description: `Changing "${existingPart.label}" from ${existingPart.kind} to ${partData.kind} retires the old part and starts a new one.`,
+          onConfirm: async (scope) => {
+            const { validFrom, retireDate } = getScopeDates(scope, 'retire')
+            await formRepo.retirePart(existingPart.id!, retireDate)
+            await formRepo.createPart({
+              questionId: qId,
+              kind: partData.kind,
+              label: partData.label,
+              level: resolvedLevel,
+              order: existingPart.order,
+              gate: partData.gate,
+              config: partData.config,
+              validFrom,
+            })
+            await ensureGateCoreIfNeeded(qId, resolvedLevel, existingPart.id, validFrom)
+            await loadData()
+          },
+        })
+        return
+      }
+
+      if (levelChanged) {
+        setScopeModal({
+          isOpen: true,
+          title: 'Change Part Priority',
+          description: `Apply switching "${partData.label}" to ${resolvedLevel.toUpperCase()}:`,
+          onConfirm: async (scope) => {
+            if (scope === 'thisChapter') {
+              await formRepo.savePart({
+                ...(existingPart as Part),
+                kind: partData.kind,
+                label: partData.label,
+                level: resolvedLevel,
+                gate: partData.gate,
+                config: partData.config,
+                updatedAt: Date.now(),
+              })
+              await ensureGateCoreIfNeeded(qId, resolvedLevel, existingPart.id)
+            } else {
+              const { validFrom } = getScopeDates('nextChapter', 'add')
+              await formRepo.retirePart(existingPart.id!, validFrom)
+              await formRepo.createPart({
+                questionId: qId,
+                kind: partData.kind,
+                label: partData.label,
+                level: resolvedLevel,
+                order: existingPart.order,
+                gate: partData.gate,
+                config: partData.config,
+                validFrom,
+              })
+              await ensureGateCoreIfNeeded(qId, resolvedLevel, existingPart.id, validFrom)
+            }
+            await loadData()
+          },
+        })
+        return
+      }
+
+      // Label, config, or gate edit in place
       const updated: Part = {
         ...(existingPart as Part),
         kind: partData.kind,
         label: partData.label,
-        level: partData.level,
+        level: resolvedLevel,
         gate: partData.gate,
         config: partData.config,
         updatedAt: Date.now(),
       }
       await formRepo.savePart(updated)
+      await ensureGateCoreIfNeeded(qId, resolvedLevel, existingPart.id)
       await loadData()
     } else {
-      // Add part immediately to the current chapter so it is active and testable right away
-      const validFrom = activeChapter?.startDate || null
-      await formRepo.createPart({
-        questionId: qId,
-        kind: partData.kind,
-        label: partData.label,
-        level: partData.level,
-        gate: partData.gate,
-        config: partData.config,
-        validFrom,
+      setScopeModal({
+        isOpen: true,
+        title: 'Add Input Part',
+        description: `Choose when "${partData.label}" starts appearing:`,
+        onConfirm: async (scope) => {
+          const { validFrom } = getScopeDates(scope, 'add')
+          await formRepo.createPart({
+            questionId: qId,
+            kind: partData.kind,
+            label: partData.label,
+            level: resolvedLevel,
+            gate: partData.gate,
+            config: partData.config,
+            validFrom,
+          })
+          await ensureGateCoreIfNeeded(qId, resolvedLevel, undefined, validFrom)
+          await loadData()
+        },
       })
-      await loadData()
     }
   }
 
   const handleTogglePartLevel = async (part: Part) => {
-    await formRepo.togglePartLevel(part.id)
-    await loadData()
+    const nextLevel: PartLevel = part.level === 'core' ? 'extra' : 'core'
+    const activeSiblings = parts.filter(
+      (p) =>
+        p.questionId === part.questionId &&
+        p.id !== part.id &&
+        !p.deletedAt &&
+        isActiveOnDate(p, logicalToday)
+    )
+    if (part.gate && nextLevel === 'extra' && activeSiblings.some((s) => s.level === 'core')) {
+      showNotice('Gate parts must stay Core while another part in the question is Core.')
+      return
+    }
+
+    setScopeModal({
+      isOpen: true,
+      title: `Set Part to ${nextLevel.toUpperCase()}`,
+      description: `Switch "${part.label}" to ${nextLevel.toUpperCase()}:`,
+      onConfirm: async (scope) => {
+        if (scope === 'thisChapter') {
+          await formRepo.togglePartLevel(part.id)
+          await ensureGateCoreIfNeeded(part.questionId, nextLevel, part.id)
+        } else {
+          const { validFrom } = getScopeDates('nextChapter', 'add')
+          await formRepo.retirePart(part.id, validFrom)
+          await formRepo.createPart({
+            questionId: part.questionId,
+            kind: part.kind,
+            label: part.label,
+            level: nextLevel,
+            order: part.order,
+            gate: part.gate,
+            config: part.config,
+            validFrom,
+          })
+          await ensureGateCoreIfNeeded(part.questionId, nextLevel, part.id, validFrom)
+        }
+        await loadData()
+      },
+    })
   }
 
   const handleRetirePart = async (partId: string) => {
@@ -316,44 +674,100 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
       title: 'Retire Part',
       description: 'Retiring this part removes it from future forms. Existing answers are preserved.',
       onConfirm: async (scope) => {
-        const { validFrom } = getScopeDates(scope)
-        const retireDate = validFrom || new Date().toISOString().slice(0, 10)
+        const { retireDate } = getScopeDates(scope, 'retire')
         await formRepo.retirePart(partId, retireDate)
         await loadData()
       },
     })
   }
 
+  const isRetired = (item: { validTo?: string | null }) =>
+    Boolean(item.validTo && item.validTo <= logicalToday)
+
+  const visibleSections = showRetired ? sections : sections.filter((s) => !isRetired(s))
+
+  // Compute daily form time-cost estimate
+  const dailySectionIds = new Set(
+    sections.filter((s) => s.scope !== 'chapterEnd' && isActiveOnDate(s, logicalToday)).map((s) => s.id)
+  )
+  const activeDailyQIds = new Set(
+    questions
+      .filter((q) => dailySectionIds.has(q.sectionId) && isActiveOnDate(q, logicalToday))
+      .map((q) => q.id)
+  )
+  const activeDailyParts = parts.filter(
+    (p) => activeDailyQIds.has(p.questionId) && isActiveOnDate(p, logicalToday)
+  )
+  const partSecCost = (kind: PartKind, full: boolean) =>
+    kind === 'text' ? (full ? 25 : 20) : kind === 'timerange' ? (full ? 15 : 12) : full ? 7 : 6
+  const quickMinutes = Math.max(
+    1,
+    Math.round(
+      activeDailyParts
+        .filter((p) => p.level === 'core')
+        .reduce((acc, p) => acc + partSecCost(p.kind, false), 0) / 60
+    )
+  )
+  const fullMinutes = Math.max(
+    1,
+    Math.round(
+      activeDailyParts.reduce((acc, p) => acc + partSecCost(p.kind, true), 0) / 60
+    )
+  )
+
   // Questions belonging to the selected section
   const currentSection = sections.find((s) => s.id === selectedSectionId)
   const currentQuestions = questions
-    .filter((q) => q.sectionId === selectedSectionId && !q.parentId)
+    .filter((q) => q.sectionId === selectedSectionId && !q.parentId && (showRetired || !isRetired(q)))
     .sort((a, b) => a.order - b.order)
+
+  const allActivePartsForConditions = parts.filter((p) => isActiveOnDate(p, logicalToday))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-[var(--color-surface)] w-full max-w-xl h-full sm:h-[94vh] sm:rounded-[var(--radius-l)] border-2 border-[var(--color-line)] shadow-2xl flex flex-col overflow-hidden text-xs">
         {/* Top Header */}
-        <div className="p-4 border-b-2 border-[var(--color-line)] flex items-center justify-between shrink-0 bg-[var(--color-surface)]">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex items-center justify-center">
+        <div className="p-4 border-b-2 border-[var(--color-line)] flex items-center justify-between gap-2 shrink-0 bg-[var(--color-surface)]">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex items-center justify-center shrink-0">
               <Sparkles size={16} />
             </div>
-            <div>
-              <h2 className="font-bold text-sm text-[var(--color-ink)]">
-                Journal Form Builder
-              </h2>
-              <p className="text-[11px] text-[var(--color-ink-soft)]">
-                {activeChapter?.title || 'Open Chapter'} • Customize sections, questions, and parts
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="font-bold text-sm text-[var(--color-ink)]">
+                  Journal Form Builder
+                </h2>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)]"
+                  title="Estimated fill duration based on active daily parts"
+                >
+                  Quick ~{quickMinutes}m · Full ~{fullMinutes}m
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--color-ink-soft)] truncate">
+                {activeChapter?.title || 'Open Chapter'} · Effective date: {logicalToday}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowRetired((v) => !v)}
+              className={`p-2 min-h-[34px] rounded-[var(--radius-pill)] border text-[10px] font-semibold flex items-center gap-1 ${
+                showRetired
+                  ? 'border-[var(--color-accent)] bg-[var(--color-bg)] text-[var(--color-accent)]'
+                  : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]'
+              }`}
+              title={showRetired ? 'Hide retired items' : 'Show retired items'}
+            >
+              {showRetired ? <Eye size={13} /> : <EyeOff size={13} />}
+              <span className="hidden sm:inline">Retired</span>
+            </button>
             <button
               type="button"
               onClick={() => setIsLibraryManagerOpen(true)}
-              className="py-1.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)] font-semibold text-xs flex items-center space-x-1 active:scale-95"
+              className="py-1.5 px-3 min-h-[34px] rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-ink)] font-semibold text-xs flex items-center space-x-1 active:scale-95"
             >
               <BookOpen size={13} className="text-[var(--color-accent)]" />
               <span>Libraries</span>
@@ -361,16 +775,59 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-line)]/50 active:scale-95"
+              className="min-w-[34px] min-h-[34px] inline-flex items-center justify-center rounded-full text-[var(--color-ink-soft)] hover:bg-[var(--color-line)]/50 active:scale-95"
             >
               <X size={18} />
             </button>
           </div>
         </div>
 
+        {/* Inline Notice Banner */}
+        {noticeMsg && (
+          <div className="mx-3 mt-2 p-2.5 rounded-xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/30 text-[11px] font-semibold text-[var(--color-ink)] flex items-center gap-2">
+            <AlertCircle size={14} className="text-[var(--color-accent)] shrink-0" />
+            <span>{noticeMsg}</span>
+          </div>
+        )}
+
+        {/* Activity -> Routine Upgrade Banner */}
+        {upgradeCandidate && (
+          <div className="mx-3 mt-2 p-3 rounded-xl bg-[var(--color-bg)] border border-[var(--color-accent)]/40 flex items-center justify-between gap-2">
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-accent)]">
+                <Zap size={12} />
+                <span>Routine Upgrade Suggestion</span>
+              </div>
+              <p className="text-[11px] text-[var(--color-ink)]">
+                You logged <span className="font-bold">{upgradeCandidate.item.name}</span> on{' '}
+                {upgradeCandidate.activeDays} of the last 84 days. Make it a dedicated daily question?
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handlePromoteUpgradeCandidate}
+                className="px-2.5 py-1.5 rounded-full bg-[var(--color-accent)] text-white text-[10px] font-bold active:scale-95"
+              >
+                Promote
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setDismissedItemIds((prev) => [...prev, upgradeCandidate.item.id])
+                }
+                className="p-1.5 rounded-full text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]"
+                title="Dismiss suggestion"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Excel-Style Section Tab Bar */}
         <div className="flex items-center space-x-1 px-3 py-2 bg-[var(--color-bg)] border-b-2 border-[var(--color-line)] overflow-x-auto scrollbar-none shrink-0">
-          {sections.map((sec) => {
+          {visibleSections.map((sec) => {
             const isSelected = selectedSectionId === sec.id
             const isChapterEnd = sec.scope === 'chapterEnd'
             return (
@@ -502,16 +959,22 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
           <div className="space-y-3.5">
             {currentQuestions.map((q, idx) => {
               const qParts = parts
-                .filter((p) => p.questionId === q.id)
+                .filter((p) => p.questionId === q.id && (showRetired || !isRetired(p)))
                 .sort((a, b) => a.order - b.order)
-              const subQuestions = questions.filter((sq) => sq.parentId === q.id)
+              const subQuestions = questions
+                .filter((sq) => sq.parentId === q.id && (showRetired || !isRetired(sq)))
+                .sort((a, b) => a.order - b.order)
+              const qScheduledFuture = Boolean(q.validFrom && q.validFrom > logicalToday)
+              const qRetired = isRetired(q)
 
               return (
                 <div
                   key={q.id}
-                  className="sticker-card p-3.5 space-y-3 border-2 border-[var(--color-line)]"
+                  className={`sticker-card p-3.5 space-y-3 border-2 border-[var(--color-line)] ${
+                    qRetired ? 'opacity-55' : ''
+                  }`}
                 >
-                  {/* Inline Question Editing or Normal Header (Item 10) */}
+                  {/* Inline Question Editing or Normal Header */}
                   {editingQuestionId === q.id ? (
                     <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border-2 border-[var(--color-accent)] space-y-2.5">
                       <label className="font-bold text-xs text-[var(--color-ink)] block">
@@ -547,11 +1010,117 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                         </div>
                       </div>
 
+                      {/* Repeats Toggle */}
+                      {!q.parentId && (
+                        <label className="flex items-center justify-between p-2 rounded border border-[var(--color-line)] bg-[var(--color-surface)] cursor-pointer">
+                          <div>
+                            <span className="text-[11px] font-bold text-[var(--color-ink)] block">
+                              Allow multiple sessions per day
+                            </span>
+                            <span className="text-[10px] text-[var(--color-ink-soft)]">
+                              Enable adding repeated entries (e.g. multiple meals or workouts)
+                            </span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={editingQuestionRepeats}
+                            onChange={(e) => setEditingQuestionRepeats(e.target.checked)}
+                            className="w-4 h-4 accent-[var(--color-accent)]"
+                          />
+                        </label>
+                      )}
+
+                      {/* Weekday Schedule */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                          Weekday Schedule (blank = every day)
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((dayLabel, dayIdx) => {
+                            const active = editingQuestionWeekdays.includes(dayIdx)
+                            return (
+                              <button
+                                key={dayLabel}
+                                type="button"
+                                onClick={() =>
+                                  setEditingQuestionWeekdays((prev) =>
+                                    prev.includes(dayIdx)
+                                      ? prev.filter((d) => d !== dayIdx)
+                                      : [...prev, dayIdx]
+                                  )
+                                }
+                                className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-colors ${
+                                  active
+                                    ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+                                    : 'bg-[var(--color-surface)] text-[var(--color-ink-soft)] border-[var(--color-line)]'
+                                }`}
+                              >
+                                {dayLabel}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Visibility Rule (showWhen) */}
+                      <div className="space-y-1.5 pt-1 border-t border-[var(--color-line)]">
+                        <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                          Conditional Visibility (showWhen)
+                        </span>
+                        <select
+                          value={editingQuestionShowWhenMode}
+                          onChange={(e) =>
+                            setEditingQuestionShowWhenMode(
+                              e.target.value as 'always' | 'truthy' | 'eq' | 'cycleActive'
+                            )
+                          }
+                          className="w-full p-1.5 rounded border border-[var(--color-line)] bg-[var(--color-surface)] text-[11px] font-semibold text-[var(--color-ink)]"
+                        >
+                          <option value="always">Always visible</option>
+                          <option value="cycleActive">Only when a period cycle is active</option>
+                          <option value="truthy">Only when a part is answered (truthy)</option>
+                          <option value="eq">Only when a part equals a specific value</option>
+                        </select>
+
+                        {(editingQuestionShowWhenMode === 'truthy' ||
+                          editingQuestionShowWhenMode === 'eq') && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            <select
+                              value={editingQuestionShowWhenPartId}
+                              onChange={(e) => setEditingQuestionShowWhenPartId(e.target.value)}
+                              className="w-full p-1.5 rounded border border-[var(--color-line)] bg-[var(--color-surface)] text-[11px] text-[var(--color-ink)]"
+                            >
+                              <option value="">Select trigger part...</option>
+                              {allActivePartsForConditions
+                                .filter((p) => p.questionId !== q.id)
+                                .map((p) => {
+                                  const pq = questions.find((item) => item.id === p.questionId)
+                                  return (
+                                    <option key={p.id} value={p.id}>
+                                      {pq ? `${pq.label}: ${p.label}` : p.label}
+                                    </option>
+                                  )
+                                })}
+                            </select>
+
+                            {editingQuestionShowWhenMode === 'eq' && (
+                              <input
+                                type="text"
+                                placeholder="Target value (e.g. true, 5)"
+                                value={editingQuestionShowWhenValue}
+                                onChange={(e) => setEditingQuestionShowWhenValue(e.target.value)}
+                                className="w-full p-1.5 rounded border border-[var(--color-line)] bg-[var(--color-surface)] text-[11px] text-[var(--color-ink)]"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-end space-x-2 pt-1">
                         <button
                           type="button"
                           onClick={() => setEditingQuestionId(null)}
-                          className="py-1 px-3 text-xs text-[var(--color-ink-soft)] font-semibold"
+                          className="py-1.5 px-3 text-xs text-[var(--color-ink-soft)] font-semibold"
                         >
                           Cancel
                         </button>
@@ -559,7 +1128,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                           type="button"
                           disabled={!editingQuestionLabel.trim()}
                           onClick={() => handleUpdateQuestion(q.id)}
-                          className="py-1 px-4 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold disabled:opacity-50"
+                          className="py-1.5 px-4 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold disabled:opacity-50"
                         >
                           Save Question
                         </button>
@@ -567,29 +1136,51 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                     </div>
                   ) : (
                     /* Question Card Header */
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-extrabold text-xs text-[var(--color-ink)] flex items-center space-x-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-xs text-[var(--color-ink)] flex flex-wrap items-center gap-1.5">
                           <span>{q.label}</span>
                           {q.repeats && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
                               Repeating
+                            </span>
+                          )}
+                          {q.schedule?.weekdays && q.schedule.weekdays.length > 0 && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink-soft)]">
+                              {q.schedule.weekdays
+                                .map((d) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d])
+                                .join(',')}
+                            </span>
+                          )}
+                          {q.showWhen && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink-soft)]">
+                              Conditional
+                            </span>
+                          )}
+                          {qScheduledFuture && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700">
+                              From {q.validFrom}
+                            </span>
+                          )}
+                          {qRetired && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-700">
+                              Retired {q.validTo}
                             </span>
                           )}
                         </h4>
                         <span className="text-[10px] text-[var(--color-ink-soft)]">
-                          {qParts.length} input parts {q.icon ? `• Icon: ${q.icon}` : ''}
+                          {qParts.length} input parts {q.icon ? `· Icon: ${q.icon}` : ''}
                         </span>
                       </div>
 
                       {/* Question Actions */}
-                      <div className="flex items-center space-x-1">
-                        {/* Move Up / Down */}
+                      <div className="flex items-center space-x-0.5 shrink-0">
                         <button
                           type="button"
                           disabled={idx === 0}
                           onClick={() => handleReorderQuestion(q.id, 'up')}
-                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
+                          className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-bg)] disabled:opacity-20 active:scale-90"
+                          title="Move up"
                         >
                           <ArrowUp size={13} />
                         </button>
@@ -597,46 +1188,42 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                           type="button"
                           disabled={idx === currentQuestions.length - 1}
                           onClick={() => handleReorderQuestion(q.id, 'down')}
-                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
+                          className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-bg)] disabled:opacity-20 active:scale-90"
+                          title="Move down"
                         >
                           <ArrowDown size={13} />
                         </button>
 
-                        {/* Edit Question */}
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingQuestionId(q.id)
-                            setEditingQuestionLabel(q.label)
-                            setEditingQuestionIcon(q.icon || 'Sparkles')
-                          }}
-                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
-                          title="Edit question & icon"
+                          onClick={() => startEditingQuestion(q)}
+                          className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg)] active:scale-90"
+                          title="Edit question, schedule & conditions"
                         >
                           <Edit2 size={13} />
                         </button>
 
-                        {/* Move to another section */}
                         <button
                           type="button"
                           onClick={() =>
                             setMovingQuestionId(movingQuestionId === q.id ? null : q.id)
                           }
-                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
+                          className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg)] active:scale-90"
                           title="Move to another section"
                         >
                           <ArrowRightLeft size={13} />
                         </button>
 
-                        {/* Retire Question */}
-                        <button
-                          type="button"
-                          onClick={() => handleRetireQuestion(q.id)}
-                          className="p-1 text-[var(--color-ink-soft)] hover:text-rose-600 active:scale-90"
-                          title="Retire question"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {!qRetired && (
+                          <button
+                            type="button"
+                            onClick={() => handleRetireQuestion(q.id)}
+                            className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-rose-600 hover:bg-[var(--color-bg)] active:scale-90"
+                            title="Retire question"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -692,12 +1279,12 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             {/* 1-Tap Core / Extra Toggle Chip */}
                             <button
                               type="button"
                               onClick={() => handleTogglePartLevel(p)}
-                              className={`py-0.5 px-2 rounded-full text-[9px] font-extrabold transition-transform active:scale-90 ${
+                              className={`py-1 px-2.5 min-h-[28px] rounded-full text-[9px] font-extrabold transition-transform active:scale-90 ${
                                 p.level === 'core'
                                   ? 'bg-[var(--color-accent)] text-white shadow-xs'
                                   : 'bg-[var(--color-line)] text-[var(--color-ink-soft)]'
@@ -716,53 +1303,150 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                                   part: p,
                                 })
                               }
-                              className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
+                              className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] hover:bg-[var(--color-surface)] active:scale-90"
                               title="Edit Part"
                             >
                               <Edit2 size={13} />
                             </button>
 
                             {/* X Retire */}
-                            <button
-                              type="button"
-                              onClick={() => handleRetirePart(p.id)}
-                              className="p-1 text-[var(--color-ink-soft)] hover:text-rose-600 active:scale-90"
-                              title="Retire Part"
-                            >
-                              <X size={14} />
-                            </button>
+                            {!isRetired(p) && (
+                              <button
+                                type="button"
+                                onClick={() => handleRetirePart(p.id)}
+                                className="min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-[var(--color-ink-soft)] hover:text-rose-600 hover:bg-[var(--color-surface)] active:scale-90"
+                                title="Retire Part"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Sub-Questions list if any */}
+                  {/* Sub-Questions list & inline authoring */}
                   {subQuestions.length > 0 && (
                     <div className="pl-3 border-l-2 border-[var(--color-line)] space-y-2 mt-2">
                       <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
-                        Sub-questions
+                        Sub-questions ({subQuestions.length})
                       </span>
-                      {subQuestions.map((sq) => (
-                        <div
-                          key={sq.id}
-                          className="p-2 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-[11px] font-semibold flex justify-between items-center"
-                        >
-                          <span>{sq.label}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRetireQuestion(sq.id)}
-                            className="text-rose-500 hover:text-rose-700"
+                      {subQuestions.map((sq) => {
+                        const sqParts = parts
+                          .filter((p) => p.questionId === sq.id && (showRetired || !isRetired(p)))
+                          .sort((a, b) => a.order - b.order)
+                        return (
+                          <div
+                            key={sq.id}
+                            className="p-2.5 rounded-[var(--radius-m)] bg-[var(--color-surface)] border border-[var(--color-line)] space-y-2"
                           >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))}
+                            <div className="flex justify-between items-center gap-2">
+                              <span className="text-[11px] font-bold text-[var(--color-ink)]">
+                                {sq.label}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingPartModal({
+                                      isOpen: true,
+                                      questionId: sq.id,
+                                      part: undefined,
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-full border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)]"
+                                >
+                                  + Part
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetireQuestion(sq.id)}
+                                  className="min-w-[28px] min-h-[28px] inline-flex items-center justify-center text-rose-500 hover:text-rose-700"
+                                  title="Retire sub-question"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                            {sqParts.length > 0 && (
+                              <div className="space-y-1">
+                                {sqParts.map((sp) => (
+                                  <div
+                                    key={sp.id}
+                                    className="px-2 py-1 rounded bg-[var(--color-bg)] flex items-center justify-between text-[10px]"
+                                  >
+                                    <span>
+                                      <strong className="text-[var(--color-ink)]">{sp.label}</strong>{' '}
+                                      <span className="text-[var(--color-ink-soft)]">({sp.kind})</span>
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setEditingPartModal({
+                                            isOpen: true,
+                                            questionId: sq.id,
+                                            part: sp,
+                                          })
+                                        }
+                                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)]"
+                                      >
+                                        <Edit2 size={11} />
+                                      </button>
+                                      {!isRetired(sp) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRetirePart(sp.id)}
+                                          className="p-1 text-[var(--color-ink-soft)] hover:text-rose-600"
+                                        >
+                                          <X size={11} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Inline Add Sub-Question Input */}
+                  {addingSubForQuestionId === q.id && (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Sub-question label (e.g. Workout notes, How hard?)..."
+                        value={newSubLabel}
+                        onChange={(e) => setNewSubLabel(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreateSubQuestion(q)}
+                        className="flex-1 p-1.5 rounded border border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCreateSubQuestion(q)}
+                        className="py-1.5 px-3 rounded-full bg-[var(--color-accent)] text-white text-[10px] font-bold"
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingSubForQuestionId(null)
+                          setNewSubLabel('')
+                        }}
+                        className="py-1.5 px-2 text-[10px] text-[var(--color-ink-soft)]"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   )}
 
                   {/* Card Action Buttons */}
-                  <div className="flex items-center space-x-2 pt-1 border-t border-[var(--color-line)]">
+                  <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-[var(--color-line)]">
                     <button
                       type="button"
                       onClick={() =>
@@ -772,10 +1456,22 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                           part: undefined,
                         })
                       }
-                      className="py-1 px-2.5 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)] flex items-center space-x-1 active:scale-95"
+                      className="py-1.5 px-3 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-accent)] flex items-center space-x-1 active:scale-95"
                     >
                       <Plus size={11} />
                       <span>Add Part</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingSubForQuestionId(q.id)
+                        setNewSubLabel('')
+                      }}
+                      className="py-1.5 px-3 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border border-[var(--color-line)] text-[10px] font-semibold text-[var(--color-ink)] flex items-center space-x-1 active:scale-95"
+                    >
+                      <Plus size={11} />
+                      <span>Sub-question</span>
                     </button>
                   </div>
                 </div>

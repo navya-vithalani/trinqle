@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Folder, Tag, ChevronRight } from 'lucide-react'
-import type { Library, Item, AnswerLink, Day, Question, Part } from '../../data/types'
+import type { Library, Item, AnswerLink, Answer, Day, Question, Part } from '../../data/types'
 import { ItemHistoryModal } from './ItemHistoryModal'
 import type { ItemDayAppearance } from '../../core/metrics/types'
 
@@ -8,6 +8,7 @@ interface LibrariesListViewProps {
   libraries: Library[]
   items: Item[]
   answerLinks: AnswerLink[]
+  answers?: Answer[]
   days: Day[]
   questions: Question[]
   parts: Part[]
@@ -19,6 +20,7 @@ export const LibrariesListView: React.FC<LibrariesListViewProps> = ({
   libraries,
   items,
   answerLinks,
+  answers = [],
   days,
   questions,
   parts,
@@ -45,6 +47,9 @@ export const LibrariesListView: React.FC<LibrariesListViewProps> = ({
 
   const pMap = new Map<string, Part>()
   parts.forEach((p) => pMap.set(p.id, p))
+
+  const ansMap = new Map<string, Answer>()
+  answers.forEach((a) => ansMap.set(a.id, a))
 
   // Aggregate item usage based on answerLinks
   const linksByItemId = new Map<string, AnswerLink[]>()
@@ -75,15 +80,18 @@ export const LibrariesListView: React.FC<LibrariesListViewProps> = ({
 
     for (const link of links) {
       const day = dayMap.get(link.date)
-      const key = `${link.date}`
+      const ans = ansMap.get(link.answerId)
+      const question = ans ? qMap.get(ans.questionId) : undefined
+      const part = ans ? pMap.get(ans.partId) : undefined
+      const key = `${link.date}:${question?.id || ''}:${part?.id || ''}`
       if (seenDayLink.has(key)) continue
       seenDayLink.add(key)
 
       appearances.push({
         date: link.date,
         dayTitle: day?.title,
-        questionLabel: 'Tagged activity',
-        partLabel: lib.name,
+        questionLabel: question?.label || 'Tagged activity',
+        partLabel: part?.label || lib.name,
         mode: day?.mode || 'full',
         rating: day?.overallRating,
       })
