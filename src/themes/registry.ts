@@ -135,3 +135,26 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
 
   saveThemePreference(themeId, isDark)
 }
+
+/**
+ * Applies the monochrome archive variant for the chosen chapter theme.
+ * Keeps the theme's icons, shapes, depth, and motion, but desaturates colors.
+ */
+export function applyArchiveTheme(themeId: string): void {
+  const theme = getTheme(themeId)
+  applyThemeTokens(theme.archive, false)
+
+  const root = document.documentElement
+  root.setAttribute('data-theme', themeId)
+  root.setAttribute('data-archive', 'true')
+}
+
+/**
+ * Restores live mode theme tokens and clears archive attribute.
+ */
+export function restoreLiveTheme(): void {
+  const root = document.documentElement
+  root.removeAttribute('data-archive')
+  const { themeId, isDark } = loadThemePreference()
+  applyThemeById(themeId, isDark)
+}

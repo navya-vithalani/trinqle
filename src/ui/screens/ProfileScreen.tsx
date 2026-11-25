@@ -15,6 +15,9 @@ import {
   ChevronRight,
   Eye,
   X,
+  HardDrive,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react'
 import {
   themeRegistry,
@@ -27,6 +30,13 @@ import {
   saveCharacterPreference,
 } from '../../characters/registry'
 import { deleteAllData } from '../../data/reset'
+import {
+  exportChapterZip,
+  exportCSVData,
+  downloadOrShareFile,
+  requestPersistentStorage,
+  isStoragePersisted,
+} from '../../core/export'
 import { exportFormPack } from '../../data/formPack/exporter'
 import { ImportDialog } from '../dialogs/ImportDialog'
 import { FormEditorScreen } from '../editor/FormEditorScreen'
@@ -74,6 +84,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [isPersisted, setIsPersisted] = useState(false)
+  const [lastBackupDate, setLastBackupDate] = useState<string | null>(null)
+  const [showBackupNudge, setShowBackupNudge] = useState(false)
 
   const settingsRepo = new SettingsRepository()
   const chapterRepo = new ChapterRepository()
@@ -113,6 +126,66 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const days = await dayRepo.getDaysInDateRange(ch.startDate, ch.plannedEndDate)
       setOpenChapterDays(days.filter((d) => !d.deletedAt))
     }
+
+    const persisted = await isStoragePersisted()
+    setIsPersisted(persisted)
+
+    const lastBackup = await settingsRepo.getSetting<number>('last_backup_timestamp', 0)
+    if (lastBackup) {
+      setLastBackupDate(new Date(lastBackup).toISOString().slice(0, 10))
+      const daysSince = (Date.now() - lastBackup) / (1000 * 60 * 60 * 24)
+      if (daysSince >= 7) setShowBackupNudge(true)
+    } else {
+      setShowBackupNudge(true)
+    }
+  }
+
+  const handleBackupNow = async () => {
+    if (!openChapter) {
+      showToast('No active chapter to back up')
+      return
+    }
+    try {
+      const { filename, blob } = await exportChapterZip(openChapter.id)
+      await downloadOrShareFile(filename, blob)
+      const now = Date.now()
+      await settingsRepo.setSetting('last_backup_timestamp', now)
+      setLastBackupDate(new Date(now).toISOString().slice(0, 10))
+      setShowBackupNudge(false)
+      showToast('Backup archive created successfully')
+    } catch {
+      showToast('Failed to create backup')
+    }
+  }
+
+  const handleExportCSV = async () => {
+    try {
+      const { wideCSV, sessionsCSV } = await exportCSVData()
+      const wideBlob = new Blob([wideCSV], { type: 'text/csv' })
+      const a1 = document.createElement('a')
+      a1.href = URL.createObjectURL(wideBlob)
+      a1.download = 'trinqle-daily-table.csv'
+      a1.click()
+      URL.revokeObjectURL(a1.href)
+
+      const sessionsBlob = new Blob([sessionsCSV], { type: 'text/csv' })
+      const a2 = document.createElement('a')
+      a2.href = URL.createObjectURL(sessionsBlob)
+      a2.download = 'trinqle-sessions.csv'
+      a2.click()
+      URL.revokeObjectURL(a2.href)
+
+      showToast('Exported daily & session CSV tables')
+    } catch {
+      showToast('Failed to export CSV')
+    }
+  }
+
+  const handleRequestPersistence = async () => {
+    const ok = await requestPersistentStorage()
+    setIsPersisted(ok)
+    if (ok) showToast('Persistent storage granted by browser')
+    else showToast('Storage permission prompt closed')
   }
 
   const showToast = (msg: string) => {
@@ -456,12 +529,62 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* SECTION 4: DATA & BACKUP TOOLS */}
       <div className="sticker-card p-4 space-y-3">
-        <h2 className="text-base font-bold text-[var(--color-ink)]">Backup & Form Pack</h2>
+        <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+          <div className="flex items-center space-x-2">
+            <HardDrive size={18} className="text-[var(--color-accent)]" />
+            <h2 className="text-base font-bold text-[var(--color-ink)]">Backup & Data Export</h2>
+          </div>
+          {lastBackupDate && (
+            <span className="text-[10px] text-[var(--color-ink-soft)] flex items-center gap-1">
+              <Clock size={11} /> Last: {lastBackupDate}
+            </span>
+          )}
+        </div>
+
+        {/* Weekly Backup Nudge (TRD 9 / PRD 5.6) */}
+        {showBackupNudge && (
+          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-2">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                <AlertCircle size={13} /> Weekly Backup Reminder
+              </span>
+              <p className="text-[11px] text-[var(--color-ink-soft)]">
+                It has been over 7 days since your last backup. Back up your open chapter to ensure your journal is never lost.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleBackupNow}
+              className="px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-bold shrink-0 hover:opacity-90 active:scale-95"
+            >
+              Back up now
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2 pt-1">
           <button
             type="button"
+            onClick={handleBackupNow}
+            className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-accent)] bg-[var(--color-bg)] text-xs font-bold text-[var(--color-accent)] active:scale-95 transition-all"
+          >
+            <Download size={14} />
+            <span>Back up now</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] active:scale-95 transition-all"
+          >
+            <FileText size={14} className="text-[var(--color-accent2)]" />
+            <span>Export CSV</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsImportOpen(true)}
-            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] active:scale-95"
+            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] active:scale-95 transition-all"
           >
             <Upload size={14} className="text-[var(--color-accent)]" />
             <span>Import pack</span>
@@ -470,11 +593,40 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <button
             type="button"
             onClick={handleExportFormPack}
-            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] active:scale-95"
+            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-[var(--radius-pill)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] active:scale-95 transition-all"
           >
             <Download size={14} className="text-[var(--color-accent2)]" />
             <span>Export pack</span>
           </button>
+        </div>
+
+        {/* Persistent Storage Status */}
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--color-bg)] text-xs pt-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck
+              size={16}
+              className={isPersisted ? 'text-emerald-500' : 'text-[var(--color-ink-soft)]'}
+            />
+            <div>
+              <span className="font-bold text-[var(--color-ink)] block">
+                {isPersisted ? 'Persistent Storage Active' : 'Storage Persistence'}
+              </span>
+              <span className="text-[10px] text-[var(--color-ink-soft)]">
+                {isPersisted
+                  ? 'Browser will protect your diary from eviction'
+                  : 'Protect diary from automated browser eviction'}
+              </span>
+            </div>
+          </div>
+          {!isPersisted && (
+            <button
+              type="button"
+              onClick={handleRequestPersistence}
+              className="px-2.5 py-1 rounded-full bg-[var(--color-line)] text-[var(--color-ink)] text-[11px] font-bold hover:bg-[var(--color-accent)] hover:text-white transition-colors"
+            >
+              Request
+            </button>
+          )}
         </div>
       </div>
 

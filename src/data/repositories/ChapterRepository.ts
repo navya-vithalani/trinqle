@@ -10,6 +10,7 @@ import type {
 import { generateUUIDv7 } from '../../core/ids'
 import { addDays } from '../../core/logicalDay'
 import { isPlannedEndDateValid } from '../../core/chapters'
+import { buildFrozenChapter } from '../../core/freeze'
 
 export class ChapterRepository {
   constructor(private db: TrinqleDB = defaultDb) {}
@@ -206,34 +207,29 @@ export class ChapterRepository {
       .filter((d) => !d.deletedAt)
       .toArray()
 
-    const quickCount = days.filter((d) => d.mode === 'quick').length
-    const fullCount = days.filter((d) => d.mode === 'full').length
-    const memorableCount = days.filter((d) => d.memorability > 0).length
-
-    // 2. Gather form snapshot
+    // 2. Gather form snapshot & answers
     const sections = await this.db.sections.filter((s) => !s.deletedAt).toArray()
     const questions = await this.db.questions.filter((q) => !q.deletedAt).toArray()
     const parts = await this.db.parts.filter((p) => !p.deletedAt).toArray()
     const libraries = await this.db.libraries.filter((l) => !l.deletedAt).toArray()
 
-    const frozen: FrozenChapter = {
-      formSnapshot: {
-        sections,
-        questions,
-        parts,
-        libraries,
-      },
-      dashboard: [],
-      insights: [],
-      themeId: chapter.themeId,
-      characterId: chapter.characterId,
-      metadata: {
-        daysFilled: days.length,
-        quickCount,
-        fullCount,
-        memorableCount,
-      },
-    }
+    const dayDates = new Set(days.map((d) => d.date))
+    const allAnswers = await this.db.answers.filter((a) => !a.deletedAt).toArray()
+    const chapterAnswers = allAnswers.filter((a) => dayDates.has(a.date))
+
+    const frozen: FrozenChapter = buildFrozenChapter({
+      chapter,
+      days,
+      answers: chapterAnswers,
+      sections,
+      questions,
+      parts,
+      libraries,
+      title: params.title,
+      summary: params.summary,
+      photos: params.photos,
+      endDate: params.endDate,
+    })
 
     // 3. Close current chapter
     const closedChapter = await this.closeChapter(
