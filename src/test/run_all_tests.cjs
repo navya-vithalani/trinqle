@@ -18,8 +18,12 @@ async function runAll() {
     console.log('\n>> Running Phase 7 (Insights Engine Validation Harness) Tests...')
     await require('./run_insights_test.cjs')
 
+    // 4. Notifications & Push System Tests
+    console.log('\n>> Running Phase 8 (VAPID Push, Scheduler & Privacy) Tests...')
+    await require('./run_notifications_test.cjs')
+
     console.log('\n========================================')
-    console.log('   ALL PHASES 5-7 TESTS PASSED!        ')
+    console.log('   ALL PHASES 5-8 TESTS PASSED!        ')
     console.log('========================================')
   } catch (err) {
     console.error('\nSuite failure:', err)

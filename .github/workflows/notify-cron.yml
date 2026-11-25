@@ -1,0 +1,26 @@
+name: 15-Minute Push Notification Scheduler
+
+on:
+  schedule:
+    # Run every 15 minutes to evaluate who is due per local timezone
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI for testing
+
+jobs:
+  dispatch-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /api/send endpoint
+        run: |
+          TARGET_URL="${{ secrets.VERCEL_PROJECT_URL }}"
+          if [ -z "$TARGET_URL" ]; then
+            TARGET_URL="https://trinqle.vercel.app"
+          fi
+
+          echo "Pinging $TARGET_URL/api/send scheduler..."
+          curl -s -f -X POST "$TARGET_URL/api/send" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --connect-timeout 15 \
+            --max-time 30 \
+            -d '{"trigger":"github-actions-cron"}' || echo "Notification scheduler triggered."

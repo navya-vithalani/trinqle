@@ -8,7 +8,14 @@ import {
   ShieldAlert,
   Sliders,
   X,
+  BellRing,
 } from 'lucide-react'
+import {
+  isPushSupported,
+  getNotificationPermission,
+  subscribeDeviceToPush,
+  DEFAULT_VAPID_PUBLIC_KEY,
+} from '../../core/notifications/client'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { ImportDialog } from '../dialogs/ImportDialog'
 import { FormEditorScreen } from '../editor/FormEditorScreen'
@@ -58,6 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Pre-close countdown & Sunday insights prompt
   const [isPreCloseDismissed, setIsPreCloseDismissed] = useState(false)
   const [isSundayPromptDismissed, setIsSundayPromptDismissed] = useState(false)
+  const [showFirstNightPrompt, setShowFirstNightPrompt] = useState(false)
 
   // Modals & Sheets
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -85,6 +93,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3000)
+  }
+
+  const checkFirstNightPrompt = () => {
+    if (typeof window === 'undefined') return
+    try {
+      const alreadyShown = localStorage.getItem('trinqle_first_night_prompt_shown')
+      if (alreadyShown === 'true') return
+      if (!isPushSupported() || getNotificationPermission() !== 'default') return
+      setShowFirstNightPrompt(true)
+    } catch {
+      // Ignore storage errors
+    }
   }
 
   const loadState = async () => {
@@ -518,6 +538,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onSaved={() => {
             showToast('Night saved successfully!')
             loadState()
+            checkFirstNightPrompt()
           }}
         />
       )}
@@ -586,6 +607,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             loadState()
           }}
         />
+      )}
+
+      {/* First-Night Push Notification Prompt (TRD Section 10 / PRD Section 5.9) */}
+      {showFirstNightPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-l)] border-2 border-[var(--color-line)] p-5 space-y-4 shadow-xl">
+            <div className="flex items-center space-x-2 text-[var(--color-accent)] font-bold text-sm">
+              <BellRing size={20} />
+              <span>Enable daily reminders?</span>
+            </div>
+            <p className="text-xs text-[var(--color-ink-soft)] leading-relaxed">
+              Piqsie can send a gentle nudge at 9:00 PM when tonight's journal is open. Zero journal content ever leaves your device.
+            </p>
+            <div className="flex items-center space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.setItem('trinqle_first_night_prompt_shown', 'true')
+                  } catch {
+                    // Ignore
+                  }
+                  setShowFirstNightPrompt(false)
+                }}
+                className="flex-1 py-2 rounded-[var(--radius-pill)] border border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-line)]/50 active:scale-95"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    localStorage.setItem('trinqle_first_night_prompt_shown', 'true')
+                  } catch {
+                    // Ignore
+                  }
+                  setShowFirstNightPrompt(false)
+                  const res = await subscribeDeviceToPush(DEFAULT_VAPID_PUBLIC_KEY)
+                  if (res.success) {
+                    showToast('Daily reminder set for 9:00 PM')
+                  } else {
+                    showToast(res.error || 'Notifications could not be enabled')
+                  }
+                }}
+                className="flex-1 py-2 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white text-xs font-bold shadow-xs hover:opacity-90 active:scale-95"
+              >
+                Enable reminders
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

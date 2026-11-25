@@ -18,7 +18,22 @@ import {
   HardDrive,
   ShieldCheck,
   Clock,
+  Bell,
+  Send,
 } from 'lucide-react'
+import {
+  isPushSupported,
+  getNotificationPermission,
+  loadNotificationPrefs,
+  saveNotificationPrefs,
+  getCurrentPushSubscription,
+  subscribeDeviceToPush,
+  unsubscribeDeviceFromPush,
+  syncDevicePrefs,
+  sendTestNotification,
+  DEFAULT_VAPID_PUBLIC_KEY,
+} from '../../core/notifications/client'
+import type { NotificationPrefs } from '../../core/notifications/types'
 import {
   themeRegistry,
   loadThemePreference,
@@ -88,6 +103,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [lastBackupDate, setLastBackupDate] = useState<string | null>(null)
   const [showBackupNudge, setShowBackupNudge] = useState(false)
 
+  // Notification state (TRD Section 10 / PRD Section 5.9)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false)
+  const [pushPrefs, setPushPrefs] = useState<NotificationPrefs>(loadNotificationPrefs())
+  const [isPushLoading, setIsPushLoading] = useState(false)
+  const [isTestingPush, setIsTestingPush] = useState(false)
+
   const settingsRepo = new SettingsRepository()
   const chapterRepo = new ChapterRepository()
   const dayRepo = new DayRepository()
@@ -129,6 +152,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     const persisted = await isStoragePersisted()
     setIsPersisted(persisted)
+
+    // Load Push Notification state
+    const supported = isPushSupported()
+    setPushSupported(supported)
+    setPushPermission(getNotificationPermission())
+    setPushPrefs(loadNotificationPrefs())
+    if (supported) {
+      getCurrentPushSubscription().then((sub) => {
+        setIsPushSubscribed(Boolean(sub))
+      })
+    }
 
     const lastBackup = await settingsRepo.getSetting<number>('last_backup_timestamp', 0)
     if (lastBackup) {
@@ -234,6 +268,61 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     saveCharacterPreference(charId)
     const char = CHARACTERS.find((c) => c.id === charId)
     showToast(`Selected character: ${char?.name || charId}`)
+  }
+
+  // Push Notification handlers (TRD Section 10)
+  const handleToggleMasterPush = async () => {
+    if (!pushSupported) {
+      showToast('Push notifications are not supported in this browser')
+      return
+    }
+    setIsPushLoading(true)
+    try {
+      if (isPushSubscribed) {
+        await unsubscribeDeviceFromPush()
+        setIsPushSubscribed(false)
+        showToast('Notifications disabled')
+      } else {
+        const res = await subscribeDeviceToPush(DEFAULT_VAPID_PUBLIC_KEY, pushPrefs)
+        if (res.success) {
+          setIsPushSubscribed(true)
+          setPushPermission(getNotificationPermission())
+          showToast('Daily reminders enabled')
+        } else {
+          showToast(res.error || 'Failed to enable notifications')
+          setPushPermission(getNotificationPermission())
+        }
+      }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Error updating notification settings')
+    } finally {
+      setIsPushLoading(false)
+    }
+  }
+
+  const handleUpdatePrefs = async (patch: Partial<NotificationPrefs>) => {
+    const updated = { ...pushPrefs, ...patch }
+    setPushPrefs(updated)
+    saveNotificationPrefs(updated)
+    if (isPushSubscribed) {
+      await syncDevicePrefs(updated)
+    }
+  }
+
+  const handleSendTest = async () => {
+    setIsTestingPush(true)
+    try {
+      const res = await sendTestNotification()
+      if (res.success) {
+        showToast('Test notification sent!')
+      } else {
+        showToast(res.error || 'Could not send test notification')
+      }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to send test notification')
+    } finally {
+      setIsTestingPush(false)
+    }
   }
 
   const handleExportFormPack = async () => {
@@ -388,6 +477,173 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             ))}
           </div>
         </div>
+      </div>
+
+      {/* SECTION: NOTIFICATIONS & REMINDERS (TRD Section 10) */}
+      <div className="sticker-card p-4 space-y-3.5">
+        <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+          <div className="flex items-center space-x-2">
+            <Bell size={18} className="text-[var(--color-accent)]" />
+            <h2 className="text-base font-bold text-[var(--color-ink)]">Notifications</h2>
+          </div>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              !pushSupported
+                ? 'bg-zinc-100 text-zinc-600'
+                : pushPermission === 'denied'
+                ? 'bg-red-100 text-red-700'
+                : isPushSubscribed
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-zinc-100 text-zinc-600'
+            }`}
+          >
+            {!pushSupported
+              ? 'Not supported'
+              : pushPermission === 'denied'
+              ? 'Blocked'
+              : isPushSubscribed
+              ? 'Active'
+              : 'Disabled'}
+          </span>
+        </div>
+
+        <p className="text-xs text-[var(--color-ink-soft)] leading-relaxed">
+          Daily gentle reminders at night, weekly insights notices, and chapter wraps. Payloads are strictly generic; zero journal content ever leaves your device.
+        </p>
+
+        {/* Master Push Toggle */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-[var(--color-ink)] block">
+              Enable Push Notifications
+            </span>
+            <span className="text-[10px] text-[var(--color-ink-soft)] block">
+              {isPushSubscribed
+                ? 'Notifications are active on this device'
+                : 'Turn on to receive reminders and alerts'}
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={!pushSupported || isPushLoading}
+            onClick={handleToggleMasterPush}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 ${
+              isPushSubscribed ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                isPushSubscribed ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {isPushSubscribed && (
+          <div className="space-y-3 pt-2 border-t border-[var(--color-line)]">
+            {/* Daily Reminder Toggle & Time */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[var(--color-ink)] block">
+                    Daily Journal Reminder
+                  </span>
+                  <span className="text-[10px] text-[var(--color-ink-soft)]">
+                    Nightly nudge when tonight's journal opens
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpdatePrefs({ dailyReminder: !pushPrefs.dailyReminder })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    pushPrefs.dailyReminder ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      pushPrefs.dailyReminder ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {pushPrefs.dailyReminder && (
+                <div className="flex items-center justify-between pl-2 border-l-2 border-[var(--color-line)]">
+                  <span className="text-[11px] text-[var(--color-ink-soft)]">Reminder Time</span>
+                  <input
+                    type="time"
+                    value={pushPrefs.dailyReminderTime || '21:00'}
+                    onChange={(e) => handleUpdatePrefs({ dailyReminderTime: e.target.value })}
+                    className="w-24 p-1.5 rounded-[var(--radius-m)] border border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)] text-center"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Monday Morning Insights */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-[var(--color-ink)] block">
+                  Monday Morning Insights
+                </span>
+                <span className="text-[10px] text-[var(--color-ink-soft)]">
+                  Weekly summary reminder on Mondays at 9:00 AM
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleUpdatePrefs({ mondayInsights: !pushPrefs.mondayInsights })}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  pushPrefs.mondayInsights ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    pushPrefs.mondayInsights ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Chapter Ending Alert */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-[var(--color-ink)] block">
+                  Chapter Ending Alert
+                </span>
+                <span className="text-[10px] text-[var(--color-ink-soft)]">
+                  Reminder 2 days before the scheduled chapter wrap-up date
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleUpdatePrefs({ chapterEnding: !pushPrefs.chapterEnding })}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  pushPrefs.chapterEnding ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    pushPrefs.chapterEnding ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Send Test Notification Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled={isTestingPush}
+                onClick={handleSendTest}
+                className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-[var(--radius-pill)] border border-[var(--color-line)] bg-[var(--color-bg)] hover:border-[var(--color-accent)] text-xs font-semibold text-[var(--color-ink)] active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Send size={13} className="text-[var(--color-accent)]" />
+                <span>{isTestingPush ? 'Sending test notification...' : 'Send test notification'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SECTION 2: YOUR FORM (Items 2, 3, 4, 5) */}
