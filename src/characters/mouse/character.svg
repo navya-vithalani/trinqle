@@ -1,0 +1,55 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Mouse Animation Contract: tail, body, head, ear-left, ear-right, eye-left, eye-right, mouth, arm-left, arm-right, leg-left, leg-right -->
+  <g id="tail" data-origin="30% 90%">
+    <path d="M60 162 C25 175 10 135 25 110 C32 98 42 108 34 116 C22 134 38 160 62 152 Z" fill="#d9b6b6" stroke="#b08b8b" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+  <g id="body" data-origin="50% 90%">
+    <!-- Chubby Field Mouse Body -->
+    <ellipse cx="100" cy="148" rx="42" ry="34" fill="#a49389" stroke="#75645c" stroke-width="3"/>
+    <ellipse cx="100" cy="150" rx="28" ry="24" fill="#dfd6cf"/>
+    <!-- Paws / Limbs -->
+    <g id="leg-left" data-origin="50% 0%">
+      <ellipse cx="80" cy="180" rx="12" ry="7" fill="#d9b6b6" stroke="#b08b8b" stroke-width="2"/>
+    </g>
+    <g id="leg-right" data-origin="50% 0%">
+      <ellipse cx="120" cy="180" rx="12" ry="7" fill="#d9b6b6" stroke="#b08b8b" stroke-width="2"/>
+    </g>
+    <g id="arm-left" data-origin="80% 20%">
+      <ellipse cx="78" cy="142" rx="9" ry="6" fill="#d9b6b6" stroke="#b08b8b" stroke-width="2"/>
+    </g>
+    <g id="arm-right" data-origin="20% 20%">
+      <ellipse cx="122" cy="142" rx="9" ry="6" fill="#d9b6b6" stroke="#b08b8b" stroke-width="2"/>
+    </g>
+  </g>
+  <g id="head" data-origin="50% 90%">
+    <!-- Big Rounded Ears -->
+    <g id="ear-left" data-origin="70% 90%">
+      <circle cx="62" cy="62" r="24" fill="#a49389" stroke="#75645c" stroke-width="3"/>
+      <circle cx="64" cy="62" r="15" fill="#f8cfd7"/>
+    </g>
+    <g id="ear-right" data-origin="30% 90%">
+      <circle cx="138" cy="62" r="24" fill="#a49389" stroke="#75645c" stroke-width="3"/>
+      <circle cx="136" cy="62" r="15" fill="#f8cfd7"/>
+    </g>
+    <!-- Head Base -->
+    <ellipse cx="100" cy="94" rx="40" ry="36" fill="#a49389" stroke="#75645c" stroke-width="3"/>
+    <ellipse cx="100" cy="98" rx="26" ry="22" fill="#dfd6cf"/>
+    <!-- Cute Eyes -->
+    <g id="eye-left" data-origin="50% 50%">
+      <ellipse cx="84" cy="90" rx="5" ry="6" fill="#2d221c"/>
+      <circle cx="85.5" cy="88" r="1.8" fill="#fff"/>
+    </g>
+    <g id="eye-right" data-origin="50% 50%">
+      <ellipse cx="116" cy="90" rx="5" ry="6" fill="#2d221c"/>
+      <circle cx="117.5" cy="88" r="1.8" fill="#fff"/>
+    </g>
+    <!-- Pink Snout & Nose -->
+    <ellipse cx="100" cy="102" rx="5.5" ry="4" fill="#e0678f"/>
+    <path id="mouth" d="M96 108 Q100 112 104 108" fill="none" stroke="#523a48" stroke-width="2" stroke-linecap="round"/>
+    <!-- Whiskers -->
+    <g stroke="#75645c" stroke-width="1.8" stroke-linecap="round" fill="none">
+      <path d="M72 100 L48 97 M72 104 L46 107"/>
+      <path d="M128 100 L152 97 M128 104 L154 107"/>
+    </g>
+  </g>
+</svg>

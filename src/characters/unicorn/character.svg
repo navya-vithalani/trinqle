@@ -1,0 +1,60 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Unicorn Front View Animation Contract: horn, tail, body, head, ear-left, ear-right, eye-left, eye-right, mouth, leg-left, leg-right -->
+  <g id="tail" data-origin="30% 90%">
+    <!-- Flowing Rainbow Pastels Tail -->
+    <path d="M60 155 C35 165 20 190 28 200 C35 208 48 185 64 165 Z" fill="#ffb2c9" stroke="#e08da4" stroke-width="2"/>
+    <path d="M56 160 C38 175 25 195 35 204 C42 208 52 188 62 168 Z" fill="#b9e7fe" stroke="#87c7e6" stroke-width="2"/>
+  </g>
+  <g id="body" data-origin="50% 90%">
+    <!-- Pearlescent White Body -->
+    <ellipse cx="100" cy="150" rx="46" ry="36" fill="#ffffff" stroke="#d5c8dc" stroke-width="3"/>
+    <g id="leg-left" data-origin="50% 0%">
+      <rect x="76" y="176" width="16" height="20" rx="7" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+      <ellipse cx="84" cy="196" rx="8" ry="4" fill="#ffd700" stroke="#cca100" stroke-width="1.5"/>
+    </g>
+    <g id="leg-right" data-origin="50% 0%">
+      <rect x="108" y="176" width="16" height="20" rx="7" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+      <ellipse cx="116" cy="196" rx="8" ry="4" fill="#ffd700" stroke="#cca100" stroke-width="1.5"/>
+    </g>
+  </g>
+  <g id="head" data-origin="50% 90%">
+    <!-- Ears -->
+    <g id="ear-left" data-origin="50% 100%">
+      <path d="M66 70 L60 38 L84 56 Z" fill="#ffffff" stroke="#d5c8dc" stroke-width="3"/>
+      <path d="M68 64 L65 48 L78 57 Z" fill="#ffd5e2"/>
+    </g>
+    <g id="ear-right" data-origin="50% 100%">
+      <path d="M134 70 L140 38 L116 56 Z" fill="#ffffff" stroke="#d5c8dc" stroke-width="3"/>
+      <path d="M132 64 L135 48 L122 57 Z" fill="#ffd5e2"/>
+    </g>
+    <!-- Flowing Pastel Mane Behind Horn -->
+    <path d="M78 48 C72 24 100 20 90 42 C108 26 126 30 114 50 Z" fill="#c9b3f5" stroke="#9d84d1" stroke-width="2"/>
+    <!-- Head Base -->
+    <ellipse cx="100" cy="88" rx="44" ry="38" fill="#ffffff" stroke="#d5c8dc" stroke-width="3"/>
+    <ellipse cx="100" cy="104" rx="22" ry="14" fill="#fff0f5"/>
+    <!-- Nostrils & Gentle Mouth -->
+    <circle cx="94" cy="102" r="2" fill="#d59fb5"/>
+    <circle cx="106" cy="102" r="2" fill="#d59fb5"/>
+    <path id="mouth" d="M96 108 Q100 112 104 108" fill="none" stroke="#906fc9" stroke-width="2" stroke-linecap="round"/>
+    <!-- Eyes with Starry Sparkle -->
+    <g id="eye-left" data-origin="50% 50%">
+      <ellipse cx="80" cy="86" rx="6" ry="7.5" fill="#4a2559"/>
+      <circle cx="82" cy="83" r="2.5" fill="#fff"/>
+      <circle cx="78" cy="89" r="1.2" fill="#ffd700"/>
+    </g>
+    <g id="eye-right" data-origin="50% 50%">
+      <ellipse cx="120" cy="86" rx="6" ry="7.5" fill="#4a2559"/>
+      <circle cx="122" cy="83" r="2.5" fill="#fff"/>
+      <circle cx="118" cy="89" r="1.2" fill="#ffd700"/>
+    </g>
+    <!-- Golden Spiraled Horn with Glow Aura -->
+    <g id="horn" data-origin="50% 100%">
+      <polygon points="100,10 93,56 107,56" fill="#ffd700" stroke="#d49400" stroke-width="2.5"/>
+      <line x1="95" y1="46" x2="105" y2="44" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="96" y1="34" x2="104" y2="32" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="98" y1="22" x2="102" y2="20" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+      <!-- Star Glint -->
+      <polygon points="100,4 102,9 107,10 102,11 100,16 98,11 93,10 98,9" fill="#ffffff"/>
+    </g>
+  </g>
+</svg>

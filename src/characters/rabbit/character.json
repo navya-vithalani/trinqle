@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "id": "rabbit",
+  "name": "Fluffy rabbit",
+  "svg": "character.svg",
+  "sideSvg": "side.svg",
+  "hasMultiView": true,
+  "views": {
+    "front": "character.svg",
+    "side": "side.svg"
+  },
+  "roles": {
+    "body": ["body"],
+    "head": ["head"],
+    "tail": ["tail"],
+    "ears": ["ear-left", "ear-right"],
+    "eyes": ["eye-left", "eye-right"],
+    "mouth": ["mouth"],
+    "limbs": [
+      { "role": "arm", "layers": ["arm-left", "arm-right"], "gait": "biped" },
+      { "role": "leg", "layers": ["leg-left", "leg-right", "leg-front", "leg-back"], "gait": "hop" }
+    ]
+  },
+  "clips": {
+    "idle": ["nose-twitch", "ear-wiggle", "breathe"],
+    "actions": ["hop", "burrow", "jump", "dance", "somersault"],
+    "overrides": { "walk": { "fallback": "hop" } }
+  },
+  "reactions": {
+    "tap": ["hop", "jump", "burrow"],
+    "saved": "hop",
+    "locked": "sleep",
+    "chapterClosed": "dance"
+  }
+}

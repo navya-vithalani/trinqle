@@ -1,0 +1,62 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Rabbit Front View Animation Contract: tail, body, head, ear-left, ear-right, eye-left, eye-right, mouth, arm-left, arm-right, leg-left, leg-right -->
+  <g id="tail" data-origin="50% 90%">
+    <circle cx="100" cy="180" r="14" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+  </g>
+  <g id="body" data-origin="50% 90%">
+    <!-- Chubby Cream Bunny Body -->
+    <ellipse cx="100" cy="148" rx="44" ry="36" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+    <ellipse cx="100" cy="152" rx="28" ry="24" fill="#ffffff"/>
+    <!-- Cute Feet -->
+    <g id="leg-left" data-origin="50% 0%">
+      <ellipse cx="74" cy="182" rx="14" ry="9" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2.5"/>
+      <ellipse cx="74" cy="183" rx="7" ry="4" fill="#ffd5e2"/>
+    </g>
+    <g id="leg-right" data-origin="50% 0%">
+      <ellipse cx="126" cy="182" rx="14" ry="9" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2.5"/>
+      <ellipse cx="126" cy="183" rx="7" ry="4" fill="#ffd5e2"/>
+    </g>
+    <!-- Front Paws folded on chest -->
+    <g id="arm-left" data-origin="80% 20%">
+      <ellipse cx="84" cy="142" rx="10" ry="7" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2"/>
+    </g>
+    <g id="arm-right" data-origin="20% 20%">
+      <ellipse cx="116" cy="142" rx="10" ry="7" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2"/>
+    </g>
+  </g>
+  <g id="head" data-origin="50% 90%">
+    <!-- Tall Bunny Ears with Twitch Capability -->
+    <g id="ear-left" data-origin="70% 100%">
+      <path d="M72 70 C50 30 55 2 76 14 C88 20 86 50 82 72 Z" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M71 62 C58 35 62 16 74 22 C82 26 80 48 77 64 Z" fill="#ffd5e2"/>
+    </g>
+    <g id="ear-right" data-origin="30% 100%">
+      <path d="M128 70 C150 30 145 2 124 14 C112 20 114 50 118 72 Z" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M129 62 C142 35 138 16 126 22 C118 26 120 48 123 64 Z" fill="#ffd5e2"/>
+    </g>
+    <!-- Head Base -->
+    <ellipse cx="100" cy="92" rx="44" ry="38" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+    <!-- Cheeks Blush -->
+    <circle cx="68" cy="100" r="9" fill="#ffb2c9" opacity="0.6"/>
+    <circle cx="132" cy="100" r="9" fill="#ffb2c9" opacity="0.6"/>
+    <!-- Eyes -->
+    <g id="eye-left" data-origin="50% 50%">
+      <ellipse cx="80" cy="88" rx="5.5" ry="7" fill="#442a3a"/>
+      <circle cx="82" cy="85.5" r="2.2" fill="#fff"/>
+      <circle cx="78" cy="91" r="1" fill="#fff"/>
+    </g>
+    <g id="eye-right" data-origin="50% 50%">
+      <ellipse cx="120" cy="88" rx="5.5" ry="7" fill="#442a3a"/>
+      <circle cx="122" cy="85.5" r="2.2" fill="#fff"/>
+      <circle cx="118" cy="91" r="1" fill="#fff"/>
+    </g>
+    <!-- Nose & Mouth -->
+    <polygon points="100,98 96,94 104,94" fill="#e0678f"/>
+    <path id="mouth" d="M100 98 Q96 104 90 102 M100 98 Q104 104 110 102" fill="none" stroke="#523a48" stroke-width="2" stroke-linecap="round"/>
+    <!-- Whiskers -->
+    <g stroke="#b8a8be" stroke-width="1.8" stroke-linecap="round" fill="none">
+      <path d="M62 98 L40 96 M62 103 L42 107"/>
+      <path d="M138 98 L160 96 M138 103 L158 107"/>
+    </g>
+  </g>
+</svg>

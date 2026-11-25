@@ -1,3 +1,7 @@
+require.extensions['.svg'] = (module, filename) => {
+  module.exports = filename
+}
+
 const jiti = require('jiti')(__filename)
 
 async function runAll() {
@@ -22,8 +26,12 @@ async function runAll() {
     console.log('\n>> Running Phase 8 (VAPID Push, Scheduler & Privacy) Tests...')
     await require('./run_notifications_test.cjs')
 
+    // 5. Phase 9 (Themes, Characters, Multi-View, Sanitizer & Polish) Tests
+    console.log('\n>> Running Phase 9 (Themes, Multi-View Characters & Sanitizer) Tests...')
+    await require('./run_phase9_test.cjs')
+
     console.log('\n========================================')
-    console.log('   ALL PHASES 5-8 TESTS PASSED!        ')
+    console.log('   ALL PHASES 5-9 TESTS PASSED!        ')
     console.log('========================================')
   } catch (err) {
     console.error('\nSuite failure:', err)

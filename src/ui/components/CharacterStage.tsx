@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { getCharacter } from '../../characters/registry'
 import { initCharacterAnimator, type AnimatorControls } from '../../characters/animator'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Eye } from 'lucide-react'
 
 interface CharacterStageProps {
   characterId: string
@@ -15,28 +15,57 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const animatorRef = useRef<AnimatorControls | null>(null)
   const character = getCharacter(characterId)
-  const [svgContent, setSvgContent] = useState<string>('')
+  const [activeView, setActiveView] = useState<'front' | 'side'>('front')
+  const [frontSvgContent, setFrontSvgContent] = useState<string>('')
+  const [sideSvgContent, setSideSvgContent] = useState<string>('')
 
-  // Load raw SVG content so we can inject inline SVG and animate its internal IDs
+  // Load front SVG content
   useEffect(() => {
     let isMounted = true
     fetch(character.svg)
       .then((res) => res.text())
       .then((text) => {
-        if (isMounted) setSvgContent(text)
+        if (isMounted) setFrontSvgContent(text)
       })
-      .catch(() => {
-        // Fallback handled by img tag if fetch fails
-      })
+      .catch(() => {})
     return () => {
       isMounted = false
     }
   }, [character.svg])
 
+  // Load side SVG content if multi-view
   useEffect(() => {
-    if (!containerRef.current || !svgContent) return
+    let isMounted = true
+    if (character.hasMultiView && character.sideSvg) {
+      fetch(character.sideSvg)
+        .then((res) => res.text())
+        .then((text) => {
+          if (isMounted) setSideSvgContent(text)
+        })
+        .catch(() => {})
+    } else {
+      setSideSvgContent('')
+      setActiveView('front')
+    }
+    return () => {
+      isMounted = false
+    }
+  }, [character.hasMultiView, character.sideSvg])
 
-    animatorRef.current = initCharacterAnimator(containerRef.current)
+  const currentSvg = activeView === 'side' && sideSvgContent ? sideSvgContent : frontSvgContent
+
+  useEffect(() => {
+    if (!containerRef.current || !currentSvg) return
+
+    animatorRef.current = initCharacterAnimator(containerRef.current, {
+      characterId,
+      isSideView: activeView === 'side',
+      onViewChange: (nextView) => {
+        if (character.hasMultiView && sideSvgContent) {
+          setActiveView(nextView)
+        }
+      },
+    })
 
     return () => {
       if (animatorRef.current) {
@@ -44,7 +73,7 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
         animatorRef.current = null
       }
     }
-  }, [svgContent])
+  }, [currentSvg, activeView, characterId, character.hasMultiView, sideSvgContent])
 
   const handleStageTap = () => {
     if (animatorRef.current) {
@@ -52,11 +81,29 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
     }
   }
 
+  const handleToggleView = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setActiveView((prev) => (prev === 'front' ? 'side' : 'front'))
+  }
+
   return (
     <div
       onClick={handleStageTap}
       className="sticker-card p-5 flex flex-col items-center justify-center min-h-[220px] bg-gradient-to-b from-[var(--color-surface)] to-[var(--color-bg)] cursor-pointer select-none relative overflow-hidden"
     >
+      {/* Multi-view badge and view switcher button */}
+      {character.hasMultiView && sideSvgContent && (
+        <button
+          type="button"
+          onClick={handleToggleView}
+          title={`Switch to ${activeView === 'front' ? 'side' : 'front'} view`}
+          className="absolute top-2.5 right-2.5 z-10 flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-bold text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:border-[var(--color-accent)] active:scale-95 transition-all shadow-xs"
+        >
+          <Eye size={12} className="text-[var(--color-accent)]" />
+          <span className="capitalize">{activeView} view</span>
+        </button>
+      )}
+
       {/* Speech Bubble Greeting */}
       {greetingText && (
         <div className="relative mb-3 max-w-[280px] bg-[var(--color-surface)] border-2 border-[var(--color-line)] shadow-sm px-3.5 py-2 rounded-[var(--radius-m)] text-center text-xs font-semibold text-[var(--color-ink)] animate-in fade-in zoom-in-95 duration-200">
@@ -73,11 +120,11 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
       )}
 
       {/* Interactive Character SVG */}
-      {svgContent ? (
+      {currentSvg ? (
         <div
           ref={containerRef}
           className="w-28 h-28 flex items-center justify-center transition-transform active:scale-95"
-          dangerouslySetInnerHTML={{ __html: svgContent }}
+          dangerouslySetInnerHTML={{ __html: currentSvg }}
         />
       ) : (
         <div
@@ -85,7 +132,7 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
           className="w-28 h-28 flex items-center justify-center transition-transform active:scale-95"
         >
           <img
-            src={character.svg}
+            src={activeView === 'side' && character.sideSvg ? character.sideSvg : character.svg}
             alt={character.name}
             className="w-24 h-24 object-contain"
           />

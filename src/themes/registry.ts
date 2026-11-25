@@ -1,12 +1,20 @@
 import { cutesyTheme } from './cutesy'
 import { clayTheme } from './clay'
 import { cyberpunkTheme } from './cyberpunk'
+import { retroTheme } from './retro'
+import { royalTheme } from './royal'
+import { newspaperTheme } from './newspaper'
+import { sportsTheme } from './sports'
 import type { Theme, ThemeTokens } from './types'
 
 export const themeRegistry: Record<string, Theme> = {
   cutesy: cutesyTheme,
   clay: clayTheme,
   cyberpunk: cyberpunkTheme,
+  retro: retroTheme,
+  royal: royalTheme,
+  newspaper: newspaperTheme,
+  sports: sportsTheme,
 }
 
 const STORAGE_THEME_KEY = 'trinqle_theme_id'
@@ -120,6 +128,8 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
       '--tab-home-shadow',
       'inset 0 2px 4px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(90, 50, 30, 0.2)'
     )
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
   } else if (themeId === 'cyberpunk') {
     root.style.setProperty('--tab-home-lift', '-4px')
     root.style.setProperty('--tab-home-radius', '4px')
@@ -127,10 +137,59 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
       '--tab-home-shadow',
       '0 0 12px rgba(0, 240, 255, 0.6), inset 0 0 4px #00f0ff'
     )
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
+  } else if (themeId === 'royal') {
+    // Big Shiny Home Button for Royal Theme
+    root.style.setProperty('--tab-home-lift', '-14px')
+    root.style.setProperty('--tab-home-radius', '9999px')
+    root.style.setProperty(
+      '--tab-home-shadow',
+      '0 0 24px rgba(255, 215, 0, 0.8), 0 6px 18px rgba(184, 134, 11, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.9)'
+    )
+    root.style.setProperty(
+      '--tab-home-bg',
+      'linear-gradient(135deg, #ffd700 0%, #daa520 50%, #fff3a8 100%)'
+    )
+    root.style.setProperty(
+      '--tab-home-active-bg',
+      'linear-gradient(135deg, #fff2a3 0%, #ffd700 50%, #b8860b 100%)'
+    )
+    root.style.setProperty('--tab-home-active-color', '#29153b')
+    root.style.setProperty('--tab-home-inactive-color', '#4a154b')
+  } else if (themeId === 'retro') {
+    // Tactile beveled button
+    root.style.setProperty('--tab-home-lift', '-4px')
+    root.style.setProperty('--tab-home-radius', '4px')
+    root.style.setProperty(
+      '--tab-home-shadow',
+      'inset 1.5px 1.5px 0px #ffffff, inset -1.5px -1.5px 0px #505050, 2px 2px 0px #000000'
+    )
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
+  } else if (themeId === 'newspaper') {
+    // Broadsheet square framing
+    root.style.setProperty('--tab-home-lift', '0px')
+    root.style.setProperty('--tab-home-radius', '0px')
+    root.style.setProperty('--tab-home-shadow', 'none')
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
+  } else if (themeId === 'sports') {
+    // Stadium athletic badge
+    root.style.setProperty('--tab-home-lift', '-8px')
+    root.style.setProperty('--tab-home-radius', '12px')
+    root.style.setProperty(
+      '--tab-home-shadow',
+      '0 4px 14px rgba(0, 135, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+    )
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
   } else {
     root.style.setProperty('--tab-home-lift', '0px')
     root.style.setProperty('--tab-home-radius', '9999px')
     root.style.setProperty('--tab-home-shadow', 'none')
+    root.style.setProperty('--tab-home-bg', 'transparent')
+    root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
   }
 
   saveThemePreference(themeId, isDark)

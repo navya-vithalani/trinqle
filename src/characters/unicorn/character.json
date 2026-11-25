@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "id": "unicorn",
+  "name": "Starlight unicorn",
+  "svg": "character.svg",
+  "sideSvg": "side.svg",
+  "hasMultiView": true,
+  "views": {
+    "front": "character.svg",
+    "side": "side.svg"
+  },
+  "roles": {
+    "body": ["body"],
+    "head": ["head"],
+    "horn": ["horn"],
+    "tail": ["tail"],
+    "ears": ["ear-left", "ear-right"],
+    "eyes": ["eye-left", "eye-right"],
+    "mouth": ["mouth"],
+    "limbs": [
+      { "role": "leg", "layers": ["leg-left", "leg-right", "leg-front-left", "leg-front-right", "leg-back-left", "leg-back-right"], "gait": "quadruped" }
+    ]
+  },
+  "clips": {
+    "idle": ["horn-glow", "breathe", "ear-wiggle"],
+    "actions": ["gallop", "prance", "somersault", "dance", "sparkle"],
+    "overrides": { "walk": { "fallback": "gallop" } }
+  },
+  "reactions": {
+    "tap": ["gallop", "prance", "sparkle"],
+    "saved": "sparkle",
+    "locked": "sleep",
+    "chapterClosed": "prance"
+  }
+}

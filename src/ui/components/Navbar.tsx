@@ -1,28 +1,124 @@
-import React from 'react'
-import { Home, LayoutDashboard, Sparkles, BookOpen, User } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import {
+  Home,
+  LayoutDashboard,
+  Sparkles,
+  BookOpen,
+  User,
+  // Sports Theme Icons
+  Trophy,
+  Timer,
+  Flame,
+  Medal,
+  Dumbbell,
+  // Royal Theme Icons
+  Crown,
+  Gem,
+  Shield,
+  // Newspaper Theme Icons
+  Newspaper,
+  FileSpreadsheet,
+  TrendingUp,
+  Archive,
+  PenTool,
+  // Retro Pixel Theme Icons
+  Monitor,
+  Terminal,
+  Radio,
+  HardDrive,
+  Cpu,
+} from 'lucide-react'
 import type { TabId } from '../types'
+import { loadThemePreference } from '../../themes/registry'
 
 interface NavbarProps {
   activeTab: TabId
   onSelectTab: (tab: TabId) => void
 }
 
-interface NavItem {
+interface NavItemDef {
   id: TabId
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
 }
 
 // Order: Archive -> Dashboard -> Home -> Insights -> Profile
-const NAV_ITEMS: NavItem[] = [
-  { id: 'archive', label: 'Archive', icon: BookOpen },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'insights', label: 'Insights', icon: Sparkles },
-  { id: 'profile', label: 'Profile', icon: User },
+const NAV_ITEM_DEFS: NavItemDef[] = [
+  { id: 'archive', label: 'Archive' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'home', label: 'Home' },
+  { id: 'insights', label: 'Insights' },
+  { id: 'profile', label: 'Profile' },
 ]
 
+function getNavIcon(tabId: TabId, themeId: string): React.ComponentType<{ size?: number; className?: string }> {
+  if (themeId === 'sports') {
+    switch (tabId) {
+      case 'home': return Trophy
+      case 'dashboard': return Timer
+      case 'insights': return Flame
+      case 'archive': return Medal
+      case 'profile': return Dumbbell
+    }
+  }
+  if (themeId === 'royal') {
+    switch (tabId) {
+      case 'home': return Crown
+      case 'dashboard': return Gem
+      case 'insights': return Sparkles
+      case 'archive': return BookOpen
+      case 'profile': return Shield
+    }
+  }
+  if (themeId === 'newspaper') {
+    switch (tabId) {
+      case 'home': return Newspaper
+      case 'dashboard': return FileSpreadsheet
+      case 'insights': return TrendingUp
+      case 'archive': return Archive
+      case 'profile': return PenTool
+    }
+  }
+  if (themeId === 'retro') {
+    switch (tabId) {
+      case 'home': return Monitor
+      case 'dashboard': return Terminal
+      case 'insights': return Radio
+      case 'archive': return HardDrive
+      case 'profile': return Cpu
+    }
+  }
+  switch (tabId) {
+    case 'home': return Home
+    case 'dashboard': return LayoutDashboard
+    case 'insights': return Sparkles
+    case 'archive': return BookOpen
+    case 'profile': return User
+  }
+}
+
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab }) => {
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.getAttribute('data-theme') || loadThemePreference().themeId
+    }
+    return 'cutesy'
+  })
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const updateTheme = () => {
+      const t = document.documentElement.getAttribute('data-theme') || loadThemePreference().themeId
+      setCurrentTheme(t)
+    }
+    updateTheme()
+    const observer = new MutationObserver(updateTheme)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-30 bg-[var(--color-surface)] border-t-2 border-[var(--color-line)] pb-[env(safe-area-inset-bottom)]"
@@ -31,8 +127,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab }) => {
       }}
     >
       <div className="max-w-md mx-auto flex items-center justify-around h-16 px-2 relative">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon
+        {NAV_ITEM_DEFS.map((item) => {
+          const Icon = getNavIcon(item.id, currentTheme)
           const isActive = activeTab === item.id
           const isHome = item.id === 'home'
 

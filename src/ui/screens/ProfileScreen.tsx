@@ -41,9 +41,12 @@ import {
 } from '../../themes/registry'
 import {
   CHARACTERS,
+  getAllCharacters,
+  getCharacterOfTheMonth,
   loadCharacterPreference,
   saveCharacterPreference,
 } from '../../characters/registry'
+import { CharacterImportDialog } from '../dialogs/CharacterImportDialog'
 import { deleteAllData } from '../../data/reset'
 import {
   exportChapterZip,
@@ -96,6 +99,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isCharacterImportOpen, setIsCharacterImportOpen] = useState(false)
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -751,31 +755,54 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* Character Selection */}
       <div className="sticker-card p-4 space-y-3">
-        <h2 className="text-base font-bold text-[var(--color-ink)]">Character persona</h2>
-        <p className="text-xs text-[var(--color-ink-soft)]">
-          Piqsie's visual look changes; the persona and friendly presence stay identical.
-        </p>
+        <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+          <div className="space-y-0.5">
+            <h2 className="text-base font-bold text-[var(--color-ink)]">Character persona</h2>
+            <p className="text-[11px] text-[var(--color-ink-soft)]">
+              Choose your companion. Multi-view characters support dynamic front & side animations.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCharacterImportOpen(true)}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[10px] font-bold text-[var(--color-accent)] hover:border-[var(--color-accent)] active:scale-95 transition-all shrink-0"
+          >
+            <Upload size={12} />
+            <span>Import SVG</span>
+          </button>
+        </div>
 
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          {CHARACTERS.map((char) => {
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+          {getAllCharacters().map((char) => {
             const isSelected = selectedCharacterId === char.id
+            const isFeatured = getCharacterOfTheMonth().id === char.id
             return (
               <button
                 key={char.id}
                 type="button"
                 onClick={() => handleCharacterChange(char.id)}
-                className={`flex flex-col items-center p-2.5 rounded-[var(--radius-m)] border-2 transition-all ${
+                className={`flex flex-col items-center p-2.5 rounded-[var(--radius-m)] border-2 transition-all relative ${
                   isSelected
                     ? 'border-[var(--color-accent)] bg-[var(--color-bg)] shadow-xs font-bold'
                     : 'border-[var(--color-line)] bg-[var(--color-surface)] hover:border-[var(--color-ink-soft)]'
                 }`}
               >
+                {isFeatured && (
+                  <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[8px] font-extrabold uppercase tracking-tight shadow-xs">
+                    Featured
+                  </span>
+                )}
+                {char.hasMultiView && (
+                  <span className="absolute -top-1.5 -left-1 px-1.5 py-0.2 rounded-full bg-[var(--color-accent)] text-white text-[8px] font-extrabold uppercase tracking-tight shadow-xs">
+                    2 Views
+                  </span>
+                )}
                 <img src={char.svg} alt={char.name} className="w-12 h-12 object-contain mb-1.5" />
                 <span className="text-xs font-semibold text-[var(--color-ink)] text-center line-clamp-1">
                   {char.name}
                 </span>
                 <span className="text-[9px] text-[var(--color-ink-soft)] text-center">
-                  {char.limbs} limbs
+                  {char.hasMultiView ? 'Front + Side' : `${char.limbs} limbs`}
                 </span>
               </button>
             )
@@ -1077,6 +1104,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <FormEditorScreen
           isOpen={isFormEditorOpen}
           onClose={() => setIsFormEditorOpen(false)}
+        />
+      )}
+
+      {/* Character Import Dialog */}
+      {isCharacterImportOpen && (
+        <CharacterImportDialog
+          isOpen={isCharacterImportOpen}
+          onClose={() => setIsCharacterImportOpen(false)}
+          onSuccess={(newId) => {
+            handleCharacterChange(newId)
+            showToast('Custom character imported and active!')
+          }}
         />
       )}
     </div>

@@ -1,0 +1,52 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Unicorn Side View Animation Contract: horn, tail, body, head, leg-front-left, leg-front-right, leg-back-left, leg-back-right -->
+  <g id="tail" data-origin="80% 40%">
+    <path d="M150 115 C175 125 190 155 180 185 C172 195 160 170 148 135 Z" fill="#ffb2c9" stroke="#e08da4" stroke-width="2.5"/>
+    <path d="M154 122 C180 135 195 165 185 190 C175 195 165 175 152 140 Z" fill="#b9e7fe" stroke="#87c7e6" stroke-width="2"/>
+  </g>
+  <g id="body" data-origin="50% 80%">
+    <!-- Galloping Equine Torso -->
+    <ellipse cx="106" cy="125" rx="46" ry="28" fill="#ffffff" stroke="#d5c8dc" stroke-width="3"/>
+    <!-- 4 Dynamic Legs with Golden Hooves -->
+    <g id="leg-back-right" data-origin="80% 0%">
+      <path d="M130 135 L145 165 L140 182" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+      <ellipse cx="140" cy="183" rx="5" ry="3.5" fill="#ffd700"/>
+    </g>
+    <g id="leg-back-left" data-origin="80% 0%">
+      <path d="M122 135 L132 168 L126 185" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+      <ellipse cx="126" cy="186" rx="5.5" ry="4" fill="#ffd700"/>
+    </g>
+    <g id="leg-front-right" data-origin="20% 0%">
+      <path d="M78 135 L70 162 L64 180" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+      <ellipse cx="64" cy="181" rx="5" ry="3.5" fill="#ffd700"/>
+    </g>
+    <g id="leg-front-left" data-origin="20% 0%">
+      <path d="M88 135 L82 165 L76 184" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+      <ellipse cx="76" cy="185" rx="5.5" ry="4" fill="#ffd700"/>
+    </g>
+  </g>
+  <g id="head" data-origin="80% 90%">
+    <!-- Neck & Mane -->
+    <path d="M100 115 L78 75 C70 65 65 55 52 58 C42 62 48 85 58 98 L75 125 Z" fill="#ffffff" stroke="#d5c8dc" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M85 70 C95 50 115 58 105 85 C118 70 128 85 110 105 Z" fill="#c9b3f5" stroke="#9d84d1" stroke-width="2"/>
+    <!-- Head Snout -->
+    <ellipse cx="50" cy="65" rx="18" ry="14" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+    <ellipse cx="40" cy="68" rx="8" ry="6" fill="#fff0f5"/>
+    <circle cx="38" cy="67" r="1.5" fill="#d59fb5"/>
+    <!-- Eye in Profile -->
+    <g id="eye" data-origin="50% 50%">
+      <ellipse cx="56" cy="62" rx="4.5" ry="6" fill="#4a2559"/>
+      <circle cx="58" cy="59.5" r="2" fill="#fff"/>
+      <circle cx="54" cy="64" r="1" fill="#ffd700"/>
+    </g>
+    <!-- Ear -->
+    <path d="M68 55 L74 34 L82 48 Z" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+    <!-- Golden Horn Angled Forward -->
+    <g id="horn" data-origin="100% 100%">
+      <polygon points="12,18 48,46 56,52" fill="#ffd700" stroke="#d49400" stroke-width="2"/>
+      <line x1="25" y1="30" x2="35" y2="35" stroke="#ffffff" stroke-width="2"/>
+      <line x1="36" y1="38" x2="44" y2="43" stroke="#ffffff" stroke-width="2"/>
+      <polygon points="10,14 12,19 17,20 12,21 10,26 8,21 3,20 8,19" fill="#ffffff"/>
+    </g>
+  </g>
+</svg>

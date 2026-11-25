@@ -178,3 +178,139 @@ html[data-theme='cyberpunk'].dark::before {
   transform: translateY(2px);
   box-shadow: var(--shadow-pressed);
 }
+
+/* ==========================================================================
+   RETRO PIXEL THEME (Phase 9)
+   Tactile 90s OS / Game Boy computing aesthetic with physical beveled buttons
+   ========================================================================== */
+[data-theme="retro"] .sticker-card {
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-m);
+}
+
+[data-theme="retro"] .sticker-button,
+[data-theme="retro"] button:not(.sticker-plain) {
+  box-shadow: var(--shadow-button);
+  border-radius: var(--radius-pill);
+  transition: transform 60ms linear, box-shadow 60ms linear;
+}
+
+[data-theme="retro"] .sticker-button:active,
+[data-theme="retro"] button:not(.sticker-plain):active {
+  transform: translate(1.5px, 1.5px) !important;
+  box-shadow: var(--shadow-pressed) !important;
+}
+
+/* ==========================================================================
+   ROYAL VELVET THEME (Phase 9)
+   Opulent imperial golds, deep velvet purples, and big shiny jeweled home button
+   ========================================================================== */
+[data-theme="royal"] .sticker-card {
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-l);
+  position: relative;
+}
+
+[data-theme="royal"] .sticker-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  pointer-events: none;
+}
+
+[data-theme="royal"] .sticker-button {
+  box-shadow: var(--shadow-button);
+  border-radius: var(--radius-pill);
+  transition: all 200ms ease-out;
+}
+
+[data-theme="royal"] .sticker-button:active {
+  transform: translateY(2px);
+  box-shadow: var(--shadow-pressed);
+}
+
+/* Big Shiny Home Button Glisten Animation */
+@keyframes royal-glisten {
+  0% {
+    filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.7));
+  }
+  50% {
+    filter: drop-shadow(0 0 24px rgba(255, 223, 77, 0.95)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+  }
+  100% {
+    filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.7));
+  }
+}
+
+[data-theme="royal"] button[aria-label="Home"] > div {
+  animation: royal-glisten 3s ease-in-out infinite;
+  border: 2px solid #ffd700;
+}
+
+/* ==========================================================================
+   MORNING BROADSHEET NEWSPAPER THEME (Phase 9)
+   Authentic print editorial rules: line separators instead of rounded boxes!
+   ========================================================================== */
+[data-theme="newspaper"] .sticker-card {
+  box-shadow: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: 3px double var(--color-line) !important;
+  border-bottom: 2px solid var(--color-line) !important;
+  border-radius: 0px !important;
+  background-color: transparent !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+[data-theme="newspaper"] .sticker-button {
+  box-shadow: var(--shadow-button);
+  border-radius: 0px !important;
+  border: 1.5px solid var(--color-ink) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-display);
+}
+
+[data-theme="newspaper"] .sticker-button:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+/* Broadsheet Column Grid Texture */
+html[data-theme="newspaper"] body {
+  background-image: linear-gradient(to right, rgba(43, 41, 38, 0.03) 1px, transparent 1px);
+  background-size: 20px 100%;
+}
+
+/* ==========================================================================
+   VARSITY SPORTS THEME (Phase 9)
+   High-energy athletic turf, stadium rules, and equipment icons
+   ========================================================================== */
+[data-theme="sports"] .sticker-card {
+  box-shadow: var(--shadow-card);
+  border: var(--border-w) solid var(--color-line);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-m);
+  position: relative;
+}
+
+[data-theme="sports"] .sticker-button {
+  box-shadow: var(--shadow-button);
+  border-radius: var(--radius-pill);
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 900;
+}
+
+[data-theme="sports"] .sticker-button:active {
+  transform: translateY(3px);
+  box-shadow: var(--shadow-pressed);
+}

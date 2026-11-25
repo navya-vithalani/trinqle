@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "id": "mouse",
+  "name": "Tiny mouse",
+  "svg": "character.svg",
+  "view": "front",
+  "roles": {
+    "body": ["body"],
+    "head": ["head"],
+    "tail": ["tail"],
+    "ears": ["ear-left", "ear-right"],
+    "eyes": ["eye-left", "eye-right"],
+    "mouth": ["mouth"],
+    "limbs": [
+      { "role": "arm", "layers": ["arm-left", "arm-right"], "gait": "biped" },
+      { "role": "leg", "layers": ["leg-left", "leg-right"], "gait": "biped" }
+    ]
+  },
+  "clips": {
+    "idle": ["whisker-twitch", "ear-wiggle", "breathe"],
+    "actions": ["scurry", "nibble", "jump", "somersault", "dance"],
+    "overrides": { "walk": { "fallback": "scurry" } }
+  },
+  "reactions": {
+    "tap": ["jump", "scurry", "somersault"],
+    "saved": "nibble",
+    "locked": "sleep",
+    "chapterClosed": "dance"
+  }
+}

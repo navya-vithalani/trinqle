@@ -1,0 +1,44 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Rabbit Side View Animation Contract: tail, body, head, ear-left, ear-right, eye, leg-front, leg-back -->
+  <g id="tail" data-origin="80% 60%">
+    <!-- Fluffy Round Cottontail -->
+    <circle cx="162" cy="144" r="16" fill="#ffffff" stroke="#d5c8dc" stroke-width="2.5"/>
+  </g>
+  <g id="body" data-origin="50% 80%">
+    <!-- Arched Leaping Bunny Torso -->
+    <ellipse cx="108" cy="136" rx="46" ry="32" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+    <!-- Rear Haunch (Curled Spring) -->
+    <g id="leg-back" data-origin="80% 30%">
+      <ellipse cx="140" cy="145" rx="20" ry="24" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+      <path d="M142 165 L118 178 L146 178" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+    <!-- Front Paws (Reaching Forward) -->
+    <g id="leg-front" data-origin="30% 20%">
+      <ellipse cx="72" cy="162" rx="12" ry="7" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2.5" transform="rotate(-15, 72, 162)"/>
+    </g>
+  </g>
+  <g id="head" data-origin="80% 80%">
+    <!-- Ears Streamlined Backwards for Hopping Speed -->
+    <g id="ear-left" data-origin="90% 80%">
+      <path d="M85 70 C100 45 140 35 165 42 C150 55 120 65 92 78 Z" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+      <path d="M96 68 C115 50 142 42 155 48 C140 56 120 63 100 72 Z" fill="#ffd5e2"/>
+    </g>
+    <g id="ear-right" data-origin="90% 80%">
+      <path d="M80 65 C95 40 135 30 160 37 C145 50 115 60 88 72 Z" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+      <path d="M90 63 C110 45 138 37 150 43 C135 52 115 58 95 68 Z" fill="#ffd5e2"/>
+    </g>
+    <!-- Profile Head -->
+    <ellipse cx="64" cy="85" rx="26" ry="22" fill="#fffaf5" stroke="#d5c8dc" stroke-width="3"/>
+    <ellipse cx="44" cy="90" rx="12" ry="10" fill="#fffaf5" stroke="#d5c8dc" stroke-width="2"/>
+    <!-- Pink Nose -->
+    <circle cx="36" cy="88" r="3.5" fill="#e0678f"/>
+    <!-- Eye in Profile -->
+    <g id="eye" data-origin="50% 50%">
+      <ellipse cx="65" cy="82" rx="5" ry="6.5" fill="#442a3a"/>
+      <circle cx="67" cy="80" r="2" fill="#fff"/>
+    </g>
+    <!-- Cheek Blush & Whiskers -->
+    <circle cx="56" cy="94" r="6" fill="#ffb2c9" opacity="0.6"/>
+    <path d="M46 92 L22 88 M46 95 L20 96" stroke="#b8a8be" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+</svg>

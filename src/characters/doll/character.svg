@@ -1,0 +1,58 @@
+<svg id="character" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Doll Animation Contract: head, body, arm-left, arm-right, leg-left, leg-right, eye-left, eye-right, mouth -->
+  <g id="body" data-origin="50% 80%">
+    <!-- Victorian Porcelain Doll Dress with Lace Collar & Apron -->
+    <path d="M72 120 L55 178 L145 178 L128 120 Z" fill="#906fc9" stroke="#5d4189" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M82 120 L74 178 L126 178 L118 120 Z" fill="#fdf2f7" stroke="#e0cde0" stroke-width="2"/>
+    <circle cx="100" cy="138" r="3.5" fill="#e0678f"/>
+    <circle cx="100" cy="154" r="3.5" fill="#e0678f"/>
+    <path d="M75 120 Q100 130 125 120" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <!-- Articulated Legs -->
+    <g id="leg-left" data-origin="50% 0%">
+      <rect x="76" y="176" width="14" height="20" rx="6" fill="#fce4ec" stroke="#d4a5b8" stroke-width="2.5"/>
+      <ellipse cx="83" cy="196" rx="8" ry="4" fill="#523a48"/>
+    </g>
+    <g id="leg-right" data-origin="50% 0%">
+      <rect x="110" y="176" width="14" height="20" rx="6" fill="#fce4ec" stroke="#d4a5b8" stroke-width="2.5"/>
+      <ellipse cx="117" cy="196" rx="8" ry="4" fill="#523a48"/>
+    </g>
+    <!-- Articulated Puppet Arms -->
+    <g id="arm-left" data-origin="90% 10%">
+      <path d="M72 124 Q50 140 46 156" fill="none" stroke="#fce4ec" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="45" cy="158" r="6" fill="#fce4ec" stroke="#d4a5b8" stroke-width="2"/>
+      <path d="M72 124 L60 136" stroke="#906fc9" stroke-width="10" stroke-linecap="round"/>
+    </g>
+    <g id="arm-right" data-origin="10% 10%">
+      <path d="M128 124 Q150 140 154 156" fill="none" stroke="#fce4ec" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="155" cy="158" r="6" fill="#fce4ec" stroke="#d4a5b8" stroke-width="2"/>
+      <path d="M128 124 L140 136" stroke="#906fc9" stroke-width="10" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g id="head" data-origin="50% 90%">
+    <!-- Twin Hair Buns & Bows -->
+    <circle cx="58" cy="56" r="18" fill="#e0833a" stroke="#aa5516" stroke-width="2.5"/>
+    <circle cx="142" cy="56" r="18" fill="#e0833a" stroke="#aa5516" stroke-width="2.5"/>
+    <path d="M52 68 L66 68 L59 58 Z" fill="#e0678f"/>
+    <path d="M134 68 L148 68 L141 58 Z" fill="#e0678f"/>
+    <!-- Head Base -->
+    <circle cx="100" cy="84" r="42" fill="#fff5f8" stroke="#d4a5b8" stroke-width="3"/>
+    <!-- Hair Bangs -->
+    <path d="M60 76 C70 54 130 54 140 76 C130 64 70 64 60 76 Z" fill="#e0833a"/>
+    <!-- Rosy Cheeks -->
+    <circle cx="72" cy="95" r="7.5" fill="#ffb2c9" opacity="0.7"/>
+    <circle cx="128" cy="95" r="7.5" fill="#ffb2c9" opacity="0.7"/>
+    <!-- Eyes -->
+    <g id="eye-left" data-origin="50% 50%">
+      <ellipse cx="80" cy="85" rx="5.5" ry="7" fill="#3b2b36"/>
+      <circle cx="82" cy="83" r="2.2" fill="#fff"/>
+      <path d="M74 77 Q80 74 86 77" fill="none" stroke="#3b2b36" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g id="eye-right" data-origin="50% 50%">
+      <ellipse cx="120" cy="85" rx="5.5" ry="7" fill="#3b2b36"/>
+      <circle cx="122" cy="83" r="2.2" fill="#fff"/>
+      <path d="M114 77 Q120 74 126 77" fill="none" stroke="#3b2b36" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <!-- Sweet Heart Mouth -->
+    <path id="mouth" d="M96 102 Q100 106 104 102" fill="none" stroke="#e0678f" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>
