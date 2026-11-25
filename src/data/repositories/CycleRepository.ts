@@ -32,6 +32,19 @@ export class CycleRepository {
     return cycle
   }
 
+  async createCompletedCycle(startDate: string, endDate: string): Promise<Cycle> {
+    const now = Date.now()
+    const cycle: Cycle = {
+      id: generateUUIDv7(now),
+      startDate,
+      endDate,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await this.db.cycles.put(cycle)
+    return cycle
+  }
+
   async endCycle(cycleId: string, endDate: string): Promise<Cycle> {
     const cycle = await this.db.cycles.get(cycleId)
     if (!cycle) throw new Error(`Cycle ${cycleId} not found`)

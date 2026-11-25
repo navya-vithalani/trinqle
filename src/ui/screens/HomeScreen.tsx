@@ -3,7 +3,6 @@ import {
   Sparkles,
   FileText,
   Clock,
-  Check,
   AlertCircle,
   Eye,
   ShieldAlert,
@@ -39,7 +38,11 @@ import { ReflectionsSheet } from './ReflectionsSheet'
 import { ChapterGate } from './ChapterGate'
 import type { FormPack, Chapter, Day, Cycle } from '../../data/types'
 
-export const HomeScreen: React.FC = () => {
+interface HomeScreenProps {
+  onNavigateToProfileBrowse?: (date: string) => void
+}
+
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToProfileBrowse }) => {
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [allChaptersCount, setAllChaptersCount] = useState(1)
   const [todayDay, setTodayDay] = useState<Day | null>(null)
@@ -205,6 +208,20 @@ export const HomeScreen: React.FC = () => {
     loadState()
   }
 
+  const handleSavePastCycle = async (startDate: string, endDate: string) => {
+    await cycleRepo.createCompletedCycle(startDate, endDate)
+    showToast('Past cycle backfilled successfully')
+    loadState()
+  }
+
+  const handleHeatmapSelectDate = (targetDate: string) => {
+    if (targetDate < todayStr && onNavigateToProfileBrowse) {
+      onNavigateToProfileBrowse(targetDate)
+    } else {
+      openFormForDate(targetDate)
+    }
+  }
+
   const progress = activeChapter
     ? getChapterProgress(activeChapter, todayStr)
     : { currentDayNumber: 1, totalDays: 28, daysRemaining: 27 }
@@ -293,15 +310,14 @@ export const HomeScreen: React.FC = () => {
 
         {/* Removed Edit Form and View Form buttons after submission (Item 1) */}
         {todayDay ? (
-          <div className="p-3 rounded-[var(--radius-m)] bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-center space-x-2">
-            <Check size={16} className="text-emerald-600 shrink-0" />
+          <div> 
           </div>
         ) : (
           <>
             <p className="text-xs text-[var(--color-ink-soft)]">
               {windowOpen
-                ? 'Form is open until 3:00 AM. Fill your nightly structured entry.'
-                : 'Window opens at 21:00. Preview or test the form below.'}
+                ? 'Form is open for tonight!'
+                : 'Window opens at 21:00.'}
             </p>
 
             <div className="flex items-center space-x-2 pt-1">
@@ -329,12 +345,6 @@ export const HomeScreen: React.FC = () => {
         )}
       </div>
 
-      {/* Character Stage with Live Greeting (Item 25 - below Tonight's Journal) */}
-      <CharacterStage
-        characterId={activeCharacterId}
-        greetingText={greetingText}
-      />
-
       {/* Backfill Banner */}
       {missingDays.length > 0 && (
         <div className="p-3 bg-amber-50 rounded-[var(--radius-m)] border border-amber-200 flex items-center justify-between text-xs text-amber-900 shadow-xs">
@@ -354,6 +364,13 @@ export const HomeScreen: React.FC = () => {
         </div>
       )}
 
+      {/* Character Stage with Live Greeting (Item 25 - below Tonight's Journal) */}
+      <CharacterStage
+        characterId={activeCharacterId}
+        greetingText={greetingText}
+      />
+
+
       {/* Unified Calendar Container (Section 6, 1) */}
       {activeChapter && (
         <UnifiedCalendarCard
@@ -362,11 +379,12 @@ export const HomeScreen: React.FC = () => {
           todayLogicalDate={todayStr}
           cycles={cycles}
           activeCycle={activeCycle}
-          onSelectDate={openFormForDate}
+          onSelectDate={handleHeatmapSelectDate}
           onStartCycle={handleStartCycle}
           onEndCycle={handleEndCycle}
           onUpdateCycle={handleUpdateCycle}
           onDeleteCycle={handleDeleteCycle}
+          onSavePastCycle={handleSavePastCycle}
         />
       )}
 

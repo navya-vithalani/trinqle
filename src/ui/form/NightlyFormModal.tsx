@@ -905,135 +905,151 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
                       {/* Horizontally Swipeable Sessions (Items 7 & 8) */}
                       {(!gatePart || isGateOn) && (
-                        <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-2.5 pb-2 scrollbar-thin">
-                          {sessions.map((instance, sIdx) => (
-                            <div
-                              key={instance}
-                              className={
-                                q.repeats && sessions.length > 1
-                                  ? 'min-w-[85%] sm:min-w-[90%] snap-center shrink-0 p-3 bg-[var(--color-bg)]/60 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2 shadow-xs'
-                                  : 'w-full space-y-2'
-                              }
-                            >
-                              {/* Session Top Bar: Plain numeral in top-left (Item 8) */}
-                              {q.repeats && sessions.length > 1 && (
-                                <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
-                                  <span className="w-5 h-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[11px] font-extrabold text-[var(--color-accent)] flex items-center justify-center">
-                                    {sIdx + 1}
-                                  </span>
-                                  {!isReadOnly && (
-                                    <button
-                                      type="button"
-                                      onClick={() => removeSession(q.id, instance)}
-                                      className="text-red-400 hover:text-red-600 p-0.5 active:scale-90"
-                                      title="Remove session"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                        <div className="space-y-1.5">
+                          <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-2.5 pb-2 scrollbar-thin">
+                            {sessions.map((instance, sIdx) => (
+                              <div
+                                key={instance}
+                                className={
+                                  q.repeats && sessions.length > 1
+                                    ? 'min-w-[85%] sm:min-w-[90%] snap-center shrink-0 p-3 bg-[var(--color-bg)]/60 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2 shadow-xs'
+                                    : 'w-full space-y-2'
+                                }
+                              >
+                                {/* Session Top Bar: Plain numeral in top-left (Item 8) */}
+                                {q.repeats && sessions.length > 1 && (
+                                  <div className="flex items-center justify-between pb-1 border-b border-[var(--color-line)]">
+                                    <span className="w-5 h-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[11px] font-extrabold text-[var(--color-accent)] flex items-center justify-center">
+                                      {sIdx + 1}
+                                    </span>
+                                    <span className="text-[10px] text-[var(--color-ink-soft)] font-medium">
+                                      Session {sIdx + 1} of {sessions.length}
+                                    </span>
+                                    {!isReadOnly && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSession(q.id, instance)}
+                                        className="text-red-400 hover:text-red-600 p-0.5 active:scale-90"
+                                        title="Remove session"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
 
-                              {/* Two-Column Split Layout for Multiple Library Parts (Item 11) */}
-                              {hasMultipleLibraryParts && (
-                                <div className="grid grid-cols-2 gap-2 pt-1">
-                                  {libraryParts.map((p) => {
+                                {/* Two-Column Split Layout for Multiple Library Parts (Item 11) */}
+                                {hasMultipleLibraryParts && (
+                                  <div className="grid grid-cols-2 gap-2 pt-1">
+                                    {libraryParts.map((p) => {
+                                      const val = answersMap[p.id]?.[instance]
+                                      return (
+                                        <div key={p.id}>
+                                          <LibraryWidget
+                                            label={p.label}
+                                            value={val as any}
+                                            disabled={isReadOnly}
+                                            config={p.config as any}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Other Parts (or single library part) */}
+                                {(hasMultipleLibraryParts ? otherParts : qParts.filter((p) => !p.gate))
+                                  .filter((p) =>
+                                    mode === 'quick' && !expandedMore ? p.level === 'core' : true
+                                  )
+                                  .map((p) => {
                                     const val = answersMap[p.id]?.[instance]
+                                    const isMissing = completeness.missingPartIds.includes(p.id)
+                                    const isCore = p.level === 'core'
+
                                     return (
-                                      <div key={p.id}>
-                                        <LibraryWidget
-                                          label={p.label}
-                                          value={val as any}
-                                          disabled={isReadOnly}
-                                          config={p.config as any}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
+                                      <div
+                                        key={p.id}
+                                        className={`space-y-1 ${
+                                          isMissing
+                                            ? 'rounded-lg p-2 bg-red-50 border border-red-300'
+                                            : ''
+                                        }`}
+                                      >
+                                        {p.kind === 'yesno' && (
+                                          <YesNoWidget
+                                            label={p.label}
+                                            value={typeof val === 'boolean' ? val : undefined}
+                                            required={isCore}
+                                            disabled={isReadOnly}
+                                            onChange={(v) =>
+                                              handleAnswerChange(p.id, instance, v ?? false)
+                                            }
+                                          />
+                                        )}
+                                        {p.kind === 'scale' && (
+                                          <ScaleWidget
+                                            label={p.label}
+                                            value={val as number}
+                                            required={isCore}
+                                            disabled={isReadOnly}
+                                            config={p.config as any}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        )}
+                                        {p.kind === 'number' && (
+                                          <NumberWidget
+                                            label={p.label}
+                                            value={val as number}
+                                            disabled={isReadOnly}
+                                            config={p.config as any}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        )}
+                                        {p.kind === 'text' && (
+                                          <TextWidget
+                                            label={p.label}
+                                            value={(val as string) ?? ''}
+                                            disabled={isReadOnly}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        )}
+                                        {p.kind === 'timerange' && (
+                                          <TimeRangeWidget
+                                            label={p.label}
+                                            value={val as any}
+                                            date={date}
+                                            disabled={isReadOnly}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        )}
+                                        {!hasMultipleLibraryParts && p.kind === 'library' && (
+                                          <LibraryWidget
+                                            label={p.label}
+                                            value={val as any}
+                                            disabled={isReadOnly}
+                                            config={p.config as any}
+                                            onChange={(v) => handleAnswerChange(p.id, instance, v)}
+                                          />
+                                        )}
                                       </div>
                                     )
                                   })}
-                                </div>
-                              )}
-
-                              {/* Other Parts (or single library part) */}
-                              {(hasMultipleLibraryParts ? otherParts : qParts.filter((p) => !p.gate))
-                                .filter((p) =>
-                                  mode === 'quick' && !expandedMore ? p.level === 'core' : true
-                                )
-                                .map((p) => {
-                                  const val = answersMap[p.id]?.[instance]
-                                  const isMissing = completeness.missingPartIds.includes(p.id)
-                                  const isCore = p.level === 'core'
-
-                                  return (
-                                    <div
-                                      key={p.id}
-                                      className={`space-y-1 ${
-                                        isMissing
-                                          ? 'rounded-lg p-2 bg-red-50 border border-red-300'
-                                          : ''
-                                      }`}
-                                    >
-                                      {p.kind === 'yesno' && (
-                                        <YesNoWidget
-                                          label={p.label}
-                                          value={typeof val === 'boolean' ? val : undefined}
-                                          required={isCore}
-                                          disabled={isReadOnly}
-                                          onChange={(v) =>
-                                            handleAnswerChange(p.id, instance, v ?? false)
-                                          }
-                                        />
-                                      )}
-                                      {p.kind === 'scale' && (
-                                        <ScaleWidget
-                                          label={p.label}
-                                          value={val as number}
-                                          required={isCore}
-                                          disabled={isReadOnly}
-                                          config={p.config as any}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
-                                      )}
-                                      {p.kind === 'number' && (
-                                        <NumberWidget
-                                          label={p.label}
-                                          value={val as number}
-                                          disabled={isReadOnly}
-                                          config={p.config as any}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
-                                      )}
-                                      {p.kind === 'text' && (
-                                        <TextWidget
-                                          label={p.label}
-                                          value={(val as string) ?? ''}
-                                          disabled={isReadOnly}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
-                                      )}
-                                      {p.kind === 'timerange' && (
-                                        <TimeRangeWidget
-                                          label={p.label}
-                                          value={val as any}
-                                          date={date}
-                                          disabled={isReadOnly}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
-                                      )}
-                                      {!hasMultipleLibraryParts && p.kind === 'library' && (
-                                        <LibraryWidget
-                                          label={p.label}
-                                          value={val as any}
-                                          disabled={isReadOnly}
-                                          config={p.config as any}
-                                          onChange={(v) => handleAnswerChange(p.id, instance, v)}
-                                        />
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                              </div>
+                            ))}
+                          </div>
+                          {/* Swipe indicator dots for repeating sessions */}
+                          {q.repeats && sessions.length > 1 && (
+                            <div className="flex items-center justify-center space-x-1 py-0.5">
+                              {sessions.map((_, dotIdx) => (
+                                <span
+                                  key={dotIdx}
+                                  className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]/50"
+                                />
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
                       )}
                     </div>

@@ -41,7 +41,15 @@ import {
 } from '../../data/repositories'
 import type { Chapter, Day } from '../../data/types'
 
-export const ProfileScreen: React.FC = () => {
+interface ProfileScreenProps {
+  initialInspectDate?: string | null
+  onClearInspectDate?: () => void
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  initialInspectDate,
+  onClearInspectDate,
+}) => {
   const [selectedThemeId, setSelectedThemeId] = useState('cutesy')
   const [isDark, setIsDark] = useState(false)
   const [selectedCharacterId, setSelectedCharacterId] = useState('white-cat')
@@ -57,7 +65,7 @@ export const ProfileScreen: React.FC = () => {
   const [openChapter, setOpenChapter] = useState<Chapter | null>(null)
   const [openChapterDays, setOpenChapterDays] = useState<Day[]>([])
   const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false)
-  const [inspectDate, setInspectDate] = useState<string | null>(null)
+  const [inspectDate, setInspectDate] = useState<string | null>(initialInspectDate || null)
 
   // Other modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -70,6 +78,12 @@ export const ProfileScreen: React.FC = () => {
   const settingsRepo = new SettingsRepository()
   const chapterRepo = new ChapterRepository()
   const dayRepo = new DayRepository()
+
+  useEffect(() => {
+    if (initialInspectDate) {
+      setInspectDate(initialInspectDate)
+    }
+  }, [initialInspectDate])
 
   useEffect(() => {
     const { themeId, isDark: dark } = loadThemePreference()
@@ -586,10 +600,14 @@ export const ProfileScreen: React.FC = () => {
           chapterId={openChapter.id}
           todayLogicalDate={logicalDate(new Date(), undefined, DEFAULT_WINDOW.endHour)}
           readOnly={true} // Default to locked Browse Mode! (Item 4)
-          onClose={() => setInspectDate(null)}
+          onClose={() => {
+            setInspectDate(null)
+            if (onClearInspectDate) onClearInspectDate()
+          }}
           onSaved={() => {
             showToast('Changes saved')
             setInspectDate(null)
+            if (onClearInspectDate) onClearInspectDate()
             loadProfileData()
           }}
         />

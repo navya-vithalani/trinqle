@@ -91,6 +91,11 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const [newQuestionLabel, setNewQuestionLabel] = useState('')
   const [newQuestionIcon, setNewQuestionIcon] = useState('Sparkles')
 
+  // Inline Question editing (Item 10)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+  const [editingQuestionLabel, setEditingQuestionLabel] = useState('')
+  const [editingQuestionIcon, setEditingQuestionIcon] = useState('Sparkles')
+
   // Move Question state
   const [movingQuestionId, setMovingQuestionId] = useState<string | null>(null)
 
@@ -202,6 +207,19 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
         await loadData()
       },
     })
+  }
+
+  const handleUpdateQuestion = async (qId: string) => {
+    if (!editingQuestionLabel.trim()) return
+    const q = questions.find((item) => item.id === qId)
+    if (!q) return
+    await formRepo.saveQuestion({
+      ...q,
+      label: editingQuestionLabel.trim(),
+      icon: editingQuestionIcon,
+    })
+    setEditingQuestionId(null)
+    await loadData()
   }
 
   const handleMoveQuestion = async (qId: string, targetSecId: string) => {
@@ -493,65 +511,135 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                   key={q.id}
                   className="sticker-card p-3.5 space-y-3 border-2 border-[var(--color-line)]"
                 >
-                  {/* Question Card Header */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-extrabold text-xs text-[var(--color-ink)] flex items-center space-x-1.5">
-                        <span>{q.label}</span>
-                        {q.repeats && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                            Repeating
-                          </span>
-                        )}
-                      </h4>
-                      <span className="text-[10px] text-[var(--color-ink-soft)]">
-                        {qParts.length} input parts
-                      </span>
+                  {/* Inline Question Editing or Normal Header (Item 10) */}
+                  {editingQuestionId === q.id ? (
+                    <div className="p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border-2 border-[var(--color-accent)] space-y-2.5">
+                      <label className="font-bold text-xs text-[var(--color-ink)] block">
+                        Edit Question Label
+                      </label>
+                      <input
+                        type="text"
+                        value={editingQuestionLabel}
+                        onChange={(e) => setEditingQuestionLabel(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleUpdateQuestion(q.id)}
+                        className="w-full p-2 text-xs rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-semibold text-[var(--color-ink)]"
+                      />
+
+                      <div className="space-y-1 pt-1">
+                        <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                          Question Icon
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['Sparkles', 'Clock', 'BookOpen', 'Heart', 'Smile', 'Activity', 'FileText', 'Coffee', 'Award', 'Zap', 'Sun', 'Moon'].map((icName) => (
+                            <button
+                              key={icName}
+                              type="button"
+                              onClick={() => setEditingQuestionIcon(icName)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                                editingQuestionIcon === icName
+                                  ? 'bg-[var(--color-accent)] text-white shadow-xs font-bold'
+                                  : 'bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink-soft)]'
+                              }`}
+                            >
+                              {icName}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end space-x-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingQuestionId(null)}
+                          className="py-1 px-3 text-xs text-[var(--color-ink-soft)] font-semibold"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!editingQuestionLabel.trim()}
+                          onClick={() => handleUpdateQuestion(q.id)}
+                          className="py-1 px-4 rounded-full bg-[var(--color-accent)] text-white text-xs font-bold disabled:opacity-50"
+                        >
+                          Save Question
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    /* Question Card Header */
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-extrabold text-xs text-[var(--color-ink)] flex items-center space-x-1.5">
+                          <span>{q.label}</span>
+                          {q.repeats && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                              Repeating
+                            </span>
+                          )}
+                        </h4>
+                        <span className="text-[10px] text-[var(--color-ink-soft)]">
+                          {qParts.length} input parts {q.icon ? `• Icon: ${q.icon}` : ''}
+                        </span>
+                      </div>
 
-                    {/* Question Actions */}
-                    <div className="flex items-center space-x-1">
-                      {/* Move Up / Down */}
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => handleReorderQuestion(q.id, 'up')}
-                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
-                      >
-                        <ArrowUp size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === currentQuestions.length - 1}
-                        onClick={() => handleReorderQuestion(q.id, 'down')}
-                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
-                      >
-                        <ArrowDown size={13} />
-                      </button>
+                      {/* Question Actions */}
+                      <div className="flex items-center space-x-1">
+                        {/* Move Up / Down */}
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => handleReorderQuestion(q.id, 'up')}
+                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === currentQuestions.length - 1}
+                          onClick={() => handleReorderQuestion(q.id, 'down')}
+                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-20 active:scale-90"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
 
-                      {/* Move to another section */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setMovingQuestionId(movingQuestionId === q.id ? null : q.id)
-                        }
-                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
-                        title="Move to another section"
-                      >
-                        <ArrowRightLeft size={13} />
-                      </button>
+                        {/* Edit Question */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingQuestionId(q.id)
+                            setEditingQuestionLabel(q.label)
+                            setEditingQuestionIcon(q.icon || 'Sparkles')
+                          }}
+                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
+                          title="Edit question & icon"
+                        >
+                          <Edit2 size={13} />
+                        </button>
 
-                      {/* Retire Question */}
-                      <button
-                        type="button"
-                        onClick={() => handleRetireQuestion(q.id)}
-                        className="p-1 text-[var(--color-ink-soft)] hover:text-rose-600 active:scale-90"
-                        title="Retire question"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                        {/* Move to another section */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMovingQuestionId(movingQuestionId === q.id ? null : q.id)
+                          }
+                          className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-accent)] active:scale-90"
+                          title="Move to another section"
+                        >
+                          <ArrowRightLeft size={13} />
+                        </button>
+
+                        {/* Retire Question */}
+                        <button
+                          type="button"
+                          onClick={() => handleRetireQuestion(q.id)}
+                          className="p-1 text-[var(--color-ink-soft)] hover:text-rose-600 active:scale-90"
+                          title="Retire question"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Move to section dropdown popup */}
                   {movingQuestionId === q.id && (

@@ -106,6 +106,26 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
     (part?.config as any)?.creatable ?? true
   )
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setKind(part?.kind || 'yesno')
+      setLabel(part?.label || '')
+      setLevel(part?.level || 'core')
+      setGate(Boolean(part?.gate))
+      setScaleMin((part?.config as any)?.min ?? 1)
+      setScaleMax((part?.config as any)?.max ?? 10)
+      setScaleStep((part?.config as any)?.step ?? 1)
+      setScaleDisplay((part?.config as any)?.display || 'slider')
+      setScaleIcon((part?.config as any)?.icon || 'Sparkles')
+      setNumberUnit((part?.config as any)?.unit || '')
+      setNumberAggregate((part?.config as any)?.aggregate || 'sum')
+      setTextMultiline(Boolean((part?.config as any)?.multiline))
+      setLibraryId((part?.config as any)?.libraryId || libraries[0]?.id || '')
+      setLibraryMulti((part?.config as any)?.multi ?? true)
+      setLibraryCreatable((part?.config as any)?.creatable ?? true)
+    }
+  }, [isOpen, part, libraries])
+
   if (!isOpen) return null
 
   const handleConfirm = () => {

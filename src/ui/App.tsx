@@ -11,12 +11,18 @@ import { loadThemePreference, applyThemeById } from '../themes/registry'
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
+  const [profileInspectDate, setProfileInspectDate] = useState<string | null>(null)
 
   useEffect(() => {
     // Initialize saved theme and dark mode preference
     const { themeId, isDark } = loadThemePreference()
     applyThemeById(themeId, isDark)
   }, [])
+
+  const handleNavigateToProfileBrowse = (date: string) => {
+    setProfileInspectDate(date)
+    setActiveTab('profile')
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] flex justify-center">
@@ -39,11 +45,18 @@ export const App: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 overflow-y-auto">
-          {activeTab === 'home' && <HomeScreen />}
+          {activeTab === 'home' && (
+            <HomeScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+          )}
           {activeTab === 'dashboard' && <DashboardScreen />}
           {activeTab === 'insights' && <InsightsScreen />}
           {activeTab === 'archive' && <ArchiveScreen />}
-          {activeTab === 'profile' && <ProfileScreen />}
+          {activeTab === 'profile' && (
+            <ProfileScreen
+              initialInspectDate={profileInspectDate}
+              onClearInspectDate={() => setProfileInspectDate(null)}
+            />
+          )}
         </main>
 
         {/* Bottom Navigation Bar */}

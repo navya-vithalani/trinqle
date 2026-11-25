@@ -15,6 +15,7 @@ interface UnifiedCalendarCardProps {
   onEndCycle: (cycleId: string, date: string) => Promise<void>
   onUpdateCycle: (cycle: Cycle) => Promise<void>
   onDeleteCycle: (cycleId: string) => Promise<void>
+  onSavePastCycle: (startDate: string, endDate: string) => Promise<void>
 }
 
 export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
@@ -28,6 +29,7 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
   onEndCycle,
   onUpdateCycle,
   onDeleteCycle,
+  onSavePastCycle,
 }) => {
   // Default to 'activity' (Journal Activity) per spec
   const [activeSegment, setActiveSegment] = useState<'activity' | 'cycle'>('activity')
@@ -63,16 +65,15 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
           </button>
         </div>
 
-        {/* Top-Right Action: Only in Cycle & Health view (ICON ONLY, NO TEXT) */}
+        {/* Top-Right Action: Include an "Update Cycle" button in Cycle & Health view (Item 27) */}
         {activeSegment === 'cycle' && (
           <button
             type="button"
             onClick={() => setIsUpdateCycleOpen(true)}
-            title="Update Cycle"
-            aria-label="Update Cycle"
-            className="w-7 h-7 rounded-full bg-rose-500 text-white font-bold flex items-center justify-center active:scale-90 shadow-xs transition-transform"
+            className="flex items-center space-x-1.5 py-1 px-2.5 rounded-[var(--radius-pill)] bg-rose-500 hover:bg-rose-600 text-white font-bold text-[11px] active:scale-95 shadow-xs transition-transform"
           >
-            <Droplets size={14} />
+            <Droplets size={12} />
+            <span>Update Cycle</span>
           </button>
         )}
       </div>
@@ -100,6 +101,7 @@ export const UnifiedCalendarCard: React.FC<UnifiedCalendarCardProps> = ({
           onEndCycle={onEndCycle}
           onUpdateCycle={onUpdateCycle}
           onDeleteCycle={onDeleteCycle}
+          onSavePastCycle={onSavePastCycle}
         />
       )}
     </div>

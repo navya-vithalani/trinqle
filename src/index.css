@@ -98,7 +98,7 @@
   box-shadow: var(--shadow-pressed);
 }
 
-/* Claymorphism theme specific squishy interactions and depth */
+/* Claymorphism theme specific squishy interactions, depth and warm ambient glow */
 [data-theme="clay"] .sticker-card {
   box-shadow: var(--shadow-card);
   border: var(--border-w) solid var(--color-line);
@@ -117,26 +117,36 @@
   box-shadow: var(--shadow-pressed);
 }
 
-/* Cyberpunk theme subtle moving circuit / digital grid background animation */
-body[data-theme='cyberpunk']::before {
+html[data-theme='clay']::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.7;
-  background-image: 
-    linear-gradient(to right, rgba(0, 240, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
-  animation: cyber-grid-drift 25s linear infinite;
+  opacity: 0.35;
+  background-image: radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.6) 0%, transparent 60%);
 }
 
-html:not(.dark) body[data-theme='cyberpunk']::before {
+/* Cyberpunk theme subtle moving circuit / digital grid background animation */
+html[data-theme='cyberpunk']::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
   opacity: 0.5;
   background-image: 
     linear-gradient(to right, rgba(0, 102, 204, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 102, 204, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  animation: cyber-grid-drift 25s linear infinite;
+}
+
+html[data-theme='cyberpunk'].dark::before {
+  opacity: 0.75;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
 }
 
 @keyframes cyber-grid-drift {

@@ -22,6 +22,7 @@ interface CycleHealthViewProps {
   onEndCycle: (cycleId: string, date: string) => Promise<void>
   onUpdateCycle?: (cycle: Cycle) => Promise<void>
   onDeleteCycle: (cycleId: string) => Promise<void>
+  onSavePastCycle?: (startDate: string, endDate: string) => Promise<void>
 }
 
 export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
@@ -35,6 +36,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
   onEndCycle,
   onUpdateCycle: _onUpdateCycle,
   onDeleteCycle,
+  onSavePastCycle,
 }) => {
   const [viewOffsetMonths, setViewOffsetMonths] = useState(0)
   const [selectedDate, setSelectedDate] = useState<string>(todayLogicalDate)
@@ -379,8 +381,11 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
                       type="button"
                       disabled={!pastStart || !pastEnd || pastStart > pastEnd}
                       onClick={async () => {
-                        await onStartCycle(pastStart)
-                        // If end date specified, end it
+                        if (onSavePastCycle) {
+                          await onSavePastCycle(pastStart, pastEnd)
+                        } else {
+                          await onStartCycle(pastStart)
+                        }
                         setIsAddingPastCycle(false)
                         setPastStart('')
                         setPastEnd('')
@@ -458,10 +463,8 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  // Spotting does not reset Cycle Day 1: delete active cycle
-                  onDeleteCycle(activeCycle.id)
+                  // Per user guidance: does nothing for now, closes dialog
                   setEarlyEndModalOpen(false)
-                  closeUpdateModal()
                 }}
                 className="w-full py-2 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-xs"
               >
