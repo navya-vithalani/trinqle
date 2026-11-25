@@ -26,12 +26,15 @@ export class LibraryRepository {
       .toArray()
   }
 
-  async getAllItems(libraryId: string): Promise<Item[]> {
-    return this.db.items
-      .where('libraryId')
-      .equals(libraryId)
-      .filter((i) => !i.deletedAt)
-      .toArray()
+  async getAllItems(libraryId?: string): Promise<Item[]> {
+    if (libraryId) {
+      return this.db.items
+        .where('libraryId')
+        .equals(libraryId)
+        .filter((i) => !i.deletedAt)
+        .toArray()
+    }
+    return this.db.items.filter((i) => !i.deletedAt).toArray()
   }
 
   async createLibrary(name: string, id?: string): Promise<Library> {

@@ -10,6 +10,8 @@ import type {
   PartConfig,
   ShowWhenRule,
   QuestionSchedule,
+  Answer,
+  AnswerLink,
 } from '../types'
 import { filterActiveItems } from '../../core/effectiveDating'
 import { generateUUIDv7 } from '../../core/ids'
@@ -48,6 +50,14 @@ export class FormRepository {
       this.getParts(date),
     ])
     return { sections, questions, parts }
+  }
+
+  async getAllAnswers(): Promise<Answer[]> {
+    return this.db.answers.filter((a) => !a.deletedAt).toArray()
+  }
+
+  async getAllAnswerLinks(): Promise<AnswerLink[]> {
+    return this.db.answerLinks.filter((l) => !l.deletedAt).toArray()
   }
 
   async saveSection(section: Section): Promise<void> {

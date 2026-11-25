@@ -115,7 +115,10 @@ export const App: React.FC = () => {
                 onNavigateToDay={handleNavigateToProfileBrowse}
               />
             ) : (
-              <HomeScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+              <HomeScreen
+                onNavigateToProfileBrowse={handleNavigateToProfileBrowse}
+                onNavigateToInsights={() => setActiveTab('insights')}
+              />
             ))}
 
           {activeTab === 'dashboard' &&
@@ -128,7 +131,9 @@ export const App: React.FC = () => {
               <DashboardScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
             ))}
 
-          {activeTab === 'insights' && <InsightsScreen />}
+          {activeTab === 'insights' && (
+            <InsightsScreen onNavigateToProfileBrowse={handleNavigateToProfileBrowse} />
+          )}
 
           {activeTab === 'archive' && (
             <ArchiveScreen

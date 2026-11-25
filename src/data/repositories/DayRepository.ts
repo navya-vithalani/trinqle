@@ -91,4 +91,8 @@ export class DayRepository {
       }
     })
   }
+
+  async getAllDays(): Promise<Day[]> {
+    return this.db.days.filter((d) => !d.deletedAt).toArray()
+  }
 }
