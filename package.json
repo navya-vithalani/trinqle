@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "generate-pwa-assets": "pwa-assets-generator && node -e \"const fs=require('fs'); ['pwa-64x64.png','pwa-192x192.png','pwa-512x512.png','maskable-icon-512x512.png','apple-touch-icon-180x180.png','favicon.ico'].forEach(f => { if(fs.existsSync('public/icons/'+f)) fs.copyFileSync('public/icons/'+f, 'public/'+f); });\""
+    "generate-pwa-assets": "pwa-assets-generator && node -e \"const fs=require('fs'); ['pwa-64x64.png','pwa-192x192.png','pwa-512x512.png','maskable-icon-512x512.png','apple-touch-icon-180x180.png','favicon.ico'].forEach(f => { if(fs.existsSync('public/icons/'+f)) fs.copyFileSync('public/icons/'+f, 'public/'+f); });\" && node -e \"import('sharp').then(({default:s}) => s('public/icons/badge.svg').resize(96,96).png().toFile('public/badge-96x96.png'))\""
   },
   "dependencies": {
     "@fontsource/comfortaa": "^5.3.0",

@@ -20,6 +20,8 @@ export default defineConfig({
         'pwa-64x64.png',
         'pwa-192x192.png',
         'pwa-512x512.png',
+        'badge-96x96.png',
+        'icons/badge.svg',
         'icons/logo.svg',
       ],
       manifest: {
