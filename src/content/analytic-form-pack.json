@@ -1,0 +1,316 @@
+{
+  "formatVersion": 1,
+  "kind": "form-pack",
+  "name": "Analytic Habits & Metrics Pack",
+  "aliases": {
+    "mood": "q_ana_state.p_ana_mood.value",
+    "energy": "q_ana_state.p_ana_energy.value",
+    "sleepMinutes": "q_ana_sleep.p_ana_sleep_when.minutes",
+    "exercise": "q_ana_workout.p_ana_workout_did.done",
+    "studyMinutes": "q_ana_focus.p_ana_focus_when.minutes",
+    "water": "q_ana_hydration.p_ana_water.value",
+    "screenHours": "q_ana_screen.p_ana_screen_hrs.value"
+  },
+  "libraries": [
+    {
+      "id": "lib_focus_topics",
+      "name": "Focus topics",
+      "items": ["Architecture", "Research", "Writing", "Practice", "Review"]
+    },
+    {
+      "id": "lib_workout_modes",
+      "name": "Workout modes",
+      "items": ["Run", "Strength", "Walk", "Mobility", "Cycling"]
+    },
+    {
+      "id": "lib_recovery_tags",
+      "name": "Recovery habits",
+      "items": ["Breathwork", "Reading", "Sunwalk", "Early bed"]
+    }
+  ],
+  "sections": [
+    {
+      "id": "sec_ana_vitals",
+      "name": "Sleep & Vitals",
+      "icon": "moon",
+      "order": 1,
+      "scope": "daily"
+    },
+    {
+      "id": "sec_ana_focus",
+      "name": "Output & Activity",
+      "icon": "zap",
+      "order": 2,
+      "scope": "daily"
+    },
+    {
+      "id": "sec_ana_state",
+      "name": "Inner State",
+      "icon": "sparkles",
+      "order": 3,
+      "scope": "daily"
+    },
+    {
+      "id": "sec_ana_reflect",
+      "name": "Chapter Reflections",
+      "icon": "book-open",
+      "order": 4,
+      "scope": "chapterEnd"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_ana_sleep",
+      "sectionId": "sec_ana_vitals",
+      "label": "Sleep blocks",
+      "icon": "moon",
+      "order": 1,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_ana_sleep_when",
+          "kind": "timerange",
+          "label": "Asleep window",
+          "order": 1,
+          "level": "core",
+          "config": { "snapMinutes": 5 }
+        },
+        {
+          "id": "p_ana_sleep_qual",
+          "kind": "scale",
+          "label": "Restfulness",
+          "order": 2,
+          "level": "core",
+          "config": { "min": 1, "max": 10, "step": 1, "display": "slider" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_steps",
+      "sectionId": "sec_ana_vitals",
+      "label": "Daily steps",
+      "icon": "footprints",
+      "order": 2,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_steps_count",
+          "kind": "number",
+          "label": "Steps",
+          "order": 1,
+          "level": "core",
+          "config": { "unit": "steps", "min": 0, "max": 40000, "step": 500, "aggregate": "sum" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_hydration",
+      "sectionId": "sec_ana_vitals",
+      "label": "Water & Caffeine",
+      "icon": "droplet",
+      "order": 3,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_water",
+          "kind": "number",
+          "label": "Water",
+          "order": 1,
+          "level": "core",
+          "config": { "unit": "glasses", "min": 0, "max": 20, "step": 1, "aggregate": "sum" }
+        },
+        {
+          "id": "p_ana_caffeine",
+          "kind": "number",
+          "label": "Caffeine",
+          "order": 2,
+          "level": "extra",
+          "config": { "unit": "cups", "min": 0, "max": 10, "step": 1, "aggregate": "sum" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_screen",
+      "sectionId": "sec_ana_vitals",
+      "label": "Screen time",
+      "icon": "monitor",
+      "order": 4,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_screen_hrs",
+          "kind": "number",
+          "label": "Hours",
+          "order": 1,
+          "level": "extra",
+          "config": { "unit": "hours", "min": 0, "max": 18, "step": 0.5, "aggregate": "sum" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_workout",
+      "sectionId": "sec_ana_focus",
+      "label": "Movement session",
+      "icon": "activity",
+      "order": 1,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_workout_did",
+          "kind": "yesno",
+          "label": "Worked out today?",
+          "order": 1,
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_ana_workout_mode",
+          "kind": "library",
+          "label": "Mode",
+          "order": 2,
+          "level": "core",
+          "config": { "libraryId": "lib_workout_modes", "multi": true, "creatable": true }
+        },
+        {
+          "id": "p_ana_workout_mins",
+          "kind": "number",
+          "label": "Duration",
+          "order": 3,
+          "level": "extra",
+          "config": { "unit": "min", "min": 5, "max": 240, "step": 5, "aggregate": "sum" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_focus",
+      "sectionId": "sec_ana_focus",
+      "label": "Deep focus sessions",
+      "icon": "target",
+      "order": 2,
+      "repeats": true,
+      "parts": [
+        {
+          "id": "p_ana_focus_did",
+          "kind": "yesno",
+          "label": "Any deep focus?",
+          "order": 1,
+          "level": "core",
+          "gate": true,
+          "config": {}
+        },
+        {
+          "id": "p_ana_focus_when",
+          "kind": "timerange",
+          "label": "Session window",
+          "order": 2,
+          "level": "core",
+          "config": { "snapMinutes": 5 }
+        },
+        {
+          "id": "p_ana_focus_topic",
+          "kind": "library",
+          "label": "Topic",
+          "order": 3,
+          "level": "core",
+          "config": { "libraryId": "lib_focus_topics", "multi": true, "creatable": true }
+        },
+        {
+          "id": "p_ana_focus_flow",
+          "kind": "scale",
+          "label": "Flow quality",
+          "order": 4,
+          "level": "extra",
+          "config": { "min": 1, "max": 10, "step": 1, "display": "stars" }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_recovery",
+      "sectionId": "sec_ana_focus",
+      "label": "Intentional recovery",
+      "icon": "feather",
+      "order": 3,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_rec_tags",
+          "kind": "library",
+          "label": "Habits",
+          "order": 1,
+          "level": "extra",
+          "config": { "libraryId": "lib_recovery_tags", "multi": true, "creatable": true }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_state",
+      "sectionId": "sec_ana_state",
+      "label": "End of day state",
+      "icon": "smile",
+      "order": 1,
+      "repeats": false,
+      "parts": [
+        {
+          "id": "p_ana_mood",
+          "kind": "scale",
+          "label": "Mood",
+          "order": 1,
+          "level": "core",
+          "config": { "min": 1, "max": 10, "step": 0.5, "display": "slider" }
+        },
+        {
+          "id": "p_ana_energy",
+          "kind": "scale",
+          "label": "Energy",
+          "order": 2,
+          "level": "core",
+          "config": { "min": 1, "max": 10, "step": 0.5, "display": "slider" }
+        },
+        {
+          "id": "p_ana_stress",
+          "kind": "scale",
+          "label": "Stress",
+          "order": 3,
+          "level": "core",
+          "config": { "min": 1, "max": 10, "step": 0.5, "display": "slider" }
+        },
+        {
+          "id": "p_ana_note",
+          "kind": "text",
+          "label": "Daily observation",
+          "order": 4,
+          "level": "extra",
+          "config": { "multiline": true }
+        }
+      ]
+    },
+    {
+      "id": "q_ana_reflect_main",
+      "sectionId": "sec_ana_reflect",
+      "label": "Chapter review",
+      "icon": "book-open",
+      "order": 1,
+      "repeats": false,
+      "schedule": { "chapterEnd": true },
+      "parts": [
+        {
+          "id": "p_ana_reflect_lesson",
+          "kind": "text",
+          "label": "What metric mattered most this chapter?",
+          "order": 1,
+          "level": "extra",
+          "config": { "multiline": true }
+        },
+        {
+          "id": "p_ana_reflect_sat",
+          "kind": "scale",
+          "label": "Overall chapter satisfaction",
+          "order": 2,
+          "level": "extra",
+          "config": { "min": 1, "max": 10, "step": 1, "display": "stars" }
+        }
+      ]
+    }
+  ]
+}

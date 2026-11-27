@@ -107,4 +107,33 @@ describe('Theme System', () => {
     expect(iconSet.archive).toBe('BookOpen')
     expect(iconSet.profile).toBe('User')
   })
+
+  it('switches multi-view characters between side and front view during locomotion', async () => {
+    const { initCharacterAnimator } = await import('../characters/animator')
+    let currentView = 'front'
+    const mockContainer = {
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement
+
+    const unicornAnimator = initCharacterAnimator(mockContainer, {
+      characterId: 'unicorn',
+      onViewChange: (next) => {
+        currentView = next
+      },
+    })
+    unicornAnimator.playClip('gallop')
+    expect(currentView).toBe('side')
+    unicornAnimator.destroy()
+
+    const rabbitAnimator = initCharacterAnimator(mockContainer, {
+      characterId: 'rabbit',
+      onViewChange: (next) => {
+        currentView = next
+      },
+    })
+    rabbitAnimator.playClip('hop')
+    expect(currentView).toBe('side')
+    rabbitAnimator.destroy()
+  })
 })

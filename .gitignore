@@ -3,6 +3,8 @@ dist
 .vercel
 .env.local
 coverage
+test-results
+playwright-report
 
 # Generated PWA assets
 public/pwa-*.png

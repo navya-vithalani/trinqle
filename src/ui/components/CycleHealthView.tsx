@@ -219,7 +219,7 @@ export const CycleHealthView: React.FC<CycleHealthViewProps> = ({
 
           // Calculate continuous cycle day offset for background phase prediction gradient
           const diffFromLastStart = daysBetween(lastCycleStart, cellDate)
-          let dayInCycle = ((diffFromLastStart % Math.round(baseline.averageLengthDays)) + Math.round(baseline.averageLengthDays)) % Math.round(baseline.averageLengthDays) + 1
+          const dayInCycle = ((diffFromLastStart % Math.round(baseline.averageLengthDays)) + Math.round(baseline.averageLengthDays)) % Math.round(baseline.averageLengthDays) + 1
           const phaseInfo = getPhaseForCycleDay(
             dayInCycle,
             baseline.averageLengthDays,

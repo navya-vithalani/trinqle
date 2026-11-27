@@ -72,11 +72,15 @@ import {
 import { RecoveryModal } from '../components/RecoveryModal'
 import { DataHealthModal } from '../components/DataHealthModal'
 import { exportFormPack } from '../../data/formPack/exporter'
+import { importFormPack } from '../../data/formPack/importer'
 import { ImportDialog } from '../dialogs/ImportDialog'
 import { FormEditorScreen } from '../editor/FormEditorScreen'
 import { generateDemoData } from '../../tools/demoData'
+import analyticPackRaw from '../../content/analytic-form-pack.json'
+import { isDevToolsEnabled } from '../../core/devFlag'
 import { db } from '../../data/db'
 import { LIMITS } from '../../core/limits'
+import type { FormPack } from '../../data/types'
 import {
   SettingsRepository,
   ChapterRepository,
@@ -121,6 +125,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [customStickers, setCustomStickers] = useState<StickerItem[]>([])
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false)
+  const [demoSeedInput, setDemoSeedInput] = useState('')
+  const [demoAlert, setDemoAlert] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isPersisted, setIsPersisted] = useState(false)
   const [backupStatus, setBackupStatus] = useState<BackupStatusInfo | null>(null)
@@ -383,16 +389,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleGenerateDemoData = async () => {
     setIsGeneratingDemo(true)
+    setDemoAlert(null)
     try {
-      const stats = await generateDemoData(db)
+      const parsedSeed = demoSeedInput.trim() ? Number(demoSeedInput.trim()) : undefined
+      const stats = await generateDemoData(db, {
+        seed: parsedSeed && Number.isFinite(parsedSeed) ? parsedSeed : undefined,
+      })
       showToast(
-        `Generated ${stats.chaptersCount} chapters, ${stats.daysCount} days, ${stats.cyclesCount} cycles!`
+        `Seeded ${stats.chaptersCount} chapters, ${stats.daysCount} days, ${stats.cyclesCount} cycles (seed ${stats.seed})!`
       )
       setTimeout(() => window.location.reload(), 1200)
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to generate demo data')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate demo data'
+      setDemoAlert(msg)
+      showToast(msg)
     } finally {
       setIsGeneratingDemo(false)
+    }
+  }
+
+  const handleLoadAnalyticPack = async () => {
+    setDemoAlert(null)
+    try {
+      await importFormPack(analyticPackRaw as unknown as FormPack, 'replace', db)
+      showToast('Loaded Analytic Habits & Metrics pack')
+      loadProfileData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load analytic pack'
+      setDemoAlert(msg)
+      showToast(msg)
     }
   }
 
@@ -1072,25 +1097,49 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       </div>
 
-      {/* Developer / Demo Data Tools */}
-      <div className="sticker-card p-4 space-y-3 border-indigo-200 bg-indigo-50/25">
-        <div className="flex items-center space-x-2 text-xs font-bold text-indigo-900">
-          <Database size={16} className="text-indigo-600" />
-          <span>Demo Data Generator</span>
+      {/* Developer / Demo Data Tools (1E: Gated behind dev flag) */}
+      {isDevToolsEnabled() && (
+        <div className="sticker-card p-4 space-y-3 border-indigo-200 bg-indigo-50/25">
+          <div className="flex items-center space-x-2 text-xs font-bold text-indigo-900">
+            <Database size={16} className="text-indigo-600" />
+            <span>Demo Data Generator (Dev)</span>
+          </div>
+          <p className="text-xs text-[var(--color-ink-soft)]">
+            Form-driven generator: reads the currently configured form to seed 2 closed chapters with frozen insights & photos, 1 open chapter, cycles, and planted effects.
+          </p>
+          {demoAlert && (
+            <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-800 flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{demoAlert}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={demoSeedInput}
+              onChange={(e) => setDemoSeedInput(e.target.value)}
+              placeholder="Random seed (optional)"
+              className="flex-1 p-2 rounded-[var(--radius-m)] border border-[var(--color-line)] bg-[var(--color-surface)] text-xs text-[var(--color-ink)]"
+            />
+            <button
+              type="button"
+              onClick={handleLoadAnalyticPack}
+              className="py-2 px-3 rounded-[var(--radius-pill)] border border-indigo-300 bg-white text-indigo-700 font-semibold text-xs active:scale-95 shrink-0"
+            >
+              Load Analytic Form
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={isGeneratingDemo}
+            onClick={handleGenerateDemoData}
+            className="w-full py-2.5 px-4 rounded-[var(--radius-pill)] bg-indigo-600 text-white font-bold text-xs sticker-button flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95"
+          >
+            <RefreshCw size={14} className={isGeneratingDemo ? 'animate-spin' : ''} />
+            <span>{isGeneratingDemo ? 'Seeding Data...' : 'Generate Demo Data (Current Form)'}</span>
+          </button>
         </div>
-        <p className="text-xs text-[var(--color-ink-soft)]">
-          Deterministically seeds 75 days of realistic journal history: 2 closed chapters with reflections & photos, 1 open chapter, regular menstrual cycles, and planted lifestyle correlations.
-        </p>
-        <button
-          type="button"
-          disabled={isGeneratingDemo}
-          onClick={handleGenerateDemoData}
-          className="w-full py-2.5 px-4 rounded-[var(--radius-pill)] bg-indigo-600 text-white font-bold text-xs sticker-button flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95"
-        >
-          <RefreshCw size={14} className={isGeneratingDemo ? 'animate-spin' : ''} />
-          <span>{isGeneratingDemo ? 'Seeding Data...' : 'Generate 75-Day Demo Data'}</span>
-        </button>
-      </div>
+      )}
 
       {/* Danger Zone */}
       <div className="sticker-card p-4 space-y-3 border-red-200 bg-red-50/30">

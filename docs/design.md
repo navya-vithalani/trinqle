@@ -38,7 +38,7 @@ Banner at top: "Viewing: {chapter title} ({dates})" + **Back** button (always vi
 No countdown, form card, backfill banner, heatmap or cycle card.
 
 ## 4. Navigation
-Bottom bar, 5 tabs: **Home, Dashboard, Insights, Archive, Profile**. Icon + label, 44 px targets, safe-area aware. Profile hosts everything else (Edit form is a full-screen route with a back arrow).
+Bottom bar, 5 tabs: **Archive, Dashboard, Home, Insights, Profile** (Home centered as anchor target). Icon + label, 44 px targets, safe-area aware. Profile hosts everything else (Edit form is a full-screen route with a back arrow).
 
 ## 5. Screens
 
@@ -49,11 +49,11 @@ Bottom bar, 5 tabs: **Home, Dashboard, Insights, Archive, Profile**. Icon + labe
 [ Backfill banner: "Tue is empty. Fill it?" ]   only if a day in the last 3 is missing
 [ Greeting line ]                                  rule-based, last 3 to 4 days
 [ Character stage, about 180 px tall ]             wanders/dances/sleeps, reacts to taps
-[ Fill heatmap: empty / quick / full / backfilled ]
-[ Cycle card: month calendar, swipe/arrows for past months, day N, prediction range ]
+[ Unified Calendar card: Heatmap | Cycle tabs, month calendar, phase predictions ]
 [ Reflections row: "4 of 9 answered"  >  ]   opens the always-open reflections sheet
+[ Honest backup status row / weekly backup nudge banner ]
 ```
-Empty state (no form yet): one large card with **Import a form** (opens the Import dialog), **Build one**, and a small "Use sample starter pack" link. After import: "Start your first chapter today?" (yes/no) with default 28 days. The character stage has its own breathing room so the character never needs to appear elsewhere.
+Empty state (no form yet): one large card with **Import a form** (opens the Import dialog), **Build one**, a "Use sample starter pack" link, and (when empty) a single-click **"See the scope of the app using fresh demo data"** button that imports the starter pack and seeds chapters, cycles, dashboard charts, and insights. The character stage has its own breathing room so the character never needs to appear elsewhere.
 
 ### Form (pop-up)
 The form is a **bordered modal sheet** that rises over Home (not a full page). Frame, border, entrance and exit animation come from the theme. Close with an X (drafts autosave).
@@ -61,9 +61,9 @@ The form is a **bordered modal sheet** that rises over Home (not a full page). F
 2. **Full mode:** paged by section. A **progress bar at the top** has one segment per section, current one highlighted, section name beneath. Bottom bar: Back / Next; the last page shows **Save tonight**. Save stays disabled until required core parts are answered (missing ones are highlighted).
 3. **Quick mode:** one flat scrolling list of the core questions (target 7 to 10), **no section headings and no progress bar**, one **Save tonight** button, and a **More questions** expander at the bottom that reveals extras inline.
 4. Interaction patterns:
-   - **Gate yesno:** big toggle row; turning on animates the details open (height + fade). Core toggles start at "No".
-   - **Session card** (repeating): small cards with time track, library chips, note; "+ Add session"; swipe or trash to remove.
-   - **Time range:** 24 h horizontal track with two draggable handles and a live "1h 30m" label, wraps midnight (next-day marker). Tap the label to type times (12-hour format).
+   - **Gate yesno:** tri-state toggle row (`Tap to check` -> `Yes` -> `No`); turning on reveals the question's details. Core toggles start blank (`undefined`) and allow submitting with `No`.
+   - **Session card** (repeating): swipeable full-width horizontal carousel (`snap-x`) with "+ Add Session", pagination dots, time track, library chips, note; trash to remove.
+   - **Time range:** unset state renders a dashed `"Tap to set time range"` trigger (`Not set`); once set, renders a 24 h vertical track plus a Dual 12-hour Circular Clock Dial pop-up with 5 min snapping and `<input type="time">` fallback.
    - **Library picker:** chips + search field; typing a new word shows a "Create" row; multi shows selected chips; recently used first.
    - **Scale:** stars (tap) or slider (drag, shows value to 0.1), per-part display setting.
    - **Text:** multiline, placeholder "optional"; leave room for Gboard voice typing.
@@ -82,7 +82,7 @@ Header: "{N} insights cleared the bar (6.5+), showing {M}". List of insight card
 List of chapter cards (cover = first photo or sticker collage, title, dates, memorable-day count). Button: Import chapter. Segmented: **Chapters | Memorable days | Search** (Memorable = all outstanding and star days with title, sticker, date). **Search** tab: a search field (fuzzy) with a quoted-phrase hint, filter chips (Everything, Text, Library, Day header, Reflections; plus Section, Question, Chapter, Date range menus), result cards grouped by day with a source label (e.g. "Dream > What happened") and highlighted matches; a toggle for newest-first or best-match.
 
 ### Profile
-Rows grouped: Form (Edit form, Libraries, Import/Export form pack), Data (Back up now, Export chapter, Import chapter, CSV, Past forms), App (Form window hours, Time format and week start, Stickers, Theme, Character, Notifications, Chapter default length), Danger (Delete all data: typed confirmation). Dev section (hidden toggle): demo data generator.
+Rows grouped: Core Settings (Name, Form window hours, Time format, Week start), Form (Edit form, Libraries, Past forms browser), Appearance & Mascot (7 offline themes + dark mode, 7+ characters, SVG character import, Stickers), Push Notifications, Data & Backup Tools (Full backup ZIP, CSV, Restore / Import, Recovery snapshots, Data Health Check, Persistent storage indicator), Danger (Delete all data: typed confirmation + auto-snapshot), and Dev-gated Demo Data Generator (`import.meta.env.DEV` / `trinqle_dev_mode`).
 
 ### Close Chapter (hard lock)
 After the end date the app shows only this full-screen flow (no tab bar). Steps with a progress dots row: Reflections review (default prompts + chapter-only prompts, editable), Title, Summary, Photos (0 to 10 slots), Confirm ("Close chapter"). Nothing is mandatory except confirming. On T-2/T-1 a thick bordered pop-up on Home previews this and can be dismissed.

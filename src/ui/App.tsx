@@ -142,7 +142,7 @@ export const App: React.FC = () => {
             )}
           </div>
           <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-line)] text-[var(--color-ink)] font-medium">
-            v0.2
+            v1.0.0
           </span>
         </header>
 

@@ -37,6 +37,8 @@ import { downloadOrShareFile } from '../../core/export'
 import { exportFullBackupZip, getBackupStatus, type BackupStatusInfo } from '../../core/fullBackup'
 import { importFormPack } from '../../data/formPack/importer'
 import starterPackRaw from '../../content/starter-form-pack.json'
+import { seedFreshDemoExperience } from '../../tools/demoData'
+import { isDevToolsEnabled } from '../../core/devFlag'
 import { loadCharacterPreference } from '../../characters/registry'
 import { getStickerById, loadCustomStickerItems, type StickerItem } from '../../core/stickers'
 import {
@@ -79,6 +81,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [cycles, setCycles] = useState<Cycle[]>([])
   const [activeCycle, setActiveCycle] = useState<Cycle | undefined>(undefined)
   const [hasFormSections, setHasFormSections] = useState(true)
+  const [isCompletelyEmpty, setIsCompletelyEmpty] = useState(false)
+  const [isSeedingDemo, setIsSeedingDemo] = useState(false)
   const [reflectionProgress, setReflectionProgress] = useState<{ answered: number; total: number }>({
     answered: 0,
     total: 0,
@@ -100,7 +104,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isReflectionsOpen, setIsReflectionsOpen] = useState(false)
   const [isChapterGateOpen, setIsChapterGateOpen] = useState(false)
   const [isFormEditorOpen, setIsFormEditorOpen] = useState(false)
-  const [isDevMode] = useState(false)
 
   // Greetings & Character
   const [greetingText, setGreetingText] = useState<string>('')
@@ -180,6 +183,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     setCustomStickers(loadedCustomStickers)
 
     setHasFormSections(allSecs.length > 0)
+    const totalDaysCount = await db.days.count()
+    setIsCompletelyEmpty(allSecs.length === 0 && totalDaysCount === 0 && allChapters.length <= 1)
 
     const chapEndSecIds = new Set(allSecs.filter((s) => s.scope === 'chapterEnd').map((s) => s.id))
     const chapEndQs = allQs.filter((q) => chapEndSecIds.has(q.sectionId) || q.schedule?.chapterEnd)
@@ -276,6 +281,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       loadState()
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Error importing pack')
+    }
+  }
+
+  const handleSeeAppScopeDemo = async () => {
+    setIsSeedingDemo(true)
+    try {
+      const stats = await seedFreshDemoExperience(db)
+      showToast(
+        `Demo ready: ${stats.chaptersCount} chapters, ${stats.daysCount} days, ${stats.insightsCount} insights!`
+      )
+      await loadState()
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to prepare demo data')
+    } finally {
+      setIsSeedingDemo(false)
     }
   }
 
@@ -531,6 +551,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             >
               Use sample starter pack
             </button>
+
+            {isCompletelyEmpty && (
+              <div className="pt-2 border-t border-[var(--color-line)]">
+                <button
+                  type="button"
+                  disabled={isSeedingDemo}
+                  onClick={handleSeeAppScopeDemo}
+                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-accent2)]/20 border-2 border-[var(--color-accent2)] text-[var(--color-ink)] font-bold text-xs active:scale-95 disabled:opacity-50"
+                >
+                  <Sparkles size={14} className="text-[var(--color-accent)] shrink-0" />
+                  <span>
+                    {isSeedingDemo
+                      ? 'Preparing demo journal...'
+                      : 'See the scope of the app using fresh demo data'}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -782,7 +820,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           chapterIndex={allChaptersCount}
           daysRemaining={progress.daysRemaining}
           todayLogicalDate={todayStr}
-          isDevMode={isDevMode}
+          isDevMode={isDevToolsEnabled()}
           onClose={() => setIsChapterDetailsOpen(false)}
           onSaveTitle={handleSaveChapterTitle}
           onSavePlannedEndDate={handleSavePlannedEndDate}

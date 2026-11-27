@@ -127,7 +127,7 @@ export function calculateMinutes(start: string, end: string, crossesMidnight: bo
   const [sh, sm] = start.split(':').map(Number)
   const [eh, em] = end.split(':').map(Number)
 
-  let startMinutes = sh * 60 + sm
+  const startMinutes = sh * 60 + sm
   let endMinutes = eh * 60 + em
 
   if (crossesMidnight || endMinutes < startMinutes) {
