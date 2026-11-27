@@ -20,6 +20,7 @@ import type { Chapter, ChapterAnswer } from '../data/types'
 import { ChapterRepository } from '../data/repositories'
 import { migrateLegacyLibraryAnswersIfNeeded } from '../data/migrations'
 import { loadAppSettings, type AppSettings } from '../core/settings'
+import { requestPersistentStorage } from '../core/export'
 import { logicalDate, DEFAULT_WINDOW } from '../core/logicalDay'
 import { ArrowLeft, Lock } from 'lucide-react'
 
@@ -75,6 +76,7 @@ export const App: React.FC = () => {
     const { themeId, isDark } = loadThemePreference()
     applyThemeById(themeId, isDark)
     migrateLegacyLibraryAnswersIfNeeded().catch(() => {})
+    requestPersistentStorage().catch(() => {})
     refreshSettings()
   }, [refreshSettings])
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, UploadCloud, CheckCircle, AlertCircle, FolderArchive } from 'lucide-react'
+import { X, UploadCloud, CheckCircle, AlertCircle, FolderArchive, Database } from 'lucide-react'
 import type { FormPack } from '../../data/types'
 import { validateFormPack } from '../../data/formPack/validator'
 import { importFormPack } from '../../data/formPack/importer'
@@ -8,6 +8,13 @@ import {
   importChapterZip,
   type ChapterZipPreview,
 } from '../../core/export'
+import {
+  inspectFullBackupZip,
+  importFullBackupZip,
+  type FullBackupPreview,
+} from '../../core/fullBackup'
+import { createSafetySnapshot } from '../../core/snapshots'
+import { readZipArchiveAsync } from '../../core/zip'
 import { db } from '../../data/db'
 import { ChapterRepository } from '../../data/repositories'
 
@@ -26,9 +33,11 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 }) => {
   const [pack, setPack] = useState<FormPack | null>(null)
   const [zipPreview, setZipPreview] = useState<ChapterZipPreview | null>(null)
+  const [fullBackupPreview, setFullBackupPreview] = useState<FullBackupPreview | null>(null)
   const [zipBytes, setZipBytes] = useState<Uint8Array | null>(null)
   const [zipConflictExists, setZipConflictExists] = useState(false)
   const [zipConflictMode, setZipConflictMode] = useState<'replace' | 'skip'>('replace')
+  const [fullBackupMode, setFullBackupMode] = useState<'replace' | 'merge'>('replace')
   const [errors, setErrors] = useState<string[]>([])
   const [mode, setMode] = useState<'replace' | 'merge'>('replace')
   const [isImporting, setIsImporting] = useState(false)
@@ -37,6 +46,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
     setErrors([])
     setPack(null)
     setZipPreview(null)
+    setFullBackupPreview(null)
     setZipBytes(null)
     setZipConflictExists(false)
   }
@@ -48,14 +58,27 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
       try {
         const buffer = await file.arrayBuffer()
         const bytes = new Uint8Array(buffer)
-        const preview = await inspectChapterZip(bytes)
-        const chapterRepo = new ChapterRepository()
-        const existing = await chapterRepo.getChapterById(preview.chapter.id)
-        setZipConflictExists(Boolean(existing && !existing.deletedAt))
-        setZipPreview(preview)
-        setZipBytes(bytes)
+        const extracted = await readZipArchiveAsync(bytes)
+        const manifestFile = extracted.find((f) => f.name === 'manifest.json')
+        if (!manifestFile) {
+          throw new Error('Invalid archive: manifest.json missing')
+        }
+        const rawManifest = JSON.parse(manifestFile.text()) as { kind?: string }
+
+        if (rawManifest.kind === 'full_backup') {
+          const preview = await inspectFullBackupZip(bytes)
+          setFullBackupPreview(preview)
+          setZipBytes(bytes)
+        } else {
+          const preview = await inspectChapterZip(bytes)
+          const chapterRepo = new ChapterRepository()
+          const existing = await chapterRepo.getChapterById(preview.chapter.id)
+          setZipConflictExists(Boolean(existing && !existing.deletedAt))
+          setZipPreview(preview)
+          setZipBytes(bytes)
+        }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to inspect chapter ZIP archive'
+        const msg = err instanceof Error ? err.message : 'Failed to inspect ZIP archive'
         setErrors([msg])
       }
       return
@@ -102,7 +125,18 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
     try {
       if (pack) {
         await importFormPack(pack, mode)
+      } else if (zipBytes && fullBackupPreview) {
+        if (fullBackupMode === 'replace') {
+          const hasData = (await db.chapters.count()) > 0 || (await db.days.count()) > 0
+          if (hasData) {
+            await createSafetySnapshot('before_import_replace', 'Before Full Backup Restore', db)
+          }
+        }
+        await importFullBackupZip(zipBytes, db, { mode: fullBackupMode })
       } else if (zipBytes) {
+        if (zipConflictExists && zipConflictMode === 'replace') {
+          await createSafetySnapshot('before_import_replace', 'Before Chapter Overwrite Import', db)
+        }
         await importChapterZip(zipBytes, db, { conflictMode: zipConflictMode })
       } else {
         return
@@ -117,7 +151,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
     }
   }
 
-  const hasSelection = Boolean(pack || zipPreview)
+  const hasSelection = Boolean(pack || zipPreview || fullBackupPreview)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
@@ -144,7 +178,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
           >
             <UploadCloud size={32} className="mx-auto text-[var(--color-accent)]" />
             <p className="text-xs font-semibold text-[var(--color-ink)]">
-              Drop a form-pack .json or chapter .zip archive here
+              Drop a form-pack .json, chapter .zip, or full backup .zip here
             </p>
             <label className="inline-block py-1.5 px-4 rounded-[var(--radius-pill)] bg-[var(--color-surface)] border-2 border-[var(--color-line)] text-xs font-medium text-[var(--color-ink)] cursor-pointer active:scale-95 shadow-xs">
               <span>Choose file</span>
@@ -236,6 +270,75 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                 className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs sticker-button disabled:opacity-50"
               >
                 {isImporting ? 'Importing...' : 'Commit import'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Full Database Backup Preview & Replace/Merge Choice */}
+        {fullBackupPreview && (
+          <div className="space-y-3">
+            <div className="bg-[var(--color-bg)] p-3 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-1 text-xs">
+              <div className="flex items-center space-x-1.5 font-bold text-[var(--color-ink)]">
+                <Database size={14} className="text-[var(--color-accent)]" />
+                <span>Full Trinqle Backup (v{fullBackupPreview.manifest.formatVersion})</span>
+              </div>
+              <p className="text-[11px] text-[var(--color-ink-soft)]">
+                {fullBackupPreview.manifest.counts.chapters} chapters ·{' '}
+                {fullBackupPreview.manifest.counts.days} days ·{' '}
+                {fullBackupPreview.manifest.counts.answers} answers ·{' '}
+                {fullBackupPreview.photosCount} photos
+              </p>
+              <p className="text-[10px] text-[var(--color-ink-soft)]">
+                Exported {new Date(fullBackupPreview.manifest.exportedAt).toLocaleString()}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-[var(--color-ink-soft)]">
+                Restore mode (Replace saves an automatic safety snapshot first):
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFullBackupMode('replace')}
+                  className={`py-2 px-3 text-xs rounded-[var(--radius-pill)] border-2 font-medium ${
+                    fullBackupMode === 'replace'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white font-semibold'
+                      : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  }`}
+                >
+                  Replace all data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFullBackupMode('merge')}
+                  className={`py-2 px-3 text-xs rounded-[var(--radius-pill)] border-2 font-medium ${
+                    fullBackupMode === 'merge'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white font-semibold'
+                      : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  }`}
+                >
+                  Merge into current
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={resetSelection}
+                className="py-2.5 px-3 rounded-[var(--radius-pill)] border border-[var(--color-line)] text-xs font-semibold text-[var(--color-ink-soft)]"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={isImporting}
+                onClick={handleCommit}
+                className="flex-1 py-2.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-semibold text-xs sticker-button disabled:opacity-50"
+              >
+                {isImporting ? 'Restoring...' : 'Restore backup'}
               </button>
             </div>
           </div>

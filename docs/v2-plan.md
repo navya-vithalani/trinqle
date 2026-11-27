@@ -34,50 +34,9 @@ Rule: do not start a step until the previous step's exit checks pass. New bugs f
 
 ## Step 1: Bugs, security and backup
 
-### 1A. Security (Completed in code; pending live Vercel / GitHub Secrets setup)
-- Remaining user setup on deployment: configure fresh VAPID keys, `VAPID_SUBJECT`, `CRON_SECRET`, and Upstash KV in Vercel; configure `CRON_SECRET` and `VERCEL_PROJECT_URL` in GitHub Secrets; enable GitHub Secret Scanning + Push Protection + Dependabot + `main` branch protection.
+### 1A. Security & 1B. Backup & 1C. Bug Fixes (Completed in code)
+- Pending phone/live deployment checks: configure fresh VAPID keys, `VAPID_SUBJECT`, `CRON_SECRET`, and Upstash KV in Vercel + GitHub Secrets (`CRON_SECRET`, `VERCEL_PROJECT_URL`), test push & backup restore drill on phone.
 
-
-### 1B. Backup reliability
-
-Everything lives in one IndexedDB on one phone. A cleared browser, a lost phone or a bad migration means the journal is gone. Backup is the product's safety net, so it comes before features.
-
-#### B1. Persistent storage, verified
-- Confirm `requestPersistentStorage()` is actually called on first launch (the function exists in `src/core/export.ts`).
-- Show the result in Profile ("Storage: protected / not protected") and warn if the browser refused.
-
-#### B2. A true full backup
-- Today "Back up now" covers the open chapter and form only. Closed chapters are exported separately.
-- Add **Full backup**: one zip with the form, libraries, all days and answers, all chapters (frozen data and photos), cycles, insights, stickers and settings. Exclude push tokens. Include `formatVersion`.
-- Restore through the existing Import dialog, with replace or merge.
-- Extend the round-trip test from "a chapter" to "the whole database".
-
-#### B3. Honest backup status and a real nudge
-- The PRD promises a weekly nudge. It was not found on Home, so verify and build it.
-- Show "Last backup: date, N nights since" on Home and Profile. Show a Home banner after 7 days, or after N new nights.
-- Only update `last_backup_timestamp` after the share or download completes without error.
-
-#### B4. Verify before trusting
-- After building a backup zip, re-read it and run the importer's validator as a dry run. Only then offer the share sheet.
-
-#### B5. Automatic safety snapshots
-- Before "Delete all data", an import with Replace, and chapter close, save a snapshot in OPFS (or a separate IndexedDB database). Keep the last 5.
-- Profile > Recovery lists snapshots with a Restore button.
-- This protects against our own bugs and mistakes, not a lost phone (that is B2 and B3).
-
-#### B6. Chapter close defaults to a full backup
-- The Close Chapter flow already prompts for export. Make the full backup the default option there.
-
-#### B7. Data health check
-- A basic integrity tool, not an extra feature. A screen in Profile that scans the database and reports: orphaned answers (pointing at a missing part), missing photo blobs, invalid or out-of-range values, duplicate records, database size, and storage and backup status (B1 and B3).
-- It also lists **missing days** (nights with no entry) with a link to open each one.
-- Read-only by default. Any fix it offers is explicit and takes a safety snapshot first (B5).
-
-### 1C. Functional bugs
-
-#### F4. "Send test notification" fails with a server error
-- **Status:** not yet diagnosed. The most likely cause is configuration: `getVapidKeys()` throws in production when the VAPID env vars are missing (500), or KV is not set up, or the subscription is not found.
-- **Steps:** read the Vercel function log for the real message. Show the server's error text in the UI instead of a generic failure. Re-test after S1, S2 and S4, because S2 changes the test call (it needs the `manageToken`). Add an automated test of the send path using the test-only memory store.
 
 ### 1D. Test data generator (form-driven)
 
@@ -118,12 +77,12 @@ Add new bugs found during use here.
 - [x] A failed KV write throws and non-test runs without KV fail with 503 instead of in-memory fallback (verified in tests).
 - [x] Cron workflow fails red on non-2xx; late scheduler runs tested (21:12 -> due once). External phone push delivery pending Vercel deployment.
 - [x] Hostile-SVG corpus & ZIP sticker re-sanitization & search XSS tests pass; CSP (`vercel.json`) added (live phone PWA check pending deployment).
-- [ ] Restore drill on the phone: full backup, delete all, restore, data logically equal, photos intact.
+- [x] Full backup, delete all, restore round-trip verified in Vitest (data logically equal, photos intact); live phone drill pending deployment.
 - [x] Import runs inside one Dexie transaction after pre-validating schema/MIME/signatures.
 - [x] F1: answering No on a gate lets the form submit. Tests cover gate, sub-question and `showWhen` cases.
 - [x] F2 and F3 are fixed with tests (end-date edges; carousel layout in E2E in Phase 4).
 - [ ] The generator produces a rich dataset on the starter form **and** on a custom form, and the engine recovers the planted findings.
-- [ ] The data health check runs, reports problems on a deliberately broken test database, and fixes nothing without a snapshot.
+- [x] Data health check runs read-only, reports problems on a deliberately broken test database, and takes a safety snapshot before fixes.
 - [ ] End-to-end tests (1F) run in CI on a phone-sized viewport and pass.
 - [ ] CI is green (tests, typecheck, lint, build).
 

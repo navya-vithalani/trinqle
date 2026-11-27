@@ -13,6 +13,10 @@ import { ChapterRepository, FormRepository } from '../../data/repositories'
 import { compressPhoto, type CompressedPhoto } from '../../core/photoCompression'
 import { LIMITS } from '../../core/limits'
 import { syncChapterPlannedEndDate } from '../../core/notifications/client'
+import { createSafetySnapshot } from '../../core/snapshots'
+import { exportFullBackupZip } from '../../core/fullBackup'
+import { exportChapterZip, downloadOrShareFile } from '../../core/export'
+import { SettingsRepository } from '../../data/repositories'
 import { ScaleWidget } from '../widgets/ScaleWidget'
 import { TextWidget } from '../widgets/TextWidget'
 
@@ -36,6 +40,7 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
   const [photos, setPhotos] = useState<CompressedPhoto[]>([])
   const [isCompressing, setIsCompressing] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
+  const [exportChoice, setExportChoice] = useState<'full' | 'chapter' | 'skip'>('full')
 
   // Reflections state
   const [questions, setQuestions] = useState<Question[]>([])
@@ -45,6 +50,7 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
 
   const chapterRepo = new ChapterRepository()
   const formRepo = new FormRepository()
+  const settingsRepo = new SettingsRepository()
 
   useEffect(() => {
     if (!isOpen) return
@@ -108,6 +114,24 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
   const handleFinalClose = async () => {
     setIsClosing(true)
     try {
+      // B5: Always capture an automatic safety snapshot before closing chapter
+      await createSafetySnapshot(
+        'before_chapter_close',
+        `Before closing ${title.trim() || chapter.title || 'Chapter'}`
+      ).catch(() => {})
+
+      // B6: Export before freezing (defaults to verified Full Backup)
+      if (exportChoice === 'full') {
+        const { filename, blob } = await exportFullBackupZip()
+        const outcome = await downloadOrShareFile(filename, blob)
+        if (outcome !== 'cancelled') {
+          await settingsRepo.setSetting('last_backup_timestamp', Date.now())
+        }
+      } else if (exportChoice === 'chapter') {
+        const { filename, blob } = await exportChapterZip(chapter.id)
+        await downloadOrShareFile(filename, blob)
+      }
+
       const photoBlobs = photos.map((p) => p.blob)
       const { nextChapter } = await chapterRepo.closeChapterWithCeremony({
         chapterId: chapter.id,
@@ -347,6 +371,51 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
                 <div className="flex justify-between">
                   <span className="text-[var(--color-ink-soft)]">Status:</span>
                   <span className="font-semibold text-emerald-600">Freezing permanently</span>
+                </div>
+              </div>
+
+              {/* B6: Export prompt defaulting to Full Backup */}
+              <div className="p-3 bg-[var(--color-bg)] rounded-[var(--radius-m)] border border-[var(--color-line)] text-left text-xs space-y-2 max-w-xs mx-auto">
+                <span className="font-bold text-[var(--color-ink)] block">
+                  Backup before closing
+                </span>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="chapter-close-export"
+                      checked={exportChoice === 'full'}
+                      onChange={() => setExportChoice('full')}
+                      className="accent-[var(--color-accent)]"
+                    />
+                    <span className="font-semibold text-[var(--color-ink)]">
+                      Full backup (.zip) — recommended
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="chapter-close-export"
+                      checked={exportChoice === 'chapter'}
+                      onChange={() => setExportChoice('chapter')}
+                      className="accent-[var(--color-accent)]"
+                    />
+                    <span className="text-[var(--color-ink-soft)]">
+                      This chapter archive only (.zip)
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="chapter-close-export"
+                      checked={exportChoice === 'skip'}
+                      onChange={() => setExportChoice('skip')}
+                      className="accent-[var(--color-accent)]"
+                    />
+                    <span className="text-[var(--color-ink-soft)]">
+                      Skip export (snapshot still saved locally)
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>

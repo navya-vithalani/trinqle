@@ -12,6 +12,8 @@ import {
   BookOpen,
   ChevronRight,
   Pencil,
+  Download,
+  HardDrive,
 } from 'lucide-react'
 import {
   isPushSupported,
@@ -28,7 +30,11 @@ import {
   DayRepository,
   CycleRepository,
   FormRepository,
+  SettingsRepository,
 } from '../../data/repositories'
+import { db } from '../../data/db'
+import { downloadOrShareFile } from '../../core/export'
+import { exportFullBackupZip, getBackupStatus, type BackupStatusInfo } from '../../core/fullBackup'
 import { importFormPack } from '../../data/formPack/importer'
 import starterPackRaw from '../../content/starter-form-pack.json'
 import { loadCharacterPreference } from '../../characters/registry'
@@ -82,6 +88,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isPreCloseDismissed, setIsPreCloseDismissed] = useState(false)
   const [isSundayPromptDismissed, setIsSundayPromptDismissed] = useState(false)
   const [showFirstNightPrompt, setShowFirstNightPrompt] = useState(false)
+  const [backupStatus, setBackupStatus] = useState<BackupStatusInfo | null>(null)
+  const [isBackupNudgeDismissed, setIsBackupNudgeDismissed] = useState(false)
+  const [isBackingUp, setIsBackingUp] = useState(false)
 
   // Modals & Sheets
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -104,6 +113,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const dayRepo = new DayRepository()
   const cycleRepo = new CycleRepository()
   const formRepo = new FormRepository()
+  const settingsRepo = new SettingsRepository()
 
   const startHour = appSettings?.windowStartHour ?? DEFAULT_WINDOW.startHour
   const endHour = appSettings?.windowEndHour ?? DEFAULT_WINDOW.endHour
@@ -218,7 +228,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const currentActiveCycle = await cycleRepo.getActiveCycle()
     setActiveCycle(currentActiveCycle)
 
-    // 6. Greetings Engine
+    // 6. Greetings Engine & Honest Backup Status (B3)
     try {
       const { context, dateStr } = await buildGreetingContext(now)
       setLoggingStreak(context.loggingStreak)
@@ -226,6 +236,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setGreetingText(greeting.text)
     } catch {
       setGreetingText('Welcome back.')
+    }
+
+    try {
+      setBackupStatus(await getBackupStatus(db))
+    } catch {
+      // Ignore status errors
+    }
+  }
+
+  const handleHomeBackupNow = async () => {
+    setIsBackingUp(true)
+    try {
+      const { filename, blob } = await exportFullBackupZip(db)
+      const outcome = await downloadOrShareFile(filename, blob)
+      if (outcome === 'cancelled') {
+        showToast('Backup share cancelled')
+        return
+      }
+      await settingsRepo.setSetting('last_backup_timestamp', Date.now())
+      setBackupStatus(await getBackupStatus(db))
+      setIsBackupNudgeDismissed(false)
+      showToast('Verified full backup created!')
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to create backup')
+    } finally {
+      setIsBackingUp(false)
     }
   }
 
@@ -662,6 +698,63 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
           <ChevronRight size={16} className="text-[var(--color-ink-soft)] shrink-0" />
         </button>
+      )}
+
+      {/* Backup Nudge & Honest Backup Status (B3 / B4) */}
+      {backupStatus && (
+        backupStatus.shouldNudge && !isBackupNudgeDismissed ? (
+          <div className="p-3 bg-amber-500/10 border-2 border-amber-500/35 rounded-[var(--radius-m)] flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-700 shrink-0">
+                <HardDrive size={16} />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-amber-800">Back up your journal</h4>
+                <p className="text-[11px] text-[var(--color-ink-soft)]">
+                  {backupStatus.lastBackupDate
+                    ? `Last backup: ${backupStatus.lastBackupDate}, ${backupStatus.nightsSinceBackup} night${backupStatus.nightsSinceBackup === 1 ? '' : 's'} since`
+                    : `No backup yet · ${backupStatus.totalActiveDays} night${backupStatus.totalActiveDays === 1 ? '' : 's'} saved locally`}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1 shrink-0">
+              <button
+                type="button"
+                disabled={isBackingUp}
+                onClick={handleHomeBackupNow}
+                className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold hover:opacity-90 flex items-center gap-1 disabled:opacity-50"
+              >
+                <Download size={12} />
+                <span>{isBackingUp ? 'Verifying...' : 'Back up now'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBackupNudgeDismissed(true)}
+                className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]"
+                title="Dismiss reminder"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-3 py-2 rounded-[var(--radius-m)] bg-[var(--color-surface)] border border-[var(--color-line)] flex items-center justify-between text-[11px] text-[var(--color-ink-soft)]">
+            <span className="flex items-center gap-1.5">
+              <HardDrive size={12} className="text-[var(--color-accent)] shrink-0" />
+              {backupStatus.lastBackupDate
+                ? `Last backup: ${backupStatus.lastBackupDate}, ${backupStatus.nightsSinceBackup} night${backupStatus.nightsSinceBackup === 1 ? '' : 's'} since`
+                : 'Last backup: Never backed up'}
+            </span>
+            <button
+              type="button"
+              disabled={isBackingUp}
+              onClick={handleHomeBackupNow}
+              className="font-semibold text-[var(--color-accent)] hover:underline disabled:opacity-50"
+            >
+              {isBackingUp ? 'Verifying...' : 'Back up now'}
+            </button>
+          </div>
+        )
       )}
 
       {/* Nightly Form Modal */}

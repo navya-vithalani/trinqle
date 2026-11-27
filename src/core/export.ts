@@ -50,7 +50,7 @@ function hasValidRasterSignature(bytes: Uint8Array, mime: string): boolean {
   return false
 }
 
-function validateImportedImageBinary(bytes: Uint8Array, mime: string, label: string, maxBytes: number): void {
+export function validateImportedImageBinary(bytes: Uint8Array, mime: string, label: string, maxBytes: number): void {
   const normalized = mime.toLowerCase()
   if (!ALLOWED_IMAGE_MIMES.has(normalized)) {
     throw new Error(`Unsupported image MIME type (${mime}) for ${label}`)
@@ -63,14 +63,14 @@ function validateImportedImageBinary(bytes: Uint8Array, mime: string, label: str
   }
 }
 
-function assertObjectRecord(val: unknown, label: string): Record<string, unknown> {
+export function assertObjectRecord(val: unknown, label: string): Record<string, unknown> {
   if (!val || typeof val !== 'object' || Array.isArray(val)) {
     throw new Error(`Invalid ${label} structure in archive`)
   }
   return val as Record<string, unknown>
 }
 
-function assertArrayRecords(val: unknown, label: string): unknown[] {
+export function assertArrayRecords(val: unknown, label: string): unknown[] {
   if (!Array.isArray(val)) {
     throw new Error(`Invalid ${label} list in archive`)
   }
@@ -79,14 +79,14 @@ function assertArrayRecords(val: unknown, label: string): unknown[] {
 
 export interface ChapterManifest {
   formatVersion: number
-  kind: 'chapter' | 'backup'
+  kind: 'chapter' | 'backup' | 'full_backup'
   chapterId: string
   exportedAt: number
   filesCount: number
   photoMeta?: { name: string; mime: string }[]
 }
 
-function extensionForMime(mime: string): string {
+export function extensionForMime(mime: string): string {
   const m = mime.toLowerCase()
   if (m.includes('png')) return 'png'
   if (m.includes('jpeg') || m.includes('jpg')) return 'jpg'
@@ -94,7 +94,7 @@ function extensionForMime(mime: string): string {
   return 'webp'
 }
 
-function mimeForFilename(name: string): string {
+export function mimeForFilename(name: string): string {
   const lower = name.toLowerCase()
   if (lower.endsWith('.png')) return 'image/png'
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
@@ -267,6 +267,7 @@ export async function exportChapterZip(
   ]
 
   const zipBytes = createZipArchive(files)
+  await verifyChapterZipBytes(zipBytes)
   const zipBlob = new Blob([zipBytes.buffer as ArrayBuffer], { type: 'application/zip' })
   const safeTitle = (chapter.title || `Chapter_${chapter.id.slice(0, 8)}`)
     .toLowerCase()
@@ -277,9 +278,22 @@ export async function exportChapterZip(
 }
 
 /**
- * Triggers native share sheet or downloads the blob to device.
+ * Dry-run verifies a generated chapter ZIP archive before sharing or saving.
  */
-export async function downloadOrShareFile(filename: string, blob: Blob): Promise<void> {
+export async function verifyChapterZipBytes(zipBytes: Uint8Array): Promise<ChapterZipPreview> {
+  return inspectChapterZip(zipBytes)
+}
+
+export type DownloadOrShareOutcome = 'shared' | 'downloaded' | 'cancelled'
+
+/**
+ * Triggers native share sheet or downloads the blob to device.
+ * Returns 'cancelled' if the user aborted the share sheet (so backup timestamps stay honest).
+ */
+export async function downloadOrShareFile(
+  filename: string,
+  blob: Blob
+): Promise<DownloadOrShareOutcome> {
   const file = new File([blob], filename, { type: blob.type })
 
   // Check Web Share API with files support
@@ -292,11 +306,14 @@ export async function downloadOrShareFile(filename: string, blob: Blob): Promise
       await navigator.share({
         files: [file],
         title: filename,
-        text: 'Trinqle Chapter Export',
+        text: 'Trinqle Backup Export',
       })
-      return
-    } catch (err: any) {
-      if (err.name === 'AbortError') return
+      return 'shared'
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError') {
+        return 'cancelled'
+      }
+      // Fall through to anchor download if share failed for another reason
     }
   }
 
@@ -308,7 +325,8 @@ export async function downloadOrShareFile(filename: string, blob: Blob): Promise
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return 'downloaded'
 }
 
 export interface ChapterZipPreview {
