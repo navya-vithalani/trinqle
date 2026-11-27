@@ -231,6 +231,16 @@ describe('Notifications & Push API Hardening (S1-S5)', () => {
       kvUrl: 'https://example-upstash.upstash.io',
       kvToken: 'upstash-token-123',
     })
+
+    // Verify custom Vercel Storage prefix (e.g. PUSH_KV_REST_API_*) resolves cleanly
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    process.env.PUSH_KV_REST_API_URL = 'https://push-kv.upstash.io/'
+    process.env.PUSH_KV_REST_API_TOKEN = 'push-token-456'
+    expect(getKvConfig()).toEqual({
+      kvUrl: 'https://push-kv.upstash.io',
+      kvToken: 'push-token-456',
+    })
   })
 
   it('extractResponseError surfaces both JSON errors and non-JSON 500 server crash bodies', async () => {

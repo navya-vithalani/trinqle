@@ -6,7 +6,7 @@ export const MAX_SUBSCRIPTIONS = 500
 export class KvUnavailableError extends Error {
   status = 503
   constructor(
-    message = 'Subscription storage is not configured on the server: set KV_REST_API_URL + KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN).'
+    message = 'Subscription storage is not configured on the server: set KV_REST_API_URL + KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_* / <PREFIX>_KV_REST_API_*).'
   ) {
     super(message)
   }
@@ -29,12 +29,32 @@ function isMemoryStoreAllowed(): boolean {
   )
 }
 
-export function getKvConfig(): { kvUrl: string; kvToken: string } | null {
-  const kvUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)?.trim()
-  const kvToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)?.trim()
+function resolveEnvPair(urlKey: string, tokenKey: string): { kvUrl: string; kvToken: string } | null {
+  const kvUrl = process.env[urlKey]?.trim()
+  const kvToken = process.env[tokenKey]?.trim()
   if (kvUrl && kvToken) {
     return { kvUrl: kvUrl.replace(/\/+$/, ''), kvToken }
   }
+  return null
+}
+
+export function getKvConfig(): { kvUrl: string; kvToken: string } | null {
+  const direct =
+    resolveEnvPair('KV_REST_API_URL', 'KV_REST_API_TOKEN') ||
+    resolveEnvPair('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN') ||
+    resolveEnvPair('PUSH_KV_REST_API_URL', 'PUSH_KV_REST_API_TOKEN') ||
+    resolveEnvPair('PUSH_UPSTASH_REDIS_REST_URL', 'PUSH_UPSTASH_REDIS_REST_TOKEN')
+  if (direct) return direct
+
+  // Support any custom Vercel Storage prefix (e.g. MYSTORE_KV_REST_API_URL + MYSTORE_KV_REST_API_TOKEN)
+  for (const key of Object.keys(process.env).sort()) {
+    if (key.endsWith('_KV_REST_API_URL')) {
+      const prefix = key.slice(0, -'_KV_REST_API_URL'.length)
+      const matched = resolveEnvPair(`${prefix}_KV_REST_API_URL`, `${prefix}_KV_REST_API_TOKEN`)
+      if (matched) return matched
+    }
+  }
+
   if (!isMemoryStoreAllowed()) {
     throw new KvUnavailableError()
   }
