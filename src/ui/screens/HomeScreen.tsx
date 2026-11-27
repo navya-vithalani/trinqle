@@ -16,8 +16,9 @@ import {
 import {
   isPushSupported,
   getNotificationPermission,
+  loadNotificationPrefs,
   subscribeDeviceToPush,
-  DEFAULT_VAPID_PUBLIC_KEY,
+  syncChapterPlannedEndDate,
 } from '../../core/notifications/client'
 import { NightlyFormModal } from '../form/NightlyFormModal'
 import { ImportDialog } from '../dialogs/ImportDialog'
@@ -152,6 +153,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       allChapters.findIndex((c) => c.id === chapter?.id) + 1 || allChapters.length || 1
     setAllChaptersCount(currentChapterIdx)
     setActiveChapter(chapter)
+    void syncChapterPlannedEndDate(chapter.plannedEndDate)
 
     if (isChapterHardLocked(chapter, todayStr)) {
       setIsChapterGateOpen(true)
@@ -262,6 +264,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       todayStr
     )
     setActiveChapter(updated)
+    void syncChapterPlannedEndDate(updated.plannedEndDate)
     showToast('Chapter end date updated!')
     loadState()
   }
@@ -780,7 +783,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     // Ignore
                   }
                   setShowFirstNightPrompt(false)
-                  const res = await subscribeDeviceToPush(DEFAULT_VAPID_PUBLIC_KEY)
+                  const res = await subscribeDeviceToPush(undefined, {
+                    ...loadNotificationPrefs(),
+                    chapterPlannedEndDate: activeChapter?.plannedEndDate,
+                  })
                   if (res.success) {
                     showToast(`Daily reminder set for ${formatTimeByPreference(windowStartStr, timeFormat)}`)
                   } else {

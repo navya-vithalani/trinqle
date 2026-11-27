@@ -211,8 +211,11 @@ export async function sendWebPushNotification(
   subscription: PushSubscriptionData,
   payload: GenericNotificationPayload,
   vapidKeys: VapidKeys,
-  vapidSubject = 'mailto:hello@trinqle.app'
+  vapidSubject: string
 ): Promise<{ status: number; success: boolean; error?: string }> {
+  if (!vapidSubject || (!vapidSubject.startsWith('mailto:') && !vapidSubject.startsWith('https://'))) {
+    throw new Error('VAPID_SUBJECT must be set to a mailto: or https:// URI')
+  }
   const url = new URL(subscription.endpoint)
   const audience = `${url.protocol}//${url.host}`
 

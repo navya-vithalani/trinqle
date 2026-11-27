@@ -1,54 +1,68 @@
 import type { IncomingMessage, ServerResponse } from 'http'
 import { subscriptionStore } from './kv'
+import {
+  extractBearerToken,
+  readJsonBody,
+  sendEndpointError,
+  sendJson,
+  verifyManageToken,
+} from './_utils'
+import {
+  sanitizeNotificationPrefs,
+  validatePushEndpoint,
+  validateTimeZone,
+} from '../src/core/notifications/validation'
 
-export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   if (req.method !== 'POST') {
-    res.statusCode = 405
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Method not allowed' }))
+    sendJson(res, 405, { error: 'Method not allowed' })
     return
   }
 
   try {
-    let bodyData: any = req.body
+    const bodyData = await readJsonBody(req)
+    const endpointCheck = validatePushEndpoint(bodyData.endpoint)
+    if (!endpointCheck.ok) {
+      sendJson(res, 400, { error: endpointCheck.error })
+      return
+    }
 
-    if (!bodyData) {
-      const chunks: Buffer[] = []
-      for await (const chunk of req) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    const token = extractBearerToken(req, bodyData.manageToken)
+    if (!token) {
+      sendJson(res, 401, { error: 'Authorization token required' })
+      return
+    }
+
+    let validatedTz: string | undefined
+    if (bodyData.tz !== undefined) {
+      const tzCheck = validateTimeZone(bodyData.tz)
+      if (!tzCheck.ok) {
+        sendJson(res, 400, { error: tzCheck.error })
+        return
       }
-      const raw = Buffer.concat(chunks).toString('utf8')
-      bodyData = raw ? JSON.parse(raw) : {}
+      validatedTz = tzCheck.value
     }
 
-    const { endpoint, tz, prefs } = bodyData
-
-    if (!endpoint || !prefs) {
-      res.statusCode = 400
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Missing endpoint or prefs' }))
+    const prefsCheck = sanitizeNotificationPrefs(bodyData.prefs, { partial: true })
+    if (!prefsCheck.ok) {
+      sendJson(res, 400, { error: prefsCheck.error })
       return
     }
 
-    const updated = await subscriptionStore.updatePrefs(endpoint, prefs, tz)
-
-    if (!updated) {
-      res.statusCode = 404
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Subscription not found' }))
+    const existing = await subscriptionStore.get(endpointCheck.value)
+    if (!existing) {
+      sendJson(res, 404, { error: 'Subscription not found' })
       return
     }
 
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ success: true }))
+    if (!verifyManageToken(token, existing.manageTokenHash)) {
+      sendJson(res, 401, { error: 'Invalid manage token' })
+      return
+    }
+
+    await subscriptionStore.updatePrefs(endpointCheck.value, prefsCheck.value, validatedTz)
+    sendJson(res, 200, { success: true })
   } catch (err: unknown) {
-    res.statusCode = 500
-    res.setHeader('Content-Type', 'application/json')
-    res.end(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal server error',
-      })
-    )
+    sendEndpointError(res, err)
   }
 }

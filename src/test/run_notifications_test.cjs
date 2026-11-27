@@ -30,10 +30,13 @@ async function run() {
     throw new Error(`Base64URL roundtrip mismatch: expected "${testStr}", got "${decoded}"`)
   }
 
-  const mockPublic = 'BFZvPtD4Cfa57rkA2P4PCQpR70NRK5n4eP2Q3hlTvYs5EGc_nr9-N0RvxAPxoggbHQo1SnBRDCFiAxNIlVEs7FM'
-  const mockPrivate = 'KfwtkSc0cWuZFQGbaPw6U_o9vEq7R34COpZP5cO5f-Q'
+  const crypto = require('crypto')
+  const serverEcdh = crypto.createECDH('prime256v1')
+  serverEcdh.generateKeys()
+  const mockPublic = serverEcdh.getPublicKey().toString('base64url')
+  const mockPrivate = serverEcdh.getPrivateKey().toString('base64url')
   const audience = 'https://fcm.googleapis.com'
-  const subject = 'mailto:hello@trinqle.app'
+  const subject = 'mailto:test@example.com'
 
   const authHeader = generateVapidAuthHeader(audience, subject, mockPublic, mockPrivate)
   if (!authHeader.startsWith('vapid t=') || !authHeader.includes(', k=')) {
@@ -58,7 +61,6 @@ async function run() {
 
   // --- Test 2: RFC 8291 aes128gcm Payload Encryption ---
   console.log('\n--- Test 2: RFC 8291 Payload Encryption ---')
-  const crypto = require('crypto')
   const clientEcdh = crypto.createECDH('prime256v1')
   clientEcdh.generateKeys()
   const mockClientKey = uint8ArrayToUrlBase64(clientEcdh.getPublicKey())

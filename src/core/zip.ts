@@ -240,8 +240,14 @@ async function inflateRawBytes(compressed: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(zlib.inflateRawSync(compressed))
 }
 
+export const MAX_ZIP_ENTRIES = 2000
+export const MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
+export const MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+export const MAX_ZIP_COMPRESSION_RATIO = 50
+
 /**
- * Async ZIP reader supporting both Store (method 0) and Deflate (method 8).
+ * Async ZIP reader supporting both Store (method 0) and Deflate (method 8),
+ * with zip-bomb limits on entry count, per-entry size, total inflated bytes, and ratio.
  */
 export async function readZipArchiveAsync(data: Uint8Array): Promise<ExtractedZipFile[]> {
   const decoder = new TextDecoder()
@@ -262,10 +268,11 @@ export async function readZipArchiveAsync(data: Uint8Array): Promise<ExtractedZi
 
   const totalEntries = view.getUint16(eocdOffset + 10, true)
   const cdOffset = view.getUint32(eocdOffset + 16, true)
-  if (totalEntries > 5000) {
-    throw new Error('ZIP archive exceeds maximum allowed entry count')
+  if (totalEntries > MAX_ZIP_ENTRIES) {
+    throw new Error(`ZIP archive exceeds maximum allowed entry count (${MAX_ZIP_ENTRIES})`)
   }
 
+  let totalUncompressedBytes = 0
   let cursor = cdOffset
   for (let i = 0; i < totalEntries; i++) {
     if (cursor + 46 > data.length) break
@@ -293,8 +300,8 @@ export async function readZipArchiveAsync(data: Uint8Array): Promise<ExtractedZi
       throw new Error(`Unsafe ZIP entry path rejected: ${filename}`)
     }
 
-    if (cdUncompSize > 50 * 1024 * 1024) {
-      throw new Error(`ZIP entry ${filename} exceeds 50 MB limit`)
+    if (cdUncompSize > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES) {
+      throw new Error(`ZIP entry ${filename} exceeds 25 MB limit`)
     }
 
     if (localOffset + 30 <= data.length && view.getUint32(localOffset, true) === 0x04034b50) {
@@ -317,6 +324,19 @@ export async function readZipArchiveAsync(data: Uint8Array): Promise<ExtractedZi
         fileBytes = await inflateRawBytes(rawBytes)
       } else {
         throw new Error(`Unsupported ZIP compression method (${compMethod}) for ${filename}`)
+      }
+
+      if (fileBytes.length > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES) {
+        throw new Error(`ZIP entry ${filename} inflated beyond 25 MB limit`)
+      }
+
+      if (compMethod === 8 && fileBytes.length > Math.max(4096, rawBytes.length * MAX_ZIP_COMPRESSION_RATIO)) {
+        throw new Error(`Suspicious compression ratio (zip bomb guard) for ${filename}`)
+      }
+
+      totalUncompressedBytes += fileBytes.length
+      if (totalUncompressedBytes > MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES) {
+        throw new Error('ZIP archive exceeds 100 MB total uncompressed limit')
       }
 
       files.push({

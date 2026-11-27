@@ -1,47 +1,48 @@
 import type { IncomingMessage, ServerResponse } from 'http'
 import { subscriptionStore } from './kv'
+import {
+  extractBearerToken,
+  readJsonBody,
+  sendEndpointError,
+  sendJson,
+  verifyManageToken,
+} from './_utils'
+import { validatePushEndpoint } from '../src/core/notifications/validation'
 
-export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   if (req.method !== 'POST') {
-    res.statusCode = 405
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Method not allowed' }))
+    sendJson(res, 405, { error: 'Method not allowed' })
     return
   }
 
   try {
-    let bodyData: any = req.body
-
-    if (!bodyData) {
-      const chunks: Buffer[] = []
-      for await (const chunk of req) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
-      }
-      const raw = Buffer.concat(chunks).toString('utf8')
-      bodyData = raw ? JSON.parse(raw) : {}
-    }
-
-    const { endpoint } = bodyData
-
-    if (!endpoint || typeof endpoint !== 'string') {
-      res.statusCode = 400
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Missing endpoint' }))
+    const bodyData = await readJsonBody(req)
+    const endpointCheck = validatePushEndpoint(bodyData.endpoint)
+    if (!endpointCheck.ok) {
+      sendJson(res, 400, { error: endpointCheck.error })
       return
     }
 
-    await subscriptionStore.remove(endpoint)
+    const token = extractBearerToken(req, bodyData.manageToken)
+    if (!token) {
+      sendJson(res, 401, { error: 'Authorization token required' })
+      return
+    }
 
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ success: true }))
+    const existing = await subscriptionStore.get(endpointCheck.value)
+    if (!existing) {
+      sendJson(res, 404, { error: 'Subscription not found' })
+      return
+    }
+
+    if (!verifyManageToken(token, existing.manageTokenHash)) {
+      sendJson(res, 401, { error: 'Invalid manage token' })
+      return
+    }
+
+    await subscriptionStore.remove(endpointCheck.value)
+    sendJson(res, 200, { success: true })
   } catch (err: unknown) {
-    res.statusCode = 500
-    res.setHeader('Content-Type', 'application/json')
-    res.end(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal server error',
-      })
-    )
+    sendEndpointError(res, err)
   }
 }

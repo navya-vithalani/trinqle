@@ -12,6 +12,70 @@ import type {
 } from '../data/types'
 import { createZipArchive, readZipArchiveAsync, type ZipFileInput } from './zip'
 import { buildDailyMetricsTable } from './metrics'
+import { sanitizeSvg } from '../characters/sanitizer'
+
+const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const MAX_IMPORT_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_IMPORT_STICKER_BYTES = 2 * 1024 * 1024
+
+function hasValidRasterSignature(bytes: Uint8Array, mime: string): boolean {
+  if (bytes.length < 12) return false
+  const m = mime.toLowerCase()
+  if (m === 'image/png') {
+    return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  }
+  if (m === 'image/jpeg') {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  }
+  if (m === 'image/gif') {
+    return (
+      bytes[0] === 0x47 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x38
+    )
+  }
+  if (m === 'image/webp') {
+    return (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    )
+  }
+  return false
+}
+
+function validateImportedImageBinary(bytes: Uint8Array, mime: string, label: string, maxBytes: number): void {
+  const normalized = mime.toLowerCase()
+  if (!ALLOWED_IMAGE_MIMES.has(normalized)) {
+    throw new Error(`Unsupported image MIME type (${mime}) for ${label}`)
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
+    throw new Error(`Image ${label} size is invalid or exceeds limit`)
+  }
+  if (!hasValidRasterSignature(bytes, normalized)) {
+    throw new Error(`Image ${label} file signature does not match ${normalized}`)
+  }
+}
+
+function assertObjectRecord(val: unknown, label: string): Record<string, unknown> {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) {
+    throw new Error(`Invalid ${label} structure in archive`)
+  }
+  return val as Record<string, unknown>
+}
+
+function assertArrayRecords(val: unknown, label: string): unknown[] {
+  if (!Array.isArray(val)) {
+    throw new Error(`Invalid ${label} list in archive`)
+  }
+  return val
+}
 
 export interface ChapterManifest {
   formatVersion: number
@@ -273,8 +337,8 @@ export async function inspectChapterZip(zipData: Uint8Array): Promise<ChapterZip
   const manifestStr = textMap.get('manifest.json')
   if (!manifestStr) throw new Error('Invalid archive: manifest.json missing')
   const manifest = JSON.parse(manifestStr) as ChapterManifest
-  if (manifest.formatVersion !== 1) {
-    throw new Error(`Unsupported formatVersion: ${manifest.formatVersion}`)
+  if (manifest.formatVersion !== 1 || (manifest.kind !== 'chapter' && manifest.kind !== 'backup')) {
+    throw new Error(`Unsupported or invalid manifest formatVersion: ${manifest.formatVersion}`)
   }
 
   const chapterStr = textMap.get('chapter.json')
@@ -284,9 +348,13 @@ export async function inspectChapterZip(zipData: Uint8Array): Promise<ChapterZip
     throw new Error('Corrupted archive: missing essential JSON data files')
   }
 
-  const chapter = JSON.parse(chapterStr) as Chapter
-  const days = JSON.parse(daysStr) as Day[]
-  const answers = JSON.parse(answersStr) as Answer[]
+  const chapterObj = assertObjectRecord(JSON.parse(chapterStr), 'chapter.json')
+  if (typeof chapterObj.id !== 'string' || typeof chapterObj.startDate !== 'string') {
+    throw new Error('Invalid chapter metadata in chapter.json')
+  }
+  const chapter = chapterObj as unknown as Chapter
+  const days = assertArrayRecords(JSON.parse(daysStr), 'days.json') as Day[]
+  const answers = assertArrayRecords(JSON.parse(answersStr), 'answers.json') as Answer[]
   const chapterAnswersStr = textMap.get('chapterAnswers.json')
   const cyclesStr = textMap.get('cycles.json')
   const photoFiles = extractedFiles.filter((f) => f.name.startsWith('images/'))
@@ -297,8 +365,12 @@ export async function inspectChapterZip(zipData: Uint8Array): Promise<ChapterZip
     daysCount: days.length,
     answersCount: answers.length,
     photosCount: photoFiles.length,
-    chapterAnswersCount: chapterAnswersStr ? (JSON.parse(chapterAnswersStr) as ChapterAnswer[]).length : 0,
-    cyclesCount: cyclesStr ? (JSON.parse(cyclesStr) as Cycle[]).length : 0,
+    chapterAnswersCount: chapterAnswersStr
+      ? (assertArrayRecords(JSON.parse(chapterAnswersStr), 'chapterAnswers.json') as ChapterAnswer[]).length
+      : 0,
+    cyclesCount: cyclesStr
+      ? (assertArrayRecords(JSON.parse(cyclesStr), 'cycles.json') as Cycle[]).length
+      : 0,
   }
 }
 
@@ -328,7 +400,7 @@ export async function importChapterZip(
   }
 
   const manifest = JSON.parse(manifestStr) as ChapterManifest
-  if (manifest.formatVersion !== 1) {
+  if (manifest.formatVersion !== 1 || (manifest.kind !== 'chapter' && manifest.kind !== 'backup')) {
     throw new Error(`Unsupported formatVersion: ${manifest.formatVersion}`)
   }
 
@@ -345,10 +417,14 @@ export async function importChapterZip(
     throw new Error('Corrupted archive: missing essential JSON data files')
   }
 
-  const chapter = JSON.parse(chapterStr) as Chapter & { photosCount?: number }
+  const chapterRaw = assertObjectRecord(JSON.parse(chapterStr), 'chapter.json')
+  if (typeof chapterRaw.id !== 'string' || typeof chapterRaw.startDate !== 'string') {
+    throw new Error('Invalid chapter record in archive')
+  }
+  const chapter = chapterRaw as unknown as Chapter & { photosCount?: number }
   delete chapter.photosCount
-  const days = JSON.parse(daysStr) as Day[]
-  const answers = JSON.parse(answersStr) as Answer[]
+  const days = assertArrayRecords(JSON.parse(daysStr), 'days.json') as Day[]
+  const answers = assertArrayRecords(JSON.parse(answersStr), 'answers.json') as Answer[]
 
   const existingChapter = await db.chapters.get(chapter.id)
   if (options?.conflictMode === 'skip' && existingChapter && !existingChapter.deletedAt) {
@@ -360,12 +436,13 @@ export async function importChapterZip(
     }
   }
 
-  // Rehydrate photos as typed Blobs
+  // Validate and rehydrate photos before touching DB
   const photoBlobs: Blob[] = []
   if (manifest.photoMeta && manifest.photoMeta.length > 0) {
     for (const pm of manifest.photoMeta) {
       const bytes = binaryMap.get(pm.name)
       if (bytes) {
+        validateImportedImageBinary(bytes, pm.mime, pm.name, MAX_IMPORT_IMAGE_BYTES)
         photoBlobs.push(new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], { type: pm.mime }))
       }
     }
@@ -375,10 +452,68 @@ export async function importChapterZip(
       .sort((a, b) => a.name.localeCompare(b.name))
     for (const f of imgEntries) {
       const mime = mimeForFilename(f.name)
+      validateImportedImageBinary(f.content, mime, f.name, MAX_IMPORT_IMAGE_BYTES)
       photoBlobs.push(new Blob([f.content.buffer.slice(f.content.byteOffset, f.content.byteOffset + f.content.byteLength) as ArrayBuffer], { type: mime }))
     }
   }
   chapter.photos = photoBlobs
+
+  // Validate & re-sanitize optional tables BEFORE opening write transaction
+  const parsedLibraries = librariesStr
+    ? assertObjectRecord(JSON.parse(librariesStr), 'libraries.json')
+    : null
+  const parsedChapterAnswers = chapterAnswersStr
+    ? (assertArrayRecords(JSON.parse(chapterAnswersStr), 'chapterAnswers.json') as ChapterAnswer[])
+    : null
+  const parsedCycles = cyclesStr
+    ? (assertArrayRecords(JSON.parse(cyclesStr), 'cycles.json') as Cycle[])
+    : null
+  const parsedInsightsBundle = insightsStr
+    ? (assertObjectRecord(JSON.parse(insightsStr), 'insights.json') as { runs?: Run[]; insights?: Insight[] })
+    : null
+
+  const validatedStickers: Sticker[] = []
+  if (stickersStr) {
+    const importedStickers = assertArrayRecords(JSON.parse(stickersStr), 'stickers.json') as Array<
+      Omit<Sticker, 'blob'> & { blob?: string; fileRef?: string }
+    >
+    for (const st of importedStickers) {
+      let resolvedBlob: Blob | string | undefined = st.blob
+      const isSvgSticker =
+        st.mime?.toLowerCase().includes('svg') ||
+        (typeof st.blob === 'string' && st.blob.trim().startsWith('<svg'))
+
+      if (st.fileRef && binaryMap.has(st.fileRef)) {
+        const b = binaryMap.get(st.fileRef)!
+        const targetMime = (st.mime || mimeForFilename(st.fileRef)).toLowerCase()
+        if (targetMime.includes('svg')) {
+          const decoded = new TextDecoder().decode(b)
+          const san = sanitizeSvg(decoded)
+          if (!san.valid) {
+            throw new Error(`Invalid SVG sticker in archive (${st.name}): ${san.error}`)
+          }
+          resolvedBlob = san.cleanSvg
+        } else {
+          validateImportedImageBinary(b, targetMime, st.fileRef, MAX_IMPORT_STICKER_BYTES)
+          resolvedBlob = new Blob(
+            [b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer],
+            { type: targetMime }
+          )
+        }
+      } else if (isSvgSticker && typeof st.blob === 'string') {
+        const rawSvg = st.blob.startsWith('data:image/svg+xml')
+          ? decodeURIComponent(st.blob.replace(/^data:image\/svg\+xml(?:;utf8|,|;base64,)?/i, ''))
+          : st.blob
+        const san = sanitizeSvg(rawSvg)
+        if (!san.valid) {
+          throw new Error(`Unsafe SVG sticker rejected on import (${st.name}): ${san.error}`)
+        }
+        resolvedBlob = san.cleanSvg
+      }
+      const { fileRef: _ignored, ...clean } = st
+      validatedStickers.push({ ...clean, blob: resolvedBlob })
+    }
+  }
 
   await db.runBypassingClosedGuard(() =>
     db.transaction(
@@ -409,8 +544,12 @@ export async function importChapterZip(
       }
 
       // 3. Merge Libraries, Items (by id then normalized name), and AnswerLinks
-      if (librariesStr) {
-        const libData = JSON.parse(librariesStr)
+      if (parsedLibraries) {
+        const libData = parsedLibraries as {
+          libraries?: any[]
+          items?: any[]
+          answerLinks?: any[]
+        }
         if (libData.libraries) {
           for (const l of libData.libraries) {
             const existing = await db.libraries.get(l.id)
@@ -444,37 +583,23 @@ export async function importChapterZip(
         }
       }
 
-      // 4. Put ChapterAnswers, Cycles, Insights/Runs, and Custom Stickers
-      if (chapterAnswersStr) {
-        const cas = JSON.parse(chapterAnswersStr) as ChapterAnswer[]
-        if (cas.length > 0) await db.chapterAnswers.bulkPut(cas)
+      // 4. Put ChapterAnswers, Cycles, Insights/Runs, and Re-Sanitized Stickers
+      if (parsedChapterAnswers && parsedChapterAnswers.length > 0) {
+        await db.chapterAnswers.bulkPut(parsedChapterAnswers)
       }
-      if (cyclesStr) {
-        const cyc = JSON.parse(cyclesStr) as Cycle[]
-        if (cyc.length > 0) await db.cycles.bulkPut(cyc)
+      if (parsedCycles && parsedCycles.length > 0) {
+        await db.cycles.bulkPut(parsedCycles)
       }
-      if (insightsStr) {
-        const insBundle = JSON.parse(insightsStr) as { runs?: Run[]; insights?: Insight[] }
-        if (insBundle.runs && insBundle.runs.length > 0) {
-          await db.runs.bulkPut(insBundle.runs)
+      if (parsedInsightsBundle) {
+        if (parsedInsightsBundle.runs && parsedInsightsBundle.runs.length > 0) {
+          await db.runs.bulkPut(parsedInsightsBundle.runs)
         }
-        if (insBundle.insights && insBundle.insights.length > 0) {
-          await db.insights.bulkPut(insBundle.insights)
+        if (parsedInsightsBundle.insights && parsedInsightsBundle.insights.length > 0) {
+          await db.insights.bulkPut(parsedInsightsBundle.insights)
         }
       }
-      if (stickersStr) {
-        const importedStickers = JSON.parse(stickersStr) as Array<
-          Omit<Sticker, 'blob'> & { blob?: string; fileRef?: string }
-        >
-        for (const st of importedStickers) {
-          let resolvedBlob: Blob | string | undefined = st.blob
-          if (st.fileRef && binaryMap.has(st.fileRef)) {
-            const b = binaryMap.get(st.fileRef)!
-            resolvedBlob = new Blob([b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer], { type: st.mime || 'image/png' })
-          }
-          const { fileRef: _ignored, ...clean } = st
-          await db.stickers.put({ ...clean, blob: resolvedBlob })
-        }
+      if (validatedStickers.length > 0) {
+        await db.stickers.bulkPut(validatedStickers)
       }
       }
     )

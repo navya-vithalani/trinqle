@@ -6,10 +6,20 @@ import { DEFAULT_NOTIFICATION_PREFS } from './types'
 import { urlBase64ToUint8Array } from './vapid'
 
 const PREFS_STORAGE_KEY = 'trinqle_notification_prefs'
+const MANAGE_TOKEN_STORAGE_KEY = 'trinqle_push_manage_token'
+const VAPID_KEY_USED_STORAGE_KEY = 'trinqle_vapid_public_key_used'
 
-export const DEFAULT_VAPID_PUBLIC_KEY =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_VAPID_PUBLIC_KEY) ||
-  'BFZvPtD4Cfa57rkA2P4PCQpR70NRK5n4eP2Q3hlTvYs5EGc_nr9-N0RvxAPxoggbHQo1SnBRDCFiAxNIlVEs7FM'
+/**
+ * Reads VITE_VAPID_PUBLIC_KEY and fails closed if unset (never falls back to a leaked key).
+ */
+export function getVapidPublicKey(): string {
+  const key =
+    typeof import.meta !== 'undefined' ? import.meta.env?.VITE_VAPID_PUBLIC_KEY?.trim() : ''
+  if (!key) {
+    throw new Error('VITE_VAPID_PUBLIC_KEY environment variable is not configured')
+  }
+  return key
+}
 
 export function isPushSupported(): boolean {
   return (
@@ -52,6 +62,65 @@ export function saveNotificationPrefs(prefs: NotificationPrefs): void {
   }
 }
 
+export function loadManageToken(): string | null {
+  try {
+    return localStorage.getItem(MANAGE_TOKEN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveManageToken(token: string): void {
+  try {
+    localStorage.setItem(MANAGE_TOKEN_STORAGE_KEY, token)
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearManageCredentials(): void {
+  try {
+    localStorage.removeItem(MANAGE_TOKEN_STORAGE_KEY)
+    localStorage.removeItem(VAPID_KEY_USED_STORAGE_KEY)
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function loadVapidPublicKeyUsed(): string | null {
+  try {
+    return localStorage.getItem(VAPID_KEY_USED_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveVapidPublicKeyUsed(key: string): void {
+  try {
+    localStorage.setItem(VAPID_KEY_USED_STORAGE_KEY, key)
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+async function extractResponseError(res: Response): Promise<string> {
+  const fallback = `Server responded with ${res.status}`
+  try {
+    const raw = await res.text()
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as { error?: unknown; message?: unknown }
+    if (typeof parsed.error === 'string' && parsed.error.trim()) {
+      return parsed.error
+    }
+    if (typeof parsed.message === 'string' && parsed.message.trim()) {
+      return parsed.message
+    }
+    return raw
+  } catch {
+    return fallback
+  }
+}
+
 export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null
   try {
@@ -66,11 +135,21 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
  * Subscribes the current device to Web Push and registers with /api/subscribe.
  */
 export async function subscribeDeviceToPush(
-  vapidPublicKey: string,
+  vapidPublicKey?: string,
   prefs: NotificationPrefs = loadNotificationPrefs()
 ): Promise<{ success: boolean; error?: string; subscription?: PushSubscriptionData }> {
   if (!isPushSupported()) {
     return { success: false, error: 'Web Push is not supported on this browser' }
+  }
+
+  let resolvedKey: string
+  try {
+    resolvedKey = vapidPublicKey?.trim() || getVapidPublicKey()
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Push notifications are not configured on this server',
+    }
   }
 
   const permission = await requestNotificationPermission()
@@ -80,12 +159,19 @@ export async function subscribeDeviceToPush(
 
   try {
     const registration = await navigator.serviceWorker.ready
-    const convertedKey = urlBase64ToUint8Array(vapidPublicKey)
+    const convertedKey = urlBase64ToUint8Array(resolvedKey)
 
-    const rawSub = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedKey as unknown as BufferSource,
-    })
+    const existingSub = await registration.pushManager.getSubscription()
+    if (existingSub && loadVapidPublicKeyUsed() !== resolvedKey) {
+      await existingSub.unsubscribe().catch(() => {})
+    }
+
+    const rawSub =
+      (await registration.pushManager.getSubscription()) ||
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey as unknown as BufferSource,
+      }))
 
     const subJson = rawSub.toJSON()
     if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
@@ -103,7 +189,6 @@ export async function subscribeDeviceToPush(
 
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
-    // Register with server API
     const response = await fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,10 +200,15 @@ export async function subscribeDeviceToPush(
     })
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      return { success: false, error: errText || `Server responded with ${response.status}` }
+      const msg = await extractResponseError(response)
+      return { success: false, error: msg }
     }
 
+    const payload = (await response.json().catch(() => ({}))) as { manageToken?: string }
+    if (typeof payload.manageToken === 'string' && payload.manageToken) {
+      saveManageToken(payload.manageToken)
+    }
+    saveVapidPublicKeyUsed(resolvedKey)
     saveNotificationPrefs(prefs)
     return { success: true, subscription: subData }
   } catch (err: unknown) {
@@ -130,6 +220,35 @@ export async function subscribeDeviceToPush(
 }
 
 /**
+ * Re-subscribes transparently when the configured VAPID public key rotated or
+ * the stored manage token is missing. Returns true if still subscribed.
+ */
+export async function reconcilePushSubscription(): Promise<boolean> {
+  const current = await getCurrentPushSubscription()
+  if (!current) return false
+
+  let configuredKey: string
+  try {
+    configuredKey = getVapidPublicKey()
+  } catch {
+    return false
+  }
+
+  const usedKey = loadVapidPublicKeyUsed()
+  const manageToken = loadManageToken()
+  if (usedKey === configuredKey && manageToken) {
+    return true
+  }
+
+  if (getNotificationPermission() !== 'granted') {
+    return false
+  }
+
+  const res = await subscribeDeviceToPush(configuredKey, loadNotificationPrefs())
+  return res.success
+}
+
+/**
  * Unsubscribes the current device from Web Push and removes from /api/unsubscribe.
  */
 export async function unsubscribeDeviceFromPush(): Promise<{ success: boolean; error?: string }> {
@@ -138,18 +257,25 @@ export async function unsubscribeDeviceFromPush(): Promise<{ success: boolean; e
   try {
     const registration = await navigator.serviceWorker.ready
     const rawSub = await registration.pushManager.getSubscription()
+    const manageToken = loadManageToken()
 
     if (rawSub) {
       const endpoint = rawSub.endpoint
       await rawSub.unsubscribe()
 
-      await fetch('/api/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint }),
-      }).catch(() => {})
+      if (manageToken) {
+        await fetch('/api/unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${manageToken}`,
+          },
+          body: JSON.stringify({ endpoint }),
+        }).catch(() => {})
+      }
     }
 
+    clearManageCredentials()
     return { success: true }
   } catch (err: unknown) {
     return {
@@ -170,12 +296,23 @@ export async function syncDevicePrefs(
   const sub = await getCurrentPushSubscription()
   if (!sub) return { success: true }
 
+  const manageToken = loadManageToken()
+  if (!manageToken) {
+    return {
+      success: false,
+      error: 'Push credentials outdated — please disable and re-enable notifications',
+    }
+  }
+
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
   try {
     const response = await fetch('/api/prefs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${manageToken}`,
+      },
       body: JSON.stringify({
         endpoint: sub.endpoint,
         tz,
@@ -184,7 +321,8 @@ export async function syncDevicePrefs(
     })
 
     if (!response.ok) {
-      return { success: false, error: 'Failed to update preferences on server' }
+      const msg = await extractResponseError(response)
+      return { success: false, error: msg }
     }
 
     return { success: true }
@@ -197,6 +335,28 @@ export async function syncDevicePrefs(
 }
 
 /**
+ * Keeps the active chapter's plannedEndDate synced in push preferences so chapter_ending alerts fire on time.
+ */
+export async function syncChapterPlannedEndDate(plannedEndDate?: string): Promise<void> {
+  const current = loadNotificationPrefs()
+  const normalized = plannedEndDate && /^\d{4}-\d{2}-\d{2}$/.test(plannedEndDate)
+    ? plannedEndDate
+    : undefined
+  if (current.chapterPlannedEndDate === normalized) return
+
+  const updated: NotificationPrefs = {
+    ...current,
+    chapterPlannedEndDate: normalized,
+  }
+  saveNotificationPrefs(updated)
+
+  const sub = await getCurrentPushSubscription()
+  if (sub && loadManageToken()) {
+    await syncDevicePrefs(updated).catch(() => {})
+  }
+}
+
+/**
  * Sends a test push notification to this device via /api/send.
  */
 export async function sendTestNotification(): Promise<{ success: boolean; error?: string }> {
@@ -205,10 +365,21 @@ export async function sendTestNotification(): Promise<{ success: boolean; error?
     return { success: false, error: 'No active push subscription on this device' }
   }
 
+  const manageToken = loadManageToken()
+  if (!manageToken) {
+    return {
+      success: false,
+      error: 'Push credentials outdated — please disable and re-enable notifications',
+    }
+  }
+
   try {
     const response = await fetch('/api/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${manageToken}`,
+      },
       body: JSON.stringify({
         test: true,
         endpoint: sub.endpoint,
@@ -216,8 +387,8 @@ export async function sendTestNotification(): Promise<{ success: boolean; error?
     })
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      return { success: false, error: errText || `Failed with status ${response.status}` }
+      const msg = await extractResponseError(response)
+      return { success: false, error: msg }
     }
 
     return { success: true }

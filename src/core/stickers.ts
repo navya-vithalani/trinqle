@@ -42,10 +42,27 @@ export const BUILTIN_STICKERS: StickerItem[] = [
 export function stickerRecordToItem(record: Sticker): StickerItem | null {
   let url = ''
   if (typeof record.blob === 'string') {
-    if (record.blob.startsWith('data:')) {
+    if (record.blob.startsWith('data:image/svg+xml')) {
+      if (typeof DOMParser !== 'undefined') {
+        const raw = decodeURIComponent(
+          record.blob.replace(/^data:image\/svg\+xml(?:;utf8|,|;charset=utf-8,)?/i, '')
+        )
+        const san = sanitizeSvg(raw)
+        if (!san.valid) return null
+        url = `data:image/svg+xml;utf8,${encodeURIComponent(san.cleanSvg)}`
+      } else {
+        url = record.blob
+      }
+    } else if (record.blob.startsWith('data:image/')) {
       url = record.blob
     } else if (record.mime.includes('svg') || record.blob.trim().startsWith('<svg')) {
-      url = `data:image/svg+xml;utf8,${encodeURIComponent(record.blob)}`
+      if (typeof DOMParser !== 'undefined') {
+        const san = sanitizeSvg(record.blob)
+        if (!san.valid) return null
+        url = `data:image/svg+xml;utf8,${encodeURIComponent(san.cleanSvg)}`
+      } else {
+        url = `data:image/svg+xml;utf8,${encodeURIComponent(record.blob)}`
+      }
     }
   } else if (record.blob instanceof Blob && typeof URL !== 'undefined') {
     url = URL.createObjectURL(record.blob)

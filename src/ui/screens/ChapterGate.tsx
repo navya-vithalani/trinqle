@@ -12,6 +12,7 @@ import type { Chapter, Question, Part, CustomPrompt } from '../../data/types'
 import { ChapterRepository, FormRepository } from '../../data/repositories'
 import { compressPhoto, type CompressedPhoto } from '../../core/photoCompression'
 import { LIMITS } from '../../core/limits'
+import { syncChapterPlannedEndDate } from '../../core/notifications/client'
 import { ScaleWidget } from '../widgets/ScaleWidget'
 import { TextWidget } from '../widgets/TextWidget'
 
@@ -115,6 +116,7 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
         photos: photoBlobs,
         endDate: chapter.plannedEndDate,
       })
+      void syncChapterPlannedEndDate(nextChapter.plannedEndDate)
       onChapterClosed(nextChapter)
     } finally {
       setIsClosing(false)

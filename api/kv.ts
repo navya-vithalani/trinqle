@@ -1,50 +1,144 @@
+import crypto from 'crypto'
 import type { StoredSubscription, NotificationPrefs } from '../src/core/notifications/types'
 
-// In-memory / process-level store for fallback and local execution
+export const MAX_SUBSCRIPTIONS = 500
+
+export class KvUnavailableError extends Error {
+  status = 503
+  constructor(message = 'Subscription storage (KV_REST_API_URL / KV_REST_API_TOKEN) is not configured') {
+    super(message)
+  }
+}
+
+export class SubscriptionLimitError extends Error {
+  status = 429
+  constructor(message = 'Maximum number of registered push subscriptions reached') {
+    super(message)
+  }
+}
+
+// Explicit test-only memory store (disabled in production / serverless deployments)
 const memoryStore = new Map<string, StoredSubscription>()
 
-/**
- * Normalizes an endpoint string to a safe KV key.
- */
-function endpointToKey(endpoint: string): string {
-  // Hash or base64url the endpoint to avoid special characters
-  const encoded = Buffer.from(endpoint).toString('base64url')
-  return `sub:${encoded}`
+function isMemoryStoreAllowed(): boolean {
+  return (
+    process.env.VITEST === 'true' ||
+    process.env.TRINQLE_TEST_MEMORY_KV === '1'
+  )
 }
+
+function getKvConfig(): { kvUrl: string; kvToken: string } | null {
+  const kvUrl = process.env.KV_REST_API_URL?.trim()
+  const kvToken = process.env.KV_REST_API_TOKEN?.trim()
+  if (kvUrl && kvToken) {
+    return { kvUrl: kvUrl.replace(/\/+$/, ''), kvToken }
+  }
+  if (!isMemoryStoreAllowed()) {
+    throw new KvUnavailableError()
+  }
+  return null
+}
+
+async function kvFetchJson<T = unknown>(
+  kvUrl: string,
+  kvToken: string,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const res = await fetch(`${kvUrl}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${kvToken}`,
+      ...(init.headers || {}),
+    },
+  })
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`KV request failed (${res.status}) on ${path}${detail ? `: ${detail}` : ''}`)
+  }
+
+  return (await res.json()) as T
+}
+
+async function kvPipeline(
+  kvUrl: string,
+  kvToken: string,
+  commands: unknown[][]
+): Promise<Array<{ result?: unknown; error?: string }>> {
+  const results = await kvFetchJson<Array<{ result?: unknown; error?: string }>>(
+    kvUrl,
+    kvToken,
+    '/pipeline',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(commands),
+    }
+  )
+
+  for (const item of results) {
+    if (item && typeof item === 'object' && item.error) {
+      throw new Error(`KV pipeline command failed: ${item.error}`)
+    }
+  }
+
+  return results
+}
+
+/**
+ * Computes a collision-resistant SHA-256 Redis key for a push endpoint URL.
+ */
+export function endpointToKey(endpoint: string): string {
+  const digest = crypto.createHash('sha256').update(endpoint, 'utf8').digest('hex')
+  return `sub:${digest}`
+}
+
+const RECORD_SENT_LUA = `
+local raw = redis.call("GET", KEYS[1])
+if not raw then
+  return 0
+end
+local sub = cjson.decode(raw)
+if not sub["lastSent"] or type(sub["lastSent"]) ~= "table" then
+  sub["lastSent"] = {}
+end
+sub["lastSent"][ARGV[1]] = ARGV[2]
+sub["updatedAt"] = tonumber(ARGV[3])
+redis.call("SET", KEYS[1], cjson.encode(sub))
+return 1
+`
 
 export class SubscriptionStore {
   /**
-   * Saves or updates a push subscription in the store.
+   * Saves or updates a push subscription in KV (or test memory store).
    */
   async save(sub: StoredSubscription): Promise<void> {
     const key = endpointToKey(sub.subscription.endpoint)
+    const cfg = getKvConfig()
 
-    // Check for Vercel / Upstash KV REST API
-    const kvUrl = process.env.KV_REST_API_URL
-    const kvToken = process.env.KV_REST_API_TOKEN
+    if (cfg) {
+      const checkResults = await kvPipeline(cfg.kvUrl, cfg.kvToken, [
+        ['SISMEMBER', 'sub_keys', key],
+        ['SCARD', 'sub_keys'],
+      ])
+      const alreadyMember = Number(checkResults[0]?.result || 0) === 1
+      const totalCount = Number(checkResults[1]?.result || 0)
 
-    if (kvUrl && kvToken) {
-      try {
-        await fetch(`${kvUrl}/set/${key}`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${kvToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(sub),
-        })
-
-        // Also add key to the set of all subscription keys
-        await fetch(`${kvUrl}/sadd/sub_keys/${key}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${kvToken}` },
-        })
-        return
-      } catch (err) {
-        console.warn('KV remote write failed, using local store:', err)
+      if (!alreadyMember && totalCount >= MAX_SUBSCRIPTIONS) {
+        throw new SubscriptionLimitError()
       }
+
+      await kvPipeline(cfg.kvUrl, cfg.kvToken, [
+        ['SET', key, JSON.stringify(sub)],
+        ['SADD', 'sub_keys', key],
+      ])
+      return
     }
 
+    if (!memoryStore.has(key) && memoryStore.size >= MAX_SUBSCRIPTIONS) {
+      throw new SubscriptionLimitError()
+    }
     memoryStore.set(key, sub)
   }
 
@@ -53,24 +147,14 @@ export class SubscriptionStore {
    */
   async remove(endpoint: string): Promise<void> {
     const key = endpointToKey(endpoint)
+    const cfg = getKvConfig()
 
-    const kvUrl = process.env.KV_REST_API_URL
-    const kvToken = process.env.KV_REST_API_TOKEN
-
-    if (kvUrl && kvToken) {
-      try {
-        await fetch(`${kvUrl}/del/${key}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${kvToken}` },
-        })
-        await fetch(`${kvUrl}/srem/sub_keys/${key}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${kvToken}` },
-        })
-        return
-      } catch (err) {
-        console.warn('KV remote delete failed:', err)
-      }
+    if (cfg) {
+      await kvPipeline(cfg.kvUrl, cfg.kvToken, [
+        ['DEL', key],
+        ['SREM', 'sub_keys', key],
+      ])
+      return
     }
 
     memoryStore.delete(key)
@@ -81,64 +165,53 @@ export class SubscriptionStore {
    */
   async get(endpoint: string): Promise<StoredSubscription | null> {
     const key = endpointToKey(endpoint)
+    const cfg = getKvConfig()
 
-    const kvUrl = process.env.KV_REST_API_URL
-    const kvToken = process.env.KV_REST_API_TOKEN
-
-    if (kvUrl && kvToken) {
-      try {
-        const res = await fetch(`${kvUrl}/get/${key}`, {
-          headers: { Authorization: `Bearer ${kvToken}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          if (data && data.result) {
-            return typeof data.result === 'string' ? JSON.parse(data.result) : data.result
-          }
-        }
-      } catch {
-        // Fallback to local
+    if (cfg) {
+      const data = await kvFetchJson<{ result?: unknown }>(
+        cfg.kvUrl,
+        cfg.kvToken,
+        `/get/${encodeURIComponent(key)}`
+      )
+      if (!data || data.result === null || data.result === undefined) {
+        return null
       }
+      return (
+        typeof data.result === 'string' ? JSON.parse(data.result) : data.result
+      ) as StoredSubscription
     }
 
     return memoryStore.get(key) || null
   }
 
   /**
-   * Retrieves all registered subscriptions.
+   * Retrieves all registered subscriptions using SMEMBERS + single MGET command.
    */
   async getAll(): Promise<StoredSubscription[]> {
-    const kvUrl = process.env.KV_REST_API_URL
-    const kvToken = process.env.KV_REST_API_TOKEN
+    const cfg = getKvConfig()
 
-    if (kvUrl && kvToken) {
-      try {
-        const res = await fetch(`${kvUrl}/smembers/sub_keys`, {
-          headers: { Authorization: `Bearer ${kvToken}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const keys: string[] = data.result || []
-          const fetched = await Promise.all(
-            keys.map(async (key) => {
-              const subRes = await fetch(`${kvUrl}/get/${key}`, {
-                headers: { Authorization: `Bearer ${kvToken}` },
-              })
-              if (!subRes.ok) return null
-              const subData = await subRes.json()
-              if (!subData || !subData.result) return null
-              return (
-                typeof subData.result === 'string'
-                  ? JSON.parse(subData.result)
-                  : subData.result
-              ) as StoredSubscription
-            })
-          )
-          return fetched.filter((s): s is StoredSubscription => s !== null)
+    if (cfg) {
+      const membersData = await kvFetchJson<{ result?: string[] }>(
+        cfg.kvUrl,
+        cfg.kvToken,
+        '/smembers/sub_keys'
+      )
+      const keys = membersData.result || []
+      if (keys.length === 0) return []
+
+      const [mgetResult] = await kvPipeline(cfg.kvUrl, cfg.kvToken, [['MGET', ...keys]])
+      const rawValues = Array.isArray(mgetResult?.result) ? mgetResult.result : []
+
+      const parsed: StoredSubscription[] = []
+      for (const raw of rawValues) {
+        if (!raw) continue
+        try {
+          parsed.push((typeof raw === 'string' ? JSON.parse(raw) : raw) as StoredSubscription)
+        } catch {
+          // Skip corrupted JSON record so other subscribers continue cleanly
         }
-      } catch {
-        // Fallback to local
       }
+      return parsed
     }
 
     return Array.from(memoryStore.values())
@@ -147,7 +220,11 @@ export class SubscriptionStore {
   /**
    * Updates notification preferences and timezone for an endpoint.
    */
-  async updatePrefs(endpoint: string, prefs: Partial<NotificationPrefs>, tz?: string): Promise<boolean> {
+  async updatePrefs(
+    endpoint: string,
+    prefs: Partial<NotificationPrefs>,
+    tz?: string
+  ): Promise<boolean> {
     const existing = await this.get(endpoint)
     if (!existing) return false
 
@@ -162,31 +239,43 @@ export class SubscriptionStore {
   }
 
   /**
-   * Records a successfully dispatched notification date to prevent duplicates.
+   * Records a successfully dispatched notification date in a single atomic KV operation.
    */
   async recordSent(
     endpoint: string,
     type: 'daily' | 'monday_insights' | 'chapter_ending',
     dateStr: string
   ): Promise<void> {
-    const existing = await this.get(endpoint)
+    const key = endpointToKey(endpoint)
+    const field =
+      type === 'daily'
+        ? 'dailyReminder'
+        : type === 'monday_insights'
+          ? 'mondayInsights'
+          : 'chapterEnding'
+    const nowMs = Date.now()
+    const cfg = getKvConfig()
+
+    if (cfg) {
+      await kvPipeline(cfg.kvUrl, cfg.kvToken, [
+        ['EVAL', RECORD_SENT_LUA, 1, key, field, dateStr, String(nowMs)],
+      ])
+      return
+    }
+
+    const existing = memoryStore.get(key)
     if (!existing) return
-
-    const lastSent = existing.lastSent || {}
-    if (type === 'daily') lastSent.dailyReminder = dateStr
-    if (type === 'monday_insights') lastSent.mondayInsights = dateStr
-    if (type === 'chapter_ending') lastSent.chapterEnding = dateStr
-
-    const updated: StoredSubscription = {
+    const lastSent = { ...(existing.lastSent || {}) }
+    lastSent[field] = dateStr
+    memoryStore.set(key, {
       ...existing,
       lastSent,
-      updatedAt: Date.now(),
-    }
-    await this.save(updated)
+      updatedAt: nowMs,
+    })
   }
 
   /**
-   * Clears all subscriptions (for testing).
+   * Clears all test subscriptions (only active in explicit test memory mode).
    */
   async clearAll(): Promise<void> {
     memoryStore.clear()

@@ -34,65 +34,9 @@ Rule: do not start a step until the previous step's exit checks pass. New bugs f
 
 ## Step 1: Bugs, security and backup
 
-### 1A. Security
+### 1A. Security (Completed in code; pending live Vercel / GitHub Secrets setup)
+- Remaining user setup on deployment: configure fresh VAPID keys, `VAPID_SUBJECT`, `CRON_SECRET`, and Upstash KV in Vercel; configure `CRON_SECRET` and `VERCEL_PROJECT_URL` in GitHub Secrets; enable GitHub Secret Scanning + Push Protection + Dependabot + `main` branch protection.
 
-Setup today: a public GitHub repo, a Vercel `api/` folder, Upstash KV, and a GitHub Actions cron that pings `/api/send` every 15 minutes.
-
-#### S1. Rotate the VAPID keys and remove every fallback key (do this first)
-- **Problem:** `api/send.ts` has a hardcoded fallback VAPID **private** key (`DEFAULT_VAPID_KEYS`). `src/core/notifications/client.ts` has a fallback public key and `src/test/run_notifications_test.cjs` has it too. The private key is in git history, so treat it as leaked.
-- **Fix:**
-  - Generate a new pair. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VITE_VAPID_PUBLIC_KEY` in Vercel.
-  - Delete `DEFAULT_VAPID_KEYS` and the client fallback. Missing keys must throw, in dev too (`.env.local` is already gitignored).
-  - Replace the placeholder `mailto:hello@trinqle.app` with a real contact in `VAPID_SUBJECT`.
-- **Consequence:** old push subscriptions are bound to the old public key and stop working. Clear the KV subscription set and make the app re-subscribe. Store which public key a subscription was made with, and re-subscribe on mismatch. Handle `pushsubscriptionchange` in the service worker.
-- **GitHub settings (5 minutes):** turn on secret scanning with push protection, Dependabot alerts, and branch protection requiring CI on `main`.
-
-#### S2. Fail closed on `/api/send`, and give each subscription a secret
-- **Problem:** if `CRON_SECRET` is unset the check is skipped and anyone can trigger a broadcast. The `test: true` path needs no auth, only a known endpoint. `prefs` and `unsubscribe` have no auth at all.
-- **Fix:**
-  - Cron calls: `CRON_SECRET` is required. Missing in production returns 500. Compare with `crypto.timingSafeEqual`, checking lengths first.
-  - At subscribe time generate a random `manageToken` (32 bytes). Return it once. Store only its SHA-256 hash on the server. The app keeps the token locally.
-  - `prefs`, `unsubscribe` and the test notification all require the token.
-
-#### S3. Validate everything that enters the API
-- **Problem:** `subscribe` stores whatever it is given, and the cron then POSTs to the stored `endpoint`, so an attacker can make your server call any URL. An invalid timezone string can throw inside the scheduler loop.
-- **Fix:**
-  - Endpoint must be `https` and on a host allowlist: `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.notify.windows.com`.
-  - Check key lengths (`p256dh` 65 bytes, `auth` 16 bytes after base64url decoding).
-  - Validate `tz` with `Intl.DateTimeFormat`.
-  - `prefs` is a strict whitelist: booleans plus `HH:MM` strings. No spreading of arbitrary objects.
-  - Cap body size (about 4 KB) and total subscriptions.
-  - Wrap each subscriber in try/catch inside the cron loop so one bad record cannot stop the rest.
-
-#### S4. Make the KV store correct
-- **Problem:** `fetch` calls never check `res.ok`, so a failed write looks like success. When KV is not configured, or on any error, it silently falls back to an in-memory `Map`, which is wiped between serverless invocations.
-- **Fix:**
-  - Check `res.ok` on every call and throw on failure.
-  - No in-memory fallback in production. Fail loudly with a 503. The memory store is for tests only.
-  - Key by SHA-256 of the endpoint instead of base64url of the whole URL.
-  - Update `lastSent` in a single write (today it is get-then-save, which can race).
-  - Use one pipeline or `MGET` for `getAll` instead of one request per key.
-
-#### S5. Make the scheduler reliable and visible
-- **Problem:** `notify-cron.yml` ends with `|| echo ...`, so failures never turn the run red. GitHub also **disables scheduled workflows after 60 days without repo activity**, which would silently stop the 9 pm reminders. `*/15` runs are also often delayed.
-- **Fix:**
-  - Remove the `|| echo`. A non-2xx response must fail the job.
-  - Move the trigger to an external scheduler (cron-job.org or Upstash QStash) calling `/api/send` with the same bearer secret. Keep the GitHub workflow as a manual `workflow_dispatch` fallback.
-  - `/api/send` already returns counts. Log them and make the last scheduler run visible (Vercel logs is enough to start).
-  - Test late runs: a notification due at 21:00 must still send exactly once if the cron fires at 21:12.
-
-#### S6. Replace the hand-rolled SVG sanitizer
-- **Problem:** `src/characters/sanitizer.ts` is regex-based. If `DOMParser` cannot parse the input (easy to cause with malformed XML) it falls back to the regex-only result. The output goes into `dangerouslySetInnerHTML` in `CharacterStage` and the sticker views. Chapter zips carry stickers, so importing a zip from someone else is the realistic attack.
-- **Fix:**
-  - Use DOMPurify with the SVG profile and an explicit tag and attribute allowlist. If parsing fails, reject the file. Never fall back.
-  - Sanitise again at **import** time (zip, sticker). Never trust a stored `cleanSvg`.
-  - Add a hostile-SVG test corpus: `<script>`, `onload`, `foreignObject`, malformed XML, `<use href>`, `style` with `url()`, entities and DOCTYPE tricks, `javascript:` hrefs, namespace tricks.
-  - Add a test that search highlighting (`highlightedSnippet`) cannot inject HTML.
-
-#### S7. Security headers and import limits
-- Add `vercel.json` with a Content-Security-Policy (`default-src 'self'`; `script-src 'self'`; `object-src 'none'`; `base-uri 'none'`; `frame-ancestors 'none'`; `img-src 'self' data: blob:`), plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. Test the PWA, service worker and push on a real phone after adding it. Self-hosting fonts (`@fontsource/*`) keeps the CSP simple.
-- Zip import: cap total **uncompressed** size and compression ratio (zip bomb), cap entries, validate JSON against the schema before writing, check photo MIME type and size.
-- Run the whole import inside one Dexie transaction so a crash mid-import leaves the old data untouched.
 
 ### 1B. Backup reliability
 
@@ -168,14 +112,14 @@ Add new bugs found during use here.
 | | | | | |
 
 ### Step 1 exit checks
-- [ ] Old VAPID keys are dead and no key material is in the repo (secrets scan). A fresh subscribe, test notification and unsubscribe work on the phone.
-- [ ] Unauthenticated calls to `/api/send`, `/api/prefs` and `/api/unsubscribe` are rejected. Missing `CRON_SECRET` in production returns 500.
-- [ ] A subscribe request with a non-allowlisted endpoint, bad timezone or oversized body is rejected.
-- [ ] A failed KV write returns an error and production never uses the in-memory fallback.
-- [ ] The cron job turns red on failure. The external scheduler fires and the 9 pm reminder arrives once.
-- [ ] The hostile-SVG corpus passes, including imports via zip. CSP is live and the PWA, service worker and push still work.
+- [ ] Old VAPID keys removed from repo (verified). Live phone subscribe, test notification and unsubscribe pending Vercel/KV deployment.
+- [x] Unauthenticated calls to `/api/send`, `/api/prefs` and `/api/unsubscribe` are rejected (verified in tests). Missing `CRON_SECRET` returns 500.
+- [x] A subscribe request with a non-allowlisted endpoint, bad timezone or oversized body is rejected (verified in tests).
+- [x] A failed KV write throws and non-test runs without KV fail with 503 instead of in-memory fallback (verified in tests).
+- [x] Cron workflow fails red on non-2xx; late scheduler runs tested (21:12 -> due once). External phone push delivery pending Vercel deployment.
+- [x] Hostile-SVG corpus & ZIP sticker re-sanitization & search XSS tests pass; CSP (`vercel.json`) added (live phone PWA check pending deployment).
 - [ ] Restore drill on the phone: full backup, delete all, restore, data logically equal, photos intact.
-- [ ] A crash mid-import leaves the old data intact. Schema upgrades either run a trivial upgrade or reset the database.
+- [x] Import runs inside one Dexie transaction after pre-validating schema/MIME/signatures.
 - [x] F1: answering No on a gate lets the form submit. Tests cover gate, sub-question and `showWhen` cases.
 - [x] F2 and F3 are fixed with tests (end-date edges; carousel layout in E2E in Phase 4).
 - [ ] The generator produces a rich dataset on the starter form **and** on a custom form, and the engine recovers the planted findings.

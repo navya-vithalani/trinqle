@@ -31,7 +31,7 @@ import {
   unsubscribeDeviceFromPush,
   syncDevicePrefs,
   sendTestNotification,
-  DEFAULT_VAPID_PUBLIC_KEY,
+  reconcilePushSubscription,
 } from '../../core/notifications/client'
 import type { NotificationPrefs } from '../../core/notifications/types'
 import {
@@ -164,14 +164,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     loadCustomStickerItems().then(setCustomStickers).catch(() => {})
 
-    // Load Push Notification state
+    // Load Push Notification state & reconcile if VAPID key rotated
     const supported = isPushSupported()
     setPushSupported(supported)
     setPushPermission(getNotificationPermission())
-    setPushPrefs(loadNotificationPrefs())
+    const loadedPrefs = {
+      ...loadNotificationPrefs(),
+      ...(ch?.plannedEndDate ? { chapterPlannedEndDate: ch.plannedEndDate } : {}),
+    }
+    setPushPrefs(loadedPrefs)
     if (supported) {
-      getCurrentPushSubscription().then((sub) => {
-        setIsPushSubscribed(Boolean(sub))
+      getCurrentPushSubscription().then(async (sub) => {
+        if (!sub) {
+          setIsPushSubscribed(false)
+          return
+        }
+        const ok = await reconcilePushSubscription()
+        setIsPushSubscribed(ok || Boolean(await getCurrentPushSubscription()))
       })
     }
 
@@ -298,7 +307,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         setIsPushSubscribed(false)
         showToast('Notifications disabled')
       } else {
-        const res = await subscribeDeviceToPush(DEFAULT_VAPID_PUBLIC_KEY, pushPrefs)
+        const res = await subscribeDeviceToPush(undefined, {
+          ...pushPrefs,
+          chapterPlannedEndDate: openChapter?.plannedEndDate,
+        })
         if (res.success) {
           setIsPushSubscribed(true)
           setPushPermission(getNotificationPermission())
@@ -316,11 +328,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }
 
   const handleUpdatePrefs = async (patch: Partial<NotificationPrefs>) => {
-    const updated = { ...pushPrefs, ...patch }
+    const updated: NotificationPrefs = {
+      ...pushPrefs,
+      ...patch,
+      chapterPlannedEndDate: openChapter?.plannedEndDate ?? pushPrefs.chapterPlannedEndDate,
+    }
     setPushPrefs(updated)
     saveNotificationPrefs(updated)
     if (isPushSubscribed) {
-      await syncDevicePrefs(updated)
+      const syncRes = await syncDevicePrefs(updated)
+      if (!syncRes.success) {
+        showToast(syncRes.error || 'Failed to sync reminder preferences')
+      }
     }
   }
 

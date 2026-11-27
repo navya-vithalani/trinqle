@@ -11,16 +11,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger /api/send endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_PROJECT_URL: ${{ secrets.VERCEL_PROJECT_URL }}
         run: |
-          TARGET_URL="${{ secrets.VERCEL_PROJECT_URL }}"
-          if [ -z "$TARGET_URL" ]; then
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Error: CRON_SECRET secret is not set." >&2
+            exit 1
+          fi
+          if [ -z "$VERCEL_PROJECT_URL" ]; then
             TARGET_URL="https://trinqle.vercel.app"
+          else
+            TARGET_URL="${VERCEL_PROJECT_URL%/}"
           fi
 
           echo "Pinging $TARGET_URL/api/send scheduler..."
-          curl -s -f -X POST "$TARGET_URL/api/send" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "$TARGET_URL/api/send" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             --connect-timeout 15 \
             --max-time 30 \
-            -d '{"trigger":"github-actions-cron"}' || echo "Notification scheduler triggered."
+            -d '{"trigger":"github-actions-cron"}')
+
+          HTTP_CODE=$(printf '%s\n' "$RESPONSE" | tail -n1)
+          BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
+          echo "HTTP $HTTP_CODE: $BODY"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Scheduler request failed with HTTP $HTTP_CODE" >&2
+            exit 1
+          fi

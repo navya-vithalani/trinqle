@@ -65,13 +65,28 @@ function parseTimeToMinutes(timeStr: string): number {
 }
 
 /**
+ * Computes whether a planned chapter end date (YYYY-MM-DD) is within 0..2 days of localDateStr.
+ */
+function isPlannedEndSoon(localDateStr: string, plannedEndDate?: string): boolean {
+  if (!plannedEndDate || !/^\d{4}-\d{2}-\d{2}$/.test(plannedEndDate)) {
+    return false
+  }
+  const [ly, lm, ld] = localDateStr.split('-').map(Number)
+  const [py, pm, pd] = plannedEndDate.split('-').map(Number)
+  const localMs = Date.UTC(ly, lm - 1, ld)
+  const plannedMs = Date.UTC(py, pm - 1, pd)
+  const diffDays = Math.round((plannedMs - localMs) / 86400000)
+  return diffDays >= 0 && diffDays <= 2
+}
+
+/**
  * Pure, deterministic scheduler evaluating whether a subscription is due
  * for an automated notification. Zero journal data is included in any payload.
  */
 export function evaluateNotificationDue(
   sub: StoredSubscription,
   nowUtc: Date = new Date(),
-  chapterEndingSoon = false
+  chapterEndingSoon?: boolean
 ): DueNotificationResult {
   const tz = sub.tz || 'UTC'
   let localTime: { dateStr: string; weekday: number; hour: number; minute: number }
@@ -109,8 +124,13 @@ export function evaluateNotificationDue(
     }
   }
 
-  // 2. Chapter Ending Reminder (T-2 / T-1)
-  if (sub.prefs.chapterEnding && chapterEndingSoon) {
+  // 2. Chapter Ending Reminder (T-2 / T-1 / T-0)
+  const resolvedChapterEndingSoon =
+    chapterEndingSoon !== undefined
+      ? chapterEndingSoon
+      : isPlannedEndSoon(dateStr, sub.prefs.chapterPlannedEndDate)
+
+  if (sub.prefs.chapterEnding && resolvedChapterEndingSoon) {
     const targetMinutes = parseTimeToMinutes('18:00') // 6:00 PM
     if (
       currentMinutes >= targetMinutes &&

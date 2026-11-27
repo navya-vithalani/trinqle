@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { getCharacter } from '../../characters/registry'
 import { initCharacterAnimator, type AnimatorControls } from '../../characters/animator'
+import { sanitizeSvg } from '../../characters/sanitizer'
 import { Sparkles, Eye } from 'lucide-react'
 
 interface CharacterStageProps {
@@ -21,13 +22,15 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
   const [frontSvgContent, setFrontSvgContent] = useState<string>('')
   const [sideSvgContent, setSideSvgContent] = useState<string>('')
 
-  // Load front SVG content
+  // Load front SVG content (always sanitize even stored SVGs before rendering)
   useEffect(() => {
     let isMounted = true
     fetch(character.svg)
       .then((res) => res.text())
       .then((text) => {
-        if (isMounted) setFrontSvgContent(text)
+        if (!isMounted) return
+        const safe = sanitizeSvg(text)
+        setFrontSvgContent(safe.valid ? safe.cleanSvg : '')
       })
       .catch(() => {})
     return () => {
@@ -35,14 +38,16 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
     }
   }, [character.svg])
 
-  // Load side SVG content if multi-view
+  // Load side SVG content if multi-view (always sanitize before rendering)
   useEffect(() => {
     let isMounted = true
     if (character.hasMultiView && character.sideSvg) {
       fetch(character.sideSvg)
         .then((res) => res.text())
         .then((text) => {
-          if (isMounted) setSideSvgContent(text)
+          if (!isMounted) return
+          const safe = sanitizeSvg(text)
+          setSideSvgContent(safe.valid ? safe.cleanSvg : '')
         })
         .catch(() => {})
     } else {

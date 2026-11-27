@@ -1,66 +1,81 @@
 import type { IncomingMessage, ServerResponse } from 'http'
 import { subscriptionStore } from './kv'
-import type { StoredSubscription } from '../src/core/notifications/types'
+import {
+  generateManageToken,
+  hashManageToken,
+  readJsonBody,
+  sendEndpointError,
+  sendJson,
+} from './_utils'
+import {
+  sanitizeNotificationPrefs,
+  validatePushEndpoint,
+  validatePushKeys,
+  validateTimeZone,
+} from '../src/core/notifications/validation'
+import type { NotificationPrefs, StoredSubscription } from '../src/core/notifications/types'
 import { generateUUIDv7 } from '../src/core/ids'
 
-export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   if (req.method !== 'POST') {
-    res.statusCode = 405
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Method not allowed' }))
+    sendJson(res, 405, { error: 'Method not allowed' })
     return
   }
 
   try {
-    let bodyData: any = req.body
+    const bodyData = await readJsonBody(req)
+    const rawSub = bodyData.subscription as Record<string, unknown> | undefined
 
-    // If body not parsed by framework, buffer it
-    if (!bodyData) {
-      const chunks: Buffer[] = []
-      for await (const chunk of req) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
-      }
-      const raw = Buffer.concat(chunks).toString('utf8')
-      bodyData = raw ? JSON.parse(raw) : {}
+    const endpointCheck = validatePushEndpoint(rawSub?.endpoint)
+    if (!endpointCheck.ok) {
+      sendJson(res, 400, { error: endpointCheck.error })
+      return
     }
 
-    const { subscription, tz, prefs } = bodyData
+    const keysCheck = validatePushKeys(rawSub?.keys)
+    if (!keysCheck.ok) {
+      sendJson(res, 400, { error: keysCheck.error })
+      return
+    }
 
-    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
-      res.statusCode = 400
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Invalid push subscription payload' }))
+    const tzCheck = validateTimeZone(bodyData.tz ?? 'UTC')
+    if (!tzCheck.ok) {
+      sendJson(res, 400, { error: tzCheck.error })
+      return
+    }
+
+    const prefsCheck = sanitizeNotificationPrefs(bodyData.prefs, { partial: false })
+    if (!prefsCheck.ok) {
+      sendJson(res, 400, { error: prefsCheck.error })
       return
     }
 
     const now = Date.now()
+    const manageToken = generateManageToken()
+    const manageTokenHash = hashManageToken(manageToken)
+    const existing = await subscriptionStore.get(endpointCheck.value)
+
     const storedSub: StoredSubscription = {
-      id: generateUUIDv7(now),
-      subscription,
-      tz: tz || 'UTC',
-      prefs: prefs || {
-        dailyReminder: true,
-        dailyReminderTime: '21:00',
-        mondayInsights: true,
-        mondayInsightsTime: '09:00',
-        chapterEnding: true,
+      id: existing?.id || generateUUIDv7(now),
+      subscription: {
+        endpoint: endpointCheck.value,
+        keys: keysCheck.value,
+        expirationTime:
+          typeof rawSub?.expirationTime === 'number' || rawSub?.expirationTime === null
+            ? rawSub.expirationTime
+            : undefined,
       },
-      createdAt: now,
+      tz: tzCheck.value,
+      prefs: prefsCheck.value as NotificationPrefs,
+      manageTokenHash,
+      lastSent: existing?.lastSent,
+      createdAt: existing?.createdAt || now,
       updatedAt: now,
     }
 
     await subscriptionStore.save(storedSub)
-
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ success: true, id: storedSub.id }))
+    sendJson(res, 200, { success: true, id: storedSub.id, manageToken })
   } catch (err: unknown) {
-    res.statusCode = 500
-    res.setHeader('Content-Type', 'application/json')
-    res.end(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal server error',
-      })
-    )
+    sendEndpointError(res, err)
   }
 }

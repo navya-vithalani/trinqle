@@ -4,6 +4,7 @@ export interface NotificationPrefs {
   mondayInsights: boolean // whether Monday morning insights ready alert is enabled
   mondayInsightsTime: string // HH:mm e.g. "09:00" (9:00 AM)
   chapterEnding: boolean // whether chapter ending alert (T-2/T-1) is enabled
+  chapterPlannedEndDate?: string // YYYY-MM-DD planned end of the active chapter
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -30,6 +31,7 @@ export interface StoredSubscription {
   subscription: PushSubscriptionData
   tz: string // IANA timezone e.g. "America/New_York", "Asia/Kolkata"
   prefs: NotificationPrefs
+  manageTokenHash?: string // SHA-256 hex digest of the client's 32-byte manage token
   createdAt: number
   updatedAt: number
   lastSent?: {

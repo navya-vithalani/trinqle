@@ -77,3 +77,40 @@ self.addEventListener('message', (event) => {
     self.skipWaiting()
   }
 })
+
+// Push subscription rotation handler: notify active windows or re-subscribe with prior key
+interface PushSubscriptionChangeEvent extends ExtendableEvent {
+  oldSubscription?: PushSubscription
+  newSubscription?: PushSubscription
+}
+
+self.addEventListener('pushsubscriptionchange', (event: Event) => {
+  const changeEvent = event as PushSubscriptionChangeEvent
+  changeEvent.waitUntil(
+    (async () => {
+      try {
+        let nextSub = changeEvent.newSubscription
+        const appKey = changeEvent.oldSubscription?.options?.applicationServerKey
+        if (!nextSub && appKey) {
+          nextSub = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appKey,
+          })
+        }
+
+        const windowClients = await self.clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true,
+        })
+        for (const client of windowClients) {
+          client.postMessage({
+            type: 'PUSH_SUBSCRIPTION_CHANGED',
+            endpoint: nextSub?.endpoint || null,
+          })
+        }
+      } catch (err) {
+        console.error('[sw] pushsubscriptionchange failed:', err)
+      }
+    })()
+  )
+})
