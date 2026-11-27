@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Plus, X, ChevronDown, Check } from 'lucide-react'
 import type { LibraryConfig, Item } from '../../data/types'
 import { LibraryRepository } from '../../data/repositories'
+import { LIMITS } from '../../core/limits'
 
 interface LibraryWidgetProps {
   label: string
@@ -178,6 +179,7 @@ export const LibraryWidget: React.FC<LibraryWidgetProps> = ({
         >
           <input
             type="text"
+            maxLength={LIMITS.LIBRARY_ITEM_NAME}
             value={search}
             disabled={disabled}
             placeholder={selectedIds.length === 0 ? 'Select or type to add...' : 'Add more...'}

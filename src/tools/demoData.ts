@@ -578,26 +578,28 @@ export async function generateDemoData(
   }
 
   // Write all generated data into Dexie
-  await db.transaction(
-    'rw',
-    [db.chapters, db.chapterAnswers, db.cycles, db.days, db.answers, db.answerLinks],
-    async () => {
-      // Clear existing records in these tables
-      await db.chapters.clear()
-      await db.chapterAnswers.clear()
-      await db.cycles.clear()
-      await db.days.clear()
-      await db.answers.clear()
-      await db.answerLinks.clear()
+  await db.runBypassingClosedGuard(() =>
+    db.transaction(
+      'rw',
+      [db.chapters, db.chapterAnswers, db.cycles, db.days, db.answers, db.answerLinks],
+      async () => {
+        // Clear existing records in these tables
+        await db.chapters.clear()
+        await db.chapterAnswers.clear()
+        await db.cycles.clear()
+        await db.days.clear()
+        await db.answers.clear()
+        await db.answerLinks.clear()
 
-      // Add bulk
-      await db.chapters.bulkAdd(chapters)
-      await db.chapterAnswers.bulkAdd(chapterAnswers)
-      await db.cycles.bulkAdd(cycles)
-      await db.days.bulkAdd(days)
-      await db.answers.bulkAdd(answers)
-      await db.answerLinks.bulkAdd(answerLinks)
-    }
+        // Add bulk
+        await db.chapters.bulkAdd(chapters)
+        await db.chapterAnswers.bulkAdd(chapterAnswers)
+        await db.cycles.bulkAdd(cycles)
+        await db.days.bulkAdd(days)
+        await db.answers.bulkAdd(answers)
+        await db.answerLinks.bulkAdd(answerLinks)
+      }
+    )
   )
 
   return {

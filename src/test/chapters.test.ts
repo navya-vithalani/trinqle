@@ -21,12 +21,14 @@ describe('Chapter Lifecycle & Gates (Phase 3)', () => {
     repo = new ChapterRepository(db)
   })
 
-  it('calculates chapter duration and validates up to 45 day bounds', () => {
+  it('calculates chapter duration and validates 20 to 45 day bounds + today + 3 rule', () => {
     const start = '2026-10-01'
 
-    // 1 day: 2026-10-01
+    // 1 day and 19 days are below MIN_CHAPTER_DAYS (20)
     expect(calculateChapterDuration(start, '2026-10-01')).toBe(1)
-    expect(isPlannedEndDateValid(start, '2026-10-01')).toBe(true)
+    expect(isPlannedEndDateValid(start, '2026-10-01')).toBe(false)
+    expect(calculateChapterDuration(start, '2026-10-19')).toBe(19)
+    expect(isPlannedEndDateValid(start, '2026-10-19')).toBe(false)
 
     // 20 days: 2026-10-01 to 2026-10-20
     expect(calculateChapterDuration(start, '2026-10-20')).toBe(20)
@@ -42,9 +44,21 @@ describe('Chapter Lifecycle & Gates (Phase 3)', () => {
     // Invalid before start date
     expect(isPlannedEndDateValid(start, '2026-09-30')).toBe(false)
 
-    const bounds = getPlannedEndBounds(start)
-    expect(bounds.minDate).toBe('2026-10-01')
-    expect(bounds.maxDate).toBe('2026-11-14')
+    // Day 1: minDate is start + 19 (day 20)
+    const boundsDay1 = getPlannedEndBounds(start, '2026-10-01')
+    expect(boundsDay1.minDate).toBe('2026-10-20')
+    expect(boundsDay1.maxDate).toBe('2026-11-14')
+    expect(boundsDay1.canExtend).toBe(true)
+
+    // Day 25 (2026-10-25): minDate is today + 3 (2026-10-28), cannot pick 2026-10-27
+    const boundsDay25 = getPlannedEndBounds(start, '2026-10-25')
+    expect(boundsDay25.minDate).toBe('2026-10-28')
+    expect(isPlannedEndDateValid(start, '2026-10-27', '2026-10-25')).toBe(false)
+    expect(isPlannedEndDateValid(start, '2026-10-28', '2026-10-25')).toBe(true)
+
+    // Day 43 (2026-11-12): today + 3 (2026-11-15) > maxDate (2026-11-14) -> extending disabled
+    const boundsDay43 = getPlannedEndBounds(start, '2026-11-12')
+    expect(boundsDay43.canExtend).toBe(false)
   })
 
   it('detects hard-lock and pre-close popup states correctly', () => {

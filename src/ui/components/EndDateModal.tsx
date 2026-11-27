@@ -4,12 +4,16 @@ import {
   getPlannedEndBounds,
   calculateChapterDuration,
   isPlannedEndDateValid,
+  MIN_CHAPTER_DAYS,
+  MAX_CHAPTER_DAYS,
 } from '../../core/chapters'
+import { formatDate } from '../../core/logicalDay'
 import type { Chapter } from '../../data/types'
 
 interface EndDateModalProps {
   isOpen: boolean
   chapter: Chapter
+  todayLogicalDate?: string
   onClose: () => void
   onSave: (newPlannedEndDate: string) => Promise<void>
 }
@@ -17,6 +21,7 @@ interface EndDateModalProps {
 export const EndDateModal: React.FC<EndDateModalProps> = ({
   isOpen,
   chapter,
+  todayLogicalDate,
   onClose,
   onSave,
 }) => {
@@ -26,13 +31,17 @@ export const EndDateModal: React.FC<EndDateModalProps> = ({
 
   if (!isOpen) return null
 
-  const bounds = getPlannedEndBounds(chapter.startDate)
+  const effectiveToday = todayLogicalDate || formatDate(new Date())
+  const bounds = getPlannedEndBounds(chapter.startDate, effectiveToday)
   const duration = calculateChapterDuration(chapter.startDate, selectedDate)
-  const isValid = isPlannedEndDateValid(chapter.startDate, selectedDate)
+  const isValid =
+    bounds.canExtend && isPlannedEndDateValid(chapter.startDate, selectedDate, effectiveToday)
 
   const handleConfirm = async () => {
     if (!isValid) {
-      setError('Chapter length must be between 20 and 45 days.')
+      setError(
+        `Chapter length must be between ${MIN_CHAPTER_DAYS} and ${MAX_CHAPTER_DAYS} days and at least 3 days after today.`
+      )
       return
     }
     setSaving(true)
@@ -64,29 +73,35 @@ export const EndDateModal: React.FC<EndDateModalProps> = ({
         </div>
 
         <p className="text-xs text-[var(--color-ink-soft)]">
-          Adjust the planned duration of this chapter. Chapters must run between 20 and 45 days.
+          Adjust the planned duration of this chapter. Chapters must run between {MIN_CHAPTER_DAYS} and {MAX_CHAPTER_DAYS} days.
         </p>
 
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-[var(--color-ink)]">
-            Planned End Date
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            min={bounds.minDate}
-            max={bounds.maxDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value)
-              setError(null)
-            }}
-            className="w-full py-2 px-3 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-sm font-semibold text-[var(--color-ink)]"
-          />
-          <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)] pt-1">
-            <span>Started: {chapter.startDate}</span>
-            <span>Duration: <strong>{duration} days</strong></span>
+        {!bounds.canExtend ? (
+          <div className="p-3 rounded-[var(--radius-m)] bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            This chapter cannot be adjusted further because today + 3 days exceeds the {MAX_CHAPTER_DAYS}-day maximum ({bounds.maxDate}).
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[var(--color-ink)]">
+              Planned End Date
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              min={bounds.minDate}
+              max={bounds.maxDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value)
+                setError(null)
+              }}
+              className="w-full py-2 px-3 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-sm font-semibold text-[var(--color-ink)]"
+            />
+            <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)] pt-1">
+              <span>Started: {chapter.startDate}</span>
+              <span>Duration: <strong>{duration} days</strong></span>
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="text-xs text-rose-600 font-semibold">{error}</p>

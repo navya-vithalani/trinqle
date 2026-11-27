@@ -20,6 +20,7 @@ import {
   Award,
 } from 'lucide-react'
 import type { Part, PartKind, PartLevel, PartConfig, Library } from '../../data/types'
+import { LIMITS } from '../../core/limits'
 
 interface PartEditorModalProps {
   isOpen: boolean
@@ -207,6 +208,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
             <label className="font-bold text-[var(--color-ink)] block">Part Label</label>
             <input
               type="text"
+              maxLength={LIMITS.PART_LABEL}
               placeholder="e.g. Mood score, Running distance, Notes..."
               value={label}
               onChange={(e) => setLabel(e.target.value)}
@@ -390,6 +392,7 @@ export const PartEditorModal: React.FC<PartEditorModalProps> = ({
                 <label className="text-[10px] text-[var(--color-ink-soft)] block">Unit Label</label>
                 <input
                   type="text"
+                  maxLength={LIMITS.UNIT_LABEL}
                   placeholder="e.g. km, mins, cups, glasses, steps"
                   value={numberUnit}
                   onChange={(e) => setNumberUnit(e.target.value)}

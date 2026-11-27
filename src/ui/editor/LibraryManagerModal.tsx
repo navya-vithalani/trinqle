@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Plus, Edit2, Trash2, GitMerge, BookOpen, Check } from 'lucide-react'
 import type { Library, Item } from '../../data/types'
 import { LibraryRepository } from '../../data/repositories'
+import { LIMITS } from '../../core/limits'
 
 interface LibraryManagerModalProps {
   isOpen: boolean
@@ -142,6 +143,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({
               <div className="flex items-center space-x-2 p-2 rounded-[var(--radius-m)] bg-[var(--color-bg)] border border-[var(--color-line)]">
                 <input
                   type="text"
+                  maxLength={LIMITS.LIBRARY_NAME}
                   placeholder="Library name (e.g. Topics, Books)..."
                   value={newLibraryName}
                   onChange={(e) => setNewLibraryName(e.target.value)}
@@ -241,6 +243,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({
             <div className="flex items-center space-x-2">
               <input
                 type="text"
+                maxLength={LIMITS.LIBRARY_ITEM_NAME}
                 placeholder="Add new item (e.g. Running, Python, Latte)..."
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
@@ -270,6 +273,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({
                       <div className="flex items-center space-x-2 flex-1 mr-2">
                         <input
                           type="text"
+                          maxLength={LIMITS.LIBRARY_ITEM_NAME}
                           value={editingItemName}
                           onChange={(e) => setEditingItemName(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleRenameItem(item.id)}

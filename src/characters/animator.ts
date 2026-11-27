@@ -54,12 +54,37 @@ export function initCharacterAnimator(
     return container.querySelector(selector)
   }
 
+  const getPivotOrigin = (el: SVGElement, fallback = '50% 50%'): string => {
+    const dataOrigin = el.getAttribute('data-origin')
+    if (dataOrigin) return dataOrigin
+    const id = (el.id || '').toLowerCase()
+    if (id.startsWith('eye')) return '50% 50%'
+    if (id === 'head') return '50% 90%'
+    if (id === 'body') return '50% 90%'
+    if (id === 'tail') return '20% 90%'
+    if (id.startsWith('ear')) return '50% 100%'
+    if (id === 'horn') return '50% 100%'
+    if (id === 'arm-left') return '90% 15%'
+    if (id === 'arm-right') return '10% 15%'
+    if (id.startsWith('leg')) return '50% 0%'
+    return fallback
+  }
+
+  // Ensure every animated SVG part resolves transform-origin against its own bounding box (F9)
+  const prepareSvgPivot = (el: SVGElement, fallback = '50% 50%'): string => {
+    const origin = getPivotOrigin(el, fallback)
+    el.style.transformBox = 'fill-box'
+    el.style.transformOrigin = origin
+    return origin
+  }
+
   const getAllLimbs = (): SVGElement[] => {
     const list = Array.from(
       container.querySelectorAll<SVGElement>(
         '[id^="leg-"], [id^="arm-"], #tail, #ear-left, #ear-right'
       )
     )
+    list.forEach((el) => prepareSvgPivot(el, '50% 0%'))
     return list
   }
 
@@ -93,15 +118,17 @@ export function initCharacterAnimator(
       blinkTimer = setTimeout(() => {
         const eyeLeft = getEl('#eye-left')
         const eyeRight = getEl('#eye-right')
+        const eyeSide = getEl('#eye')
 
-        const eyes = [eyeLeft, eyeRight].filter(Boolean) as SVGElement[]
+        const eyes = [eyeLeft, eyeRight, eyeSide].filter(Boolean) as SVGElement[]
         eyes.forEach((eye) => {
+          const origin = prepareSvgPivot(eye, '50% 50%')
           if (eye.animate) {
             eye.animate(
               [
-                { transform: 'scaleY(1)', transformOrigin: 'center' },
-                { transform: 'scaleY(0.1)', transformOrigin: 'center' },
-                { transform: 'scaleY(1)', transformOrigin: 'center' },
+                { transform: 'scaleY(1)', transformOrigin: origin },
+                { transform: 'scaleY(0.1)', transformOrigin: origin },
+                { transform: 'scaleY(1)', transformOrigin: origin },
               ],
               {
                 duration: 180,
@@ -214,14 +241,15 @@ export function initCharacterAnimator(
         }
 
         limbs.forEach((limb, idx) => {
+          const origin = prepareSvgPivot(limb, '50% 0%')
           if (limb.animate) {
             const dir = idx % 2 === 0 ? 1 : -1
             limb.animate(
               [
-                { transform: 'rotate(0deg)', transformOrigin: 'top center' },
-                { transform: `rotate(${dir * 18}deg)`, transformOrigin: 'top center' },
-                { transform: `rotate(${-dir * 18}deg)`, transformOrigin: 'top center' },
-                { transform: 'rotate(0deg)', transformOrigin: 'top center' },
+                { transform: 'rotate(0deg)', transformOrigin: origin },
+                { transform: `rotate(${dir * 18}deg)`, transformOrigin: origin },
+                { transform: `rotate(${-dir * 18}deg)`, transformOrigin: origin },
+                { transform: 'rotate(0deg)', transformOrigin: origin },
               ],
               {
                 duration: 550,
@@ -254,13 +282,14 @@ export function initCharacterAnimator(
       }
 
       case 'sleep': {
-        const eyes = [getEl('#eye-left'), getEl('#eye-right')].filter(Boolean) as SVGElement[]
+        const eyes = [getEl('#eye-left'), getEl('#eye-right'), getEl('#eye')].filter(Boolean) as SVGElement[]
         eyes.forEach((eye) => {
+          const origin = prepareSvgPivot(eye, '50% 50%')
           if (eye.animate) {
             eye.animate(
               [
-                { transform: 'scaleY(1)', transformOrigin: 'center' },
-                { transform: 'scaleY(0.1)', transformOrigin: 'center' },
+                { transform: 'scaleY(1)', transformOrigin: origin },
+                { transform: 'scaleY(0.1)', transformOrigin: origin },
               ],
               {
                 duration: 400,
@@ -270,10 +299,11 @@ export function initCharacterAnimator(
           }
         })
         if (head && head.animate) {
+          const headOrigin = prepareSvgPivot(head, '50% 90%')
           currentActionAnimation = head.animate(
             [
-              { transform: 'rotate(0deg) translateY(0px)' },
-              { transform: 'rotate(6deg) translateY(4px)' },
+              { transform: 'rotate(0deg) translateY(0px)', transformOrigin: headOrigin },
+              { transform: 'rotate(6deg) translateY(4px)', transformOrigin: headOrigin },
             ],
             {
               duration: 600,
@@ -375,11 +405,12 @@ export function initCharacterAnimator(
         // Unicorn horn magic glow
         const horn = getEl('#horn')
         if (horn && horn.animate) {
+          const hornOrigin = prepareSvgPivot(horn, '50% 100%')
           horn.animate(
             [
-              { transform: 'scale(1)', filter: 'brightness(1)' },
-              { transform: 'scale(1.2)', filter: 'drop-shadow(0 0 12px #ffd700) brightness(1.4)' },
-              { transform: 'scale(1)', filter: 'brightness(1)' },
+              { transform: 'scale(1)', filter: 'brightness(1)', transformOrigin: hornOrigin },
+              { transform: 'scale(1.2)', filter: 'drop-shadow(0 0 12px #ffd700) brightness(1.4)', transformOrigin: hornOrigin },
+              { transform: 'scale(1)', filter: 'brightness(1)', transformOrigin: hornOrigin },
             ],
             {
               duration: 800,

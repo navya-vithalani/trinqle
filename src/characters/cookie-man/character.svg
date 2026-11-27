@@ -2,20 +2,20 @@
   <!-- Gingerbread Cookie Man -->
   <g id="cookie-man" stroke="#8a5328" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
     <!-- Stubby left leg -->
-    <path id="leg-left" d="M72 170 L72 215 A 15 15 0 0 0 100 215 L100 170 Z" fill="#c7834e"/>
+    <path id="leg-left" data-origin="50% 0%" d="M72 170 L72 215 A 15 15 0 0 0 100 215 L100 170 Z" fill="#c7834e"/>
     <!-- Stubby right leg -->
-    <path id="leg-right" d="M100 170 L100 215 A 15 15 0 0 0 128 215 L128 170 Z" fill="#c7834e"/>
+    <path id="leg-right" data-origin="50% 0%" d="M100 170 L100 215 A 15 15 0 0 0 128 215 L128 170 Z" fill="#c7834e"/>
 
     <!-- Stubby left arm -->
-    <path id="arm-left" d="M60 110 L28 135 A 14 14 0 0 0 46 155 L68 135 Z" fill="#c7834e"/>
+    <path id="arm-left" data-origin="90% 15%" d="M60 110 L28 135 A 14 14 0 0 0 46 155 L68 135 Z" fill="#c7834e"/>
     <!-- Stubby right arm -->
-    <path id="arm-right" d="M140 110 L172 135 A 14 14 0 0 1 154 155 L132 135 Z" fill="#c7834e"/>
+    <path id="arm-right" data-origin="10% 15%" d="M140 110 L172 135 A 14 14 0 0 1 154 155 L132 135 Z" fill="#c7834e"/>
 
     <!-- Body torso -->
-    <path id="body" d="M60 100 Q56 170 100 170 Q144 170 140 100 Z" fill="#c7834e"/>
+    <path id="body" data-origin="50% 80%" d="M60 100 Q56 170 100 170 Q144 170 140 100 Z" fill="#c7834e"/>
 
     <!-- Head -->
-    <circle id="head" cx="100" cy="65" r="42" fill="#c7834e"/>
+    <circle id="head" data-origin="50% 90%" cx="100" cy="65" r="42" fill="#c7834e"/>
   </g>
 
   <!-- White icing squiggles -->

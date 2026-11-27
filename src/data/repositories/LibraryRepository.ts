@@ -2,6 +2,7 @@ import type { TrinqleDB } from '../db'
 import { db as defaultDb } from '../db'
 import type { Library, Item } from '../types'
 import { generateUUIDv7 } from '../../core/ids'
+import { LIMITS, clampText } from '../../core/limits'
 
 export class LibraryRepository {
   constructor(private db: TrinqleDB = defaultDb) {}
@@ -41,7 +42,7 @@ export class LibraryRepository {
     const now = Date.now()
     const lib: Library = {
       id: id || generateUUIDv7(now),
-      name,
+      name: clampText(name, LIMITS.LIBRARY_NAME),
       createdAt: now,
       updatedAt: now,
     }
@@ -54,7 +55,7 @@ export class LibraryRepository {
     if (lib) {
       await this.db.libraries.put({
         ...lib,
-        name: newName,
+        name: clampText(newName, LIMITS.LIBRARY_NAME),
         updatedAt: Date.now(),
       })
     }
@@ -76,7 +77,7 @@ export class LibraryRepository {
     const item: Item = {
       id: id || generateUUIDv7(now),
       libraryId,
-      name,
+      name: clampText(name, LIMITS.LIBRARY_ITEM_NAME),
       createdAt: now,
       updatedAt: now,
     }
@@ -89,7 +90,7 @@ export class LibraryRepository {
     if (item) {
       await this.db.items.put({
         ...item,
-        name: newName,
+        name: clampText(newName, LIMITS.LIBRARY_ITEM_NAME),
         updatedAt: Date.now(),
       })
     }

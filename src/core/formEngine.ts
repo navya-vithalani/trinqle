@@ -16,24 +16,22 @@ export interface FormSnapshot {
 }
 
 /**
- * Checks whether a single question is visible given the current answers, date, and cycle state.
+ * Checks whether a single question's own schedule, section scope, and showWhen rule pass.
+ * Does not traverse parentId — use isQuestionReachable() for full reachability.
  */
-export function isQuestionVisible(
+function passesOwnVisibility(
   q: Question,
   snapshot: FormSnapshot,
   answers: Answer[],
   date: string,
-  cycleActive: boolean
+  cycleActive: boolean,
+  instance = 0
 ): boolean {
-  // Find question's section to verify scope
   const section = snapshot.sections?.find((s) => s.id === q.sectionId)
   if (section) {
-    // 1. Chapter reflection section is NEVER part of the nightly form
     if (section.scope === 'chapterEnd') {
       return false
     }
-
-    // 2. Weekly review only appears on Sundays (day 0)
     if (section.scope === 'weekly') {
       const [y, m, d] = date.split('-').map(Number)
       const dayOfWeek = new Date(y, m - 1, d).getDay()
@@ -43,7 +41,6 @@ export function isQuestionVisible(
     }
   }
 
-  // 3. Question-level schedule: weekdays (0 = Sunday .. 6 = Saturday)
   if (q.schedule?.weekdays && q.schedule.weekdays.length > 0) {
     const [y, m, d] = date.split('-').map(Number)
     const dayOfWeek = new Date(y, m - 1, d).getDay()
@@ -52,12 +49,10 @@ export function isQuestionVisible(
     }
   }
 
-  // 4. Chapter end question schedule
   if (q.schedule?.chapterEnd) {
     return false
   }
 
-  // 5. Conditional visibility (showWhen)
   if (q.showWhen) {
     const rule: ShowWhenRule = q.showWhen
 
@@ -66,7 +61,9 @@ export function isQuestionVisible(
     }
 
     if (rule.partId) {
-      const ans = answers.find((a) => a.partId === rule.partId && a.instance === 0)
+      const ans =
+        answers.find((a) => a.partId === rule.partId && a.instance === instance) ??
+        answers.find((a) => a.partId === rule.partId && a.instance === 0)
       const val = ans ? ans.value : null
 
       if (rule.op === 'truthy') {
@@ -75,6 +72,95 @@ export function isQuestionVisible(
         if (val !== rule.value) return false
       } else if (rule.op === 'in' && Array.isArray(rule.value)) {
         if (!rule.value.includes(val)) return false
+      }
+    }
+  }
+
+  return true
+}
+
+/**
+ * Checks whether a question is reachable through its section scope, schedule, showWhen,
+ * and full parentId + parent gate chain.
+ */
+export function isQuestionVisible(
+  q: Question,
+  snapshot: FormSnapshot,
+  answers: Answer[],
+  date: string,
+  cycleActive: boolean,
+  instance = 0,
+  visited = new Set<string>()
+): boolean {
+  if (visited.has(q.id)) return false
+  visited.add(q.id)
+
+  if (!passesOwnVisibility(q, snapshot, answers, date, cycleActive, instance)) {
+    return false
+  }
+
+  if (q.parentId) {
+    const parent = snapshot.questions.find((cand) => cand.id === q.parentId)
+    if (!parent) return false
+    if (!isQuestionVisible(parent, snapshot, answers, date, cycleActive, instance, visited)) {
+      return false
+    }
+    const parentGates = snapshot.parts.filter((p) => p.questionId === parent.id && p.gate)
+    const gateInst = parent.parentId ? instance : 0
+    for (const gp of parentGates) {
+      const gateAns = answers.find((a) => a.partId === gp.id && a.instance === gateInst)
+      if (!gateAns || gateAns.value !== true) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+/**
+ * Single source of truth for whether a specific part is currently reachable in UI & completeness.
+ * Reachable means: owning question is visible through its full parent/gate/showWhen/schedule/scope chain,
+ * and if the part is not a gate on its question, all gate parts on that question are true.
+ */
+export function isPartReachable(
+  part: Part,
+  snapshot: FormSnapshot,
+  answers: Answer[],
+  date: string,
+  cycleActive: boolean,
+  instance = 0,
+  options?: { mode?: EntryMode; expandedMore?: boolean }
+): boolean {
+  const q = snapshot.questions.find((cand) => cand.id === part.questionId)
+  if (!q) return false
+
+  if (!isQuestionVisible(q, snapshot, answers, date, cycleActive, instance)) {
+    return false
+  }
+
+  // In quick mode (without expandedMore), non-core parts and questions without core parts are hidden
+  if (options?.mode === 'quick' && !options.expandedMore) {
+    if (part.level !== 'core') return false
+    let root: Question = q
+    while (root.parentId) {
+      const parent = snapshot.questions.find((cand) => cand.id === root.parentId)
+      if (!parent) break
+      root = parent
+    }
+    const rootParts = snapshot.parts.filter((p) => p.questionId === root.id)
+    if (!rootParts.some((p) => p.level === 'core')) {
+      return false
+    }
+  }
+
+  if (!part.gate) {
+    const qGates = snapshot.parts.filter((p) => p.questionId === q.id && p.gate)
+    const gateInst = q.parentId ? instance : 0
+    for (const gp of qGates) {
+      const gateAns = answers.find((a) => a.partId === gp.id && a.instance === gateInst)
+      if (!gateAns || gateAns.value !== true) {
+        return false
       }
     }
   }
@@ -149,11 +235,11 @@ export interface CompletenessResult {
 }
 
 /**
- * Completeness rule (PRD F4 & TRD 5):
- * - Core parts required.
+ * Completeness rule:
+ * A part is required if and only if it is `core` AND currently reachable (`isPartReachable`).
  * - Core yes/no gates must be answered (true or false). Leaving unselected (undefined) is missing.
- * - Core parts under a gate are required ONLY when the gate is true.
- * - A repeating question with its gate on needs at least one session where all core parts are filled.
+ * - Sibling core parts and sub-question core parts under a gate are required ONLY when the gate is true.
+ * - A repeating question with its gate on needs at least one complete session; without a gate, every started session must be complete.
  */
 export function checkCompleteness(
   snapshot: FormSnapshot,
@@ -163,98 +249,111 @@ export function checkCompleteness(
   cycleActive: boolean
 ): CompletenessResult {
   const missingPartIds: string[] = []
-  const questions = visibleQuestions(snapshot, date, mode, answers, cycleActive, true)
+  const addMissing = (partId: string) => {
+    if (!missingPartIds.includes(partId)) {
+      missingPartIds.push(partId)
+    }
+  }
 
-  for (const q of questions) {
+  const collectMissingForQuestionInstance = (
+    q: Question,
+    instance: number,
+    options?: { mode?: EntryMode; expandedMore?: boolean }
+  ): string[] => {
+    const missing: string[] = []
     const qParts = snapshot.parts.filter((p) => p.questionId === q.id)
-    const gatePart = qParts.find((p) => p.gate)
+    for (const p of qParts) {
+      if (p.level !== 'core') continue
+      const inst = p.gate && !q.parentId ? 0 : instance
+      if (!isPartReachable(p, snapshot, answers, date, cycleActive, instance, options)) {
+        continue
+      }
+      const ans = answers.find((a) => a.partId === p.id && a.instance === inst)
+      if (!isPartAnswered(p, ans?.value)) {
+        missing.push(p.id)
+      }
+    }
 
-    if (gatePart) {
-      const gateAns = answers.find((a) => a.partId === gatePart.id && a.instance === 0)
-      const isGateAnswered = gateAns && typeof gateAns.value === 'boolean'
-      const isGateOn = gateAns ? gateAns.value === true : false
+    const childQuestions = snapshot.questions.filter((sq) => sq.parentId === q.id)
+    for (const sq of childQuestions) {
+      missing.push(...collectMissingForQuestionInstance(sq, instance, options))
+    }
 
-      // Gate must be answered if it is core
-      if (gatePart.level === 'core' && !isGateAnswered) {
-        missingPartIds.push(gatePart.id)
+    return missing
+  }
+
+  const checkOptions = { mode, expandedMore: true }
+  const topLevelQuestions = snapshot.questions.filter((q) => !q.parentId)
+
+  for (const q of topLevelQuestions) {
+    if (!isQuestionVisible(q, snapshot, answers, date, cycleActive, 0)) {
+      continue
+    }
+
+    const qParts = snapshot.parts.filter((p) => p.questionId === q.id)
+    const gateParts = qParts.filter((p) => p.gate)
+
+    if (gateParts.length > 0) {
+      let allGatesOn = true
+      for (const gp of gateParts) {
+        const gateAns = answers.find((a) => a.partId === gp.id && a.instance === 0)
+        const isGateAnswered = gateAns && typeof gateAns.value === 'boolean'
+        if (gp.level === 'core' && !isGateAnswered) {
+          addMissing(gp.id)
+        }
+        if (!gateAns || gateAns.value !== true) {
+          allGatesOn = false
+        }
       }
 
-      // If gate is not turned on (false or unanswered), sibling parts are skipped
-      if (!isGateOn) {
+      if (!allGatesOn) {
         continue
       }
 
-      // Gate is true: sibling core parts become required!
-      const siblingCoreParts = qParts.filter((p) => !p.gate && p.level === 'core')
-
       if (q.repeats) {
+        const subtreeIds = collectSubtreeQuestionIds(q.id, snapshot.questions)
+        const gateIds = new Set(gateParts.map((gp) => gp.id))
         const instances = Array.from(
           new Set(
             answers
-              .filter((a) => a.questionId === q.id && a.partId !== gatePart.id)
+              .filter((a) => subtreeIds.has(a.questionId) && !gateIds.has(a.partId))
               .map((a) => a.instance)
           )
         )
 
         if (instances.length === 0) {
-          siblingCoreParts.forEach((p) => missingPartIds.push(p.id))
+          collectMissingForQuestionInstance(q, 0, checkOptions).forEach(addMissing)
         } else {
-          const hasCompleteSession = instances.some((inst) => {
-            return siblingCoreParts.every((p) => {
-              const ans = answers.find((a) => a.partId === p.id && a.instance === inst)
-              return isPartAnswered(p, ans?.value)
-            })
-          })
-
+          const perInstanceMissing = instances.map((inst) =>
+            collectMissingForQuestionInstance(q, inst, checkOptions)
+          )
+          const hasCompleteSession = perInstanceMissing.some((m) => m.length === 0)
           if (!hasCompleteSession) {
-            siblingCoreParts.forEach((p) => {
-              const anyAnswered = answers.some((a) => a.partId === p.id)
-              if (!anyAnswered) missingPartIds.push(p.id)
-            })
+            perInstanceMissing[0].forEach(addMissing)
           }
         }
       } else {
-        for (const p of siblingCoreParts) {
-          const ans = answers.find((a) => a.partId === p.id && a.instance === 0)
-          if (!isPartAnswered(p, ans?.value)) {
-            missingPartIds.push(p.id)
-          }
+        collectMissingForQuestionInstance(q, 0, checkOptions).forEach(addMissing)
+      }
+    } else if (q.repeats) {
+      const subtreeIds = collectSubtreeQuestionIds(q.id, snapshot.questions)
+      const instances = Array.from(
+        new Set(
+          answers
+            .filter((a) => subtreeIds.has(a.questionId))
+            .map((a) => a.instance)
+        )
+      )
+
+      if (instances.length === 0) {
+        collectMissingForQuestionInstance(q, 0, checkOptions).forEach(addMissing)
+      } else {
+        for (const inst of instances) {
+          collectMissingForQuestionInstance(q, inst, checkOptions).forEach(addMissing)
         }
       }
     } else {
-      const coreParts = qParts.filter((p) => p.level === 'core')
-
-      if (q.repeats) {
-        const instances = Array.from(
-          new Set(
-            answers
-              .filter((a) => a.questionId === q.id)
-              .map((a) => a.instance)
-          )
-        )
-
-        if (instances.length === 0) {
-          if (coreParts.length > 0) {
-            coreParts.forEach((p) => missingPartIds.push(p.id))
-          }
-        } else {
-          for (const inst of instances) {
-            for (const p of coreParts) {
-              const ans = answers.find((a) => a.partId === p.id && a.instance === inst)
-              if (!isPartAnswered(p, ans?.value)) {
-                if (!missingPartIds.includes(p.id)) missingPartIds.push(p.id)
-              }
-            }
-          }
-        }
-      } else {
-        for (const p of coreParts) {
-          const ans = answers.find((a) => a.partId === p.id && a.instance === 0)
-          if (!isPartAnswered(p, ans?.value)) {
-            missingPartIds.push(p.id)
-          }
-        }
-      }
+      collectMissingForQuestionInstance(q, 0, checkOptions).forEach(addMissing)
     }
   }
 
@@ -262,6 +361,21 @@ export function checkCompleteness(
     complete: missingPartIds.length === 0,
     missingPartIds,
   }
+}
+
+function collectSubtreeQuestionIds(rootId: string, allQuestions: Question[]): Set<string> {
+  const result = new Set<string>([rootId])
+  let added = true
+  while (added) {
+    added = false
+    for (const q of allQuestions) {
+      if (q.parentId && result.has(q.parentId) && !result.has(q.id)) {
+        result.add(q.id)
+        added = true
+      }
+    }
+  }
+  return result
 }
 
 /**

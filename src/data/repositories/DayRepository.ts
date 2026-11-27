@@ -2,6 +2,7 @@ import type { TrinqleDB } from '../db'
 import { db as defaultDb } from '../db'
 import type { Day, Answer, AnswerLink } from '../types'
 import { ChapterRepository } from './ChapterRepository'
+import { LIMITS, clampText } from '../../core/limits'
 
 export class DayRepository {
   private chapterRepo: ChapterRepository
@@ -50,20 +51,32 @@ export class DayRepository {
     // Assert chapter is not closed
     await this.chapterRepo.assertDateNotClosed(day.date)
 
+    const sanitizedDay: Day = {
+      ...day,
+      title: day.title !== undefined ? clampText(day.title, LIMITS.DAY_TITLE) : undefined,
+      oneliner: day.oneliner !== undefined ? clampText(day.oneliner, LIMITS.DAY_ONELINER) : undefined,
+    }
+
+    const sanitizedAnswers: Answer[] = answers.map((a) =>
+      typeof a.value === 'string'
+        ? { ...a, value: clampText(a.value, LIMITS.LONG_TEXT) }
+        : a
+    )
+
     await this.db.transaction('rw', [this.db.days, this.db.answers, this.db.answerLinks], async () => {
       // 1. Put Day
-      await this.db.days.put(day)
+      await this.db.days.put(sanitizedDay)
 
       // 2. Remove old answers for this date
-      await this.db.answers.where('date').equals(day.date).delete()
+      await this.db.answers.where('date').equals(sanitizedDay.date).delete()
 
       // 3. Put new answers
-      if (answers.length > 0) {
-        await this.db.answers.bulkPut(answers)
+      if (sanitizedAnswers.length > 0) {
+        await this.db.answers.bulkPut(sanitizedAnswers)
       }
 
       // 4. Remove old links for this date
-      await this.db.answerLinks.where('date').equals(day.date).delete()
+      await this.db.answerLinks.where('date').equals(sanitizedDay.date).delete()
 
       // 5. Put new links
       if (answerLinks.length > 0) {

@@ -380,22 +380,23 @@ export async function importChapterZip(
   }
   chapter.photos = photoBlobs
 
-  await db.transaction(
-    'rw',
-    [
-      db.chapters,
-      db.days,
-      db.answers,
-      db.libraries,
-      db.items,
-      db.answerLinks,
-      db.chapterAnswers,
-      db.cycles,
-      db.runs,
-      db.insights,
-      db.stickers,
-    ],
-    async () => {
+  await db.runBypassingClosedGuard(() =>
+    db.transaction(
+      'rw',
+      [
+        db.chapters,
+        db.days,
+        db.answers,
+        db.libraries,
+        db.items,
+        db.answerLinks,
+        db.chapterAnswers,
+        db.cycles,
+        db.runs,
+        db.insights,
+        db.stickers,
+      ],
+      async () => {
       // 1. Put Chapter
       await db.chapters.put(chapter)
 
@@ -475,7 +476,8 @@ export async function importChapterZip(
           await db.stickers.put({ ...clean, blob: resolvedBlob })
         }
       }
-    }
+      }
+    )
   )
 
   return {

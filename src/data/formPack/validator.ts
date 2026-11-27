@@ -1,4 +1,5 @@
 import type { FormPack, PartKind, PartLevel, SectionScope } from '../types'
+import { LIMITS } from '../../core/limits'
 
 const VALID_PART_KINDS: PartKind[] = ['yesno', 'scale', 'number', 'text', 'timerange', 'library']
 const VALID_PART_LEVELS: PartLevel[] = ['core', 'extra']
@@ -40,9 +41,17 @@ export function validateFormPack(data: unknown): ValidationResult {
       }
       if (!lib.name || typeof lib.name !== 'string') {
         errors.push(`Library at index ${idx} is missing a valid 'name'`)
+      } else if (lib.name.length > LIMITS.LIBRARY_NAME) {
+        errors.push(`Library '${lib.name.slice(0, 20)}...' exceeds ${LIMITS.LIBRARY_NAME} characters`)
       }
       if (!Array.isArray(lib.items)) {
         errors.push(`Library '${lib.name || idx}' items must be an array`)
+      } else {
+        lib.items.forEach((itName, itIdx) => {
+          if (typeof itName !== 'string' || itName.length > LIMITS.LIBRARY_ITEM_NAME) {
+            errors.push(`Library '${lib.name}' item at index ${itIdx} is invalid or exceeds ${LIMITS.LIBRARY_ITEM_NAME} characters`)
+          }
+        })
       }
     })
   }
@@ -57,6 +66,8 @@ export function validateFormPack(data: unknown): ValidationResult {
       }
       if (!sec.name || typeof sec.name !== 'string') {
         errors.push(`Section at index ${idx} is missing a valid 'name'`)
+      } else if (sec.name.length > LIMITS.SECTION_NAME) {
+        errors.push(`Section '${sec.name.slice(0, 20)}...' exceeds ${LIMITS.SECTION_NAME} characters`)
       }
       if (sec.scope && !VALID_SECTION_SCOPES.includes(sec.scope)) {
         errors.push(`Section '${sec.name}' has invalid scope '${sec.scope}'`)
@@ -74,6 +85,8 @@ export function validateFormPack(data: unknown): ValidationResult {
       }
       if (!q.label || typeof q.label !== 'string') {
         errors.push(`Question at index ${idx} is missing a valid 'label'`)
+      } else if (q.label.length > LIMITS.QUESTION_LABEL) {
+        errors.push(`Question '${q.label.slice(0, 20)}...' exceeds ${LIMITS.QUESTION_LABEL} characters`)
       }
       if (!Array.isArray(q.parts) || q.parts.length === 0) {
         errors.push(`Question '${q.label || idx}' must contain at least one part`)
@@ -84,6 +97,8 @@ export function validateFormPack(data: unknown): ValidationResult {
           }
           if (!p.label || typeof p.label !== 'string') {
             errors.push(`Question '${q.label}' part at index ${pIdx} is missing 'label'`)
+          } else if (p.label.length > LIMITS.PART_LABEL) {
+            errors.push(`Question '${q.label}' part '${p.label.slice(0, 20)}...' exceeds ${LIMITS.PART_LABEL} characters`)
           }
           if (!VALID_PART_KINDS.includes(p.kind)) {
             errors.push(`Question '${q.label}' part '${p.label}' has invalid kind '${p.kind}'`)

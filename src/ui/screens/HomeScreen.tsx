@@ -258,7 +258,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (!activeChapter) return
     const updated = await chapterRepo.updatePlannedEndDate(
       activeChapter.id,
-      newPlannedEndDate
+      newPlannedEndDate,
+      todayStr
     )
     setActiveChapter(updated)
     showToast('Chapter end date updated!')
@@ -684,6 +685,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           chapter={activeChapter}
           chapterIndex={allChaptersCount}
           daysRemaining={progress.daysRemaining}
+          todayLogicalDate={todayStr}
           isDevMode={isDevMode}
           onClose={() => setIsChapterDetailsOpen(false)}
           onSaveTitle={handleSaveChapterTitle}

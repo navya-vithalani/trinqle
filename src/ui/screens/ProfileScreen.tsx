@@ -67,6 +67,8 @@ import { ImportDialog } from '../dialogs/ImportDialog'
 import { FormEditorScreen } from '../editor/FormEditorScreen'
 import { generateDemoData } from '../../tools/demoData'
 import { db } from '../../data/db'
+import { formatDate } from '../../core/logicalDay'
+import { LIMITS } from '../../core/limits'
 import {
   SettingsRepository,
   ChapterRepository,
@@ -175,7 +177,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     const lastBackup = await settingsRepo.getSetting<number>('last_backup_timestamp', 0)
     if (lastBackup) {
-      setLastBackupDate(new Date(lastBackup).toISOString().slice(0, 10))
+      setLastBackupDate(formatDate(new Date(lastBackup)))
       const daysSince = (Date.now() - lastBackup) / (1000 * 60 * 60 * 24)
       if (daysSince >= 7) setShowBackupNudge(true)
     } else {
@@ -193,7 +195,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       await downloadOrShareFile(filename, blob)
       const now = Date.now()
       await settingsRepo.setSetting('last_backup_timestamp', now)
-      setLastBackupDate(new Date(now).toISOString().slice(0, 10))
+      setLastBackupDate(formatDate(new Date(now)))
       setShowBackupNudge(false)
       showToast('Backup archive created successfully')
     } catch {
@@ -428,6 +430,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </label>
           <input
             type="text"
+            maxLength={LIMITS.USER_NAME}
             placeholder="Add your name..."
             value={userName}
             onChange={(e) => handleSaveUserName(e.target.value)}

@@ -49,6 +49,7 @@ import {
 import { getStickerById, loadCustomStickerItems, type StickerItem } from '../../core/stickers'
 import { generateUUIDv7 } from '../../core/ids'
 import { getLocalTimeZone } from '../../core/logicalDay'
+import { LIMITS } from '../../core/limits'
 
 import { YesNoWidget } from '../widgets/YesNoWidget'
 import { ScaleWidget } from '../widgets/ScaleWidget'
@@ -125,7 +126,11 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
   // Answers state: partId -> instance -> AnswerValue
   const [answersMap, setAnswersMap] = useState<Record<string, Record<number, AnswerValue>>>({})
+  const [existingAnswerMeta, setExistingAnswerMeta] = useState<
+    Record<string, Record<number, { id: string; createdAt: number }>>
+  >({})
   const [repeatingSessions, setRepeatingSessions] = useState<Record<string, number[]>>({}) // questionId -> instance numbers
+  const [activeSessionIndex, setActiveSessionIndex] = useState<Record<string, number>>({}) // questionId -> active dot index
 
   // Existing day check & change diff tracking
   const [existingDayRecord, setExistingDayRecord] = useState<Day | null>(null)
@@ -190,22 +195,28 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
         const existingAnswers = await dayRepo.getAnswersForDate(date)
         const loadedAnswers: Record<string, Record<number, AnswerValue>> = {}
+        const loadedMeta: Record<string, Record<number, { id: string; createdAt: number }>> = {}
         const loadedSessions: Record<string, Set<number>> = {}
 
         existingAnswers.forEach((a) => {
           if (!loadedAnswers[a.partId]) loadedAnswers[a.partId] = {}
           loadedAnswers[a.partId][a.instance] = a.value
 
+          if (!loadedMeta[a.partId]) loadedMeta[a.partId] = {}
+          loadedMeta[a.partId][a.instance] = { id: a.id, createdAt: a.createdAt }
+
           if (!loadedSessions[a.questionId]) loadedSessions[a.questionId] = new Set()
           loadedSessions[a.questionId].add(a.instance)
         })
 
         setAnswersMap(loadedAnswers)
+        setExistingAnswerMeta(loadedMeta)
         const sessionsRecord: Record<string, number[]> = {}
         Object.entries(loadedSessions).forEach(([qId, insts]) => {
           sessionsRecord[qId] = Array.from(insts).sort((a, b) => a - b)
         })
-        setRepeatingSessions((prev) => ({ ...prev, ...sessionsRecord }))
+        setRepeatingSessions({ ...initSessions, ...sessionsRecord })
+        setActiveSessionIndex({})
 
         // Save baseline snapshot to detect actual edits
         setInitialSnapshotJson(
@@ -219,22 +230,15 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         )
       } else {
         setExistingDayRecord(null)
+        setExistingAnswerMeta({})
         setInitialSnapshotJson('')
         const draftKey = `trinqle_draft_${date}`
         const savedDraft = localStorage.getItem(draftKey)
         const applyFreshDefaults = () => {
-          // Core yes/no toggles start visibly at "No" (false) per PRD F4
-          const defaultAnswers: Record<string, Record<number, AnswerValue>> = {}
-          const qMap = new Map(nightlyQuestions.map((nq) => [nq.id, nq]))
-          for (const p of allParts) {
-            const parentQ = qMap.get(p.questionId)
-            if (!parentQ) continue
-            if (p.kind === 'yesno' && p.level === 'core' && (!parentQ.repeats || p.gate)) {
-              defaultAnswers[p.id] = { 0: false }
-            }
-          }
-          setAnswersMap(defaultAnswers)
+          // Core yes/no parts start blank (undefined) so user explicitly chooses Yes or No
+          setAnswersMap({})
           setRepeatingSessions(initSessions)
+          setActiveSessionIndex({})
           setStep('header')
         }
 
@@ -413,7 +417,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
         const inst = parseInt(instStr, 10)
         if (val === undefined || val === null) return
 
-        const ansId = generateUUIDv7(now)
+        const priorMeta = existingAnswerMeta[partId]?.[inst]
+        const ansId = priorMeta?.id || generateUUIDv7(now)
         finalAnswers.push({
           id: ansId,
           date,
@@ -421,7 +426,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
           partId,
           instance: inst,
           value: val,
-          createdAt: now,
+          createdAt: priorMeta?.createdAt ?? now,
           updatedAt: now,
         })
 
@@ -472,7 +477,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
       memorability,
       mode,
       expandedMore,
-      backfilled: isBackfill,
+      backfilled: existingDayRecord ? existingDayRecord.backfilled : isBackfill,
       filledAt: existingDayRecord ? existingDayRecord.filledAt : now,
       editedAt: hasActualChanges ? now : existingDayRecord?.editedAt,
       tz: getLocalTimeZone(),
@@ -612,11 +617,19 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
               {/* Title & One-liner Input */}
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
-                    Day Headline
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-[var(--color-ink)] block">
+                      Day Headline
+                    </label>
+                    {title.length >= Math.floor(LIMITS.DAY_TITLE * 0.85) && (
+                      <span className="text-[10px] text-[var(--color-ink-soft)]">
+                        {title.length}/{LIMITS.DAY_TITLE}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    maxLength={LIMITS.DAY_TITLE}
                     placeholder="e.g. Rainy cafe morning & deep focus"
                     value={title}
                     disabled={isReadOnly}
@@ -626,11 +639,19 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[var(--color-ink)] block">
-                    One-liner summary
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-[var(--color-ink)] block">
+                      One-liner summary
+                    </label>
+                    {oneliner.length >= Math.floor(LIMITS.DAY_ONELINER * 0.85) && (
+                      <span className="text-[10px] text-[var(--color-ink-soft)]">
+                        {oneliner.length}/{LIMITS.DAY_ONELINER}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    maxLength={LIMITS.DAY_ONELINER}
                     placeholder="e.g. Shipped Phase 4 and made matcha tea"
                     value={oneliner}
                     disabled={isReadOnly}
@@ -970,7 +991,7 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                     <div
                       id={`question-${q.id}`}
                       key={q.id}
-                      className={`sticker-card p-4 space-y-3 ${
+                      className={`sticker-card p-4 space-y-3 min-w-0 overflow-hidden ${
                         hasCorePart ? 'border-l-4 border-l-[var(--color-accent)]' : ''
                       }`}
                     >
@@ -1008,26 +1029,48 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
 
                       {/* Render Gate Part if present */}
                       {gatePart && (
-                        <YesNoWidget
-                          label={gatePart.label}
-                          value={typeof gateValue === 'boolean' ? gateValue : undefined}
-                          required={gatePart.level === 'core'}
-                          disabled={isReadOnly}
-                          onChange={(val) => handleAnswerChange(gatePart.id, 0, val ?? false)}
-                        />
+                        <div
+                          className={
+                            completeness.missingPartIds.includes(gatePart.id)
+                              ? 'rounded-lg p-1 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]'
+                              : ''
+                          }
+                        >
+                          <YesNoWidget
+                            label={gatePart.label}
+                            value={typeof gateValue === 'boolean' ? gateValue : undefined}
+                            required={gatePart.level === 'core'}
+                            disabled={isReadOnly}
+                            onChange={(val) => handleAnswerChange(gatePart.id, 0, val ?? false)}
+                          />
+                        </div>
                       )}
 
-                      {/* Horizontally Swipeable Sessions (Items 7 & 8) */}
+                      {/* Horizontally Swipeable Sessions (F2: snap + no overflow + active dots) */}
                       {(!gatePart || isGateOn) && (
-                        <div className="space-y-1.5">
-                          <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-2.5 pb-2 scrollbar-thin">
+                        <div className="space-y-1.5 min-w-0">
+                          <div
+                            onScroll={(e) => {
+                              if (!q.repeats || sessions.length <= 1) return
+                              const el = e.currentTarget
+                              const width = el.clientWidth || 1
+                              const idx = Math.min(
+                                sessions.length - 1,
+                                Math.max(0, Math.round(el.scrollLeft / width))
+                              )
+                              setActiveSessionIndex((prev) =>
+                                prev[q.id] === idx ? prev : { ...prev, [q.id]: idx }
+                              )
+                            }}
+                            className="flex flex-row w-full overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-thin"
+                          >
                             {sessions.map((instance, sIdx) => (
                               <div
                                 key={instance}
                                 className={
                                   q.repeats && sessions.length > 1
-                                    ? 'min-w-[85%] sm:min-w-[90%] snap-center shrink-0 p-3 bg-[var(--color-bg)]/60 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2 shadow-xs'
-                                    : 'w-full space-y-2'
+                                    ? 'w-full flex-none min-w-0 snap-center overflow-hidden p-3 bg-[var(--color-bg)]/60 rounded-[var(--radius-m)] border border-[var(--color-line)] space-y-2 shadow-xs'
+                                    : 'w-full min-w-0 space-y-2'
                                 }
                               >
                                 {/* Session Top Bar: Plain numeral in top-left (Item 8) */}
@@ -1125,6 +1168,11 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                           <TextWidget
                                             label={p.label}
                                             value={(val as string) ?? ''}
+                                            maxLength={
+                                              (p.config as any)?.multiline
+                                                ? LIMITS.LONG_TEXT
+                                                : LIMITS.SHORT_TEXT
+                                            }
                                             disabled={isReadOnly}
                                             onChange={(v) => handleAnswerChange(p.id, instance, v)}
                                           />
@@ -1163,7 +1211,8 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                         { sections, questions, parts },
                                         currentAnswerArray,
                                         date,
-                                        Boolean(activeCycle)
+                                        Boolean(activeCycle),
+                                        instance
                                       )
                                   )
                                   .map((sq) => {
@@ -1185,27 +1234,43 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                           {sq.label}
                                         </span>
                                         {sqGate && (
-                                          <YesNoWidget
-                                            label={sqGate.label}
-                                            value={
-                                              typeof answersMap[sqGate.id]?.[instance] === 'boolean'
-                                                ? (answersMap[sqGate.id][instance] as boolean)
-                                                : undefined
+                                          <div
+                                            className={
+                                              completeness.missingPartIds.includes(sqGate.id)
+                                                ? 'rounded-lg p-1 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]'
+                                                : ''
                                             }
-                                            required={sqGate.level === 'core'}
-                                            disabled={isReadOnly}
-                                            onChange={(v) =>
-                                              handleAnswerChange(sqGate.id, instance, v ?? false)
-                                            }
-                                          />
+                                          >
+                                            <YesNoWidget
+                                              label={sqGate.label}
+                                              value={
+                                                typeof answersMap[sqGate.id]?.[instance] === 'boolean'
+                                                  ? (answersMap[sqGate.id][instance] as boolean)
+                                                  : undefined
+                                              }
+                                              required={sqGate.level === 'core'}
+                                              disabled={isReadOnly}
+                                              onChange={(v) =>
+                                                handleAnswerChange(sqGate.id, instance, v ?? false)
+                                              }
+                                            />
+                                          </div>
                                         )}
                                         {sqGateOn &&
                                           sqParts
                                             .filter((sp) => !sp.gate)
                                             .map((sp) => {
                                               const spVal = answersMap[sp.id]?.[instance]
+                                              const spMissing = completeness.missingPartIds.includes(sp.id)
                                               return (
-                                                <div key={sp.id}>
+                                                <div
+                                                  key={sp.id}
+                                                  className={
+                                                    spMissing
+                                                      ? 'rounded-lg p-2 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]'
+                                                      : ''
+                                                  }
+                                                >
                                                   {sp.kind === 'yesno' && (
                                                     <YesNoWidget
                                                       label={sp.label}
@@ -1240,6 +1305,11 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                                                     <TextWidget
                                                       label={sp.label}
                                                       value={(spVal as string) ?? ''}
+                                                      maxLength={
+                                                        (sp.config as any)?.multiline
+                                                          ? LIMITS.LONG_TEXT
+                                                          : LIMITS.SHORT_TEXT
+                                                      }
                                                       disabled={isReadOnly}
                                                       onChange={(v) => handleAnswerChange(sp.id, instance, v)}
                                                     />
@@ -1275,13 +1345,20 @@ export const NightlyFormModal: React.FC<NightlyFormModalProps> = ({
                           </div>
                           {/* Swipe indicator dots for repeating sessions */}
                           {q.repeats && sessions.length > 1 && (
-                            <div className="flex items-center justify-center space-x-1 py-0.5">
-                              {sessions.map((_, dotIdx) => (
-                                <span
-                                  key={dotIdx}
-                                  className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]/50"
-                                />
-                              ))}
+                            <div className="flex items-center justify-center space-x-1.5 py-0.5">
+                              {sessions.map((_, dotIdx) => {
+                                const isActiveDot = (activeSessionIndex[q.id] ?? 0) === dotIdx
+                                return (
+                                  <span
+                                    key={dotIdx}
+                                    className={`h-1.5 rounded-full transition-all ${
+                                      isActiveDot
+                                        ? 'w-4 bg-[var(--color-accent)]'
+                                        : 'w-1.5 bg-[var(--color-accent)]/35'
+                                    }`}
+                                  />
+                                )
+                              })}
                             </div>
                           )}
                         </div>

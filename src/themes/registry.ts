@@ -112,7 +112,7 @@ export function applyThemeTokens(tokens: ThemeTokens, isDark: boolean = false): 
   }
 }
 
-export function applyThemeById(themeId: string, isDark: boolean): void {
+export function applyThemeById(themeId: string, isDark: boolean, persist = true): void {
   const theme = getTheme(themeId)
   const tokens = isDark ? theme.tokens.dark : theme.tokens.light
   applyThemeTokens(tokens, isDark)
@@ -192,7 +192,9 @@ export function applyThemeById(themeId: string, isDark: boolean): void {
     root.style.setProperty('--tab-home-active-bg', 'var(--color-bg)')
   }
 
-  saveThemePreference(themeId, isDark)
+  if (persist) {
+    saveThemePreference(themeId, isDark)
+  }
 }
 
 /**

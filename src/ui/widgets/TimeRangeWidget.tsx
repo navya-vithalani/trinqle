@@ -605,7 +605,7 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
   onChange,
   disabled,
 }) => {
-  // Default to 4:00 PM (16:00) to 6:00 PM (18:00), syncing when async value loads
+  const hasValue = Boolean(value && value.start && value.end)
   const [start, setStart] = useState(value?.start || '16:00')
   const [end, setEnd] = useState(value?.end || '18:00')
   const [startDayOffset, setStartDayOffset] = useState(value?.startDayOffset ?? 0)
@@ -658,65 +658,84 @@ export const TimeRangeWidget: React.FC<TimeRangeWidgetProps> = ({
   const endDayLabel = getDayAbbrev(date, 0)
 
   return (
-    <div className="py-2.5 space-y-2">
-      <div className="flex items-center justify-between">
+    <div className="py-2.5 space-y-2 min-w-0">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
-        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)]">
-          {formatMinutesToHours(durationMinutes)}
-        </span>
+        {hasValue ? (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-line)] text-[var(--color-accent)] shrink-0">
+            {formatMinutesToHours(durationMinutes)}
+          </span>
+        ) : (
+          <span className="text-[11px] font-medium text-[var(--color-ink-soft)] shrink-0">
+            Not set
+          </span>
+        )}
       </div>
 
       {/* Vertical Summary Bar (Clickable to open Dual-Clock pop-up) */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Time range: ${formatTime12h(start)} to ${formatTime12h(end)}. Click to change.`}
-        onClick={() => !disabled && setIsModalOpen(true)}
-        className="w-full flex items-center p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border-2 border-[var(--color-line)] cursor-pointer hover:border-[var(--color-accent)]/60 transition-all select-none active:scale-[0.99]"
-      >
-        {/* Dynamic Vertical Bar */}
-        <div className="relative w-8 h-28 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] shrink-0 overflow-hidden shadow-inner">
-          {/* Tick markers */}
-          <div className="absolute top-[25%] left-0 right-0 h-[1px] bg-[var(--color-line)]/50" />
-          <div className="absolute top-[50%] left-0 right-0 h-[1px] bg-[var(--color-line)]/80" />
-          <div className="absolute top-[75%] left-0 right-0 h-[1px] bg-[var(--color-line)]/50" />
-
-          {/* Filled active span */}
-          <div
-            className="absolute left-0.5 right-0.5 rounded-full bg-gradient-to-b from-[var(--color-accent)] to-[var(--color-accent2)] shadow-sm"
-            style={{
-              top: `${Math.max(2, topPct)}%`,
-              height: `${Math.max(6, heightPct)}%`,
-            }}
-          />
+      {!hasValue ? (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Set time range for ${label}`}
+          onClick={() => !disabled && setIsModalOpen(true)}
+          className="w-full flex items-center justify-center gap-2 p-4 rounded-[var(--radius-m)] bg-[var(--color-bg)]/60 border-2 border-dashed border-[var(--color-line)] text-xs font-semibold text-[var(--color-ink-soft)] cursor-pointer hover:border-[var(--color-accent)]/60 transition-all select-none active:scale-[0.99]"
+        >
+          <Clock size={15} className="text-[var(--color-accent)]" />
+          <span>Tap to set time range</span>
         </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Time range: ${formatTime12h(start)} to ${formatTime12h(end)}. Click to change.`}
+          onClick={() => !disabled && setIsModalOpen(true)}
+          className="w-full flex items-center p-3 rounded-[var(--radius-m)] bg-[var(--color-bg)] border-2 border-[var(--color-line)] cursor-pointer hover:border-[var(--color-accent)]/60 transition-all select-none active:scale-[0.99]"
+        >
+          {/* Dynamic Vertical Bar */}
+          <div className="relative w-8 h-28 rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] shrink-0 overflow-hidden shadow-inner">
+            {/* Tick markers */}
+            <div className="absolute top-[25%] left-0 right-0 h-[1px] bg-[var(--color-line)]/50" />
+            <div className="absolute top-[50%] left-0 right-0 h-[1px] bg-[var(--color-line)]/80" />
+            <div className="absolute top-[75%] left-0 right-0 h-[1px] bg-[var(--color-line)]/50" />
 
-        {/* Visual Readout labels on the right */}
-        <div className="flex-1 ml-4 flex flex-col justify-between h-28 py-0.5">
-          <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
-              Start ({startDayLabel})
-            </span>
-            <span className="text-sm font-bold text-[var(--color-ink)]">
-              {formatTimeByPreference(start, timeFormat)}
-            </span>
+            {/* Filled active span */}
+            <div
+              className="absolute left-0.5 right-0.5 rounded-full bg-gradient-to-b from-[var(--color-accent)] to-[var(--color-accent2)] shadow-sm"
+              style={{
+                top: `${Math.max(2, topPct)}%`,
+                height: `${Math.max(6, heightPct)}%`,
+              }}
+            />
           </div>
 
-          <div className="flex items-center space-x-1.5 text-[11px] text-[var(--color-ink-soft)] font-medium">
-            <Clock size={12} className="text-[var(--color-accent)]" />
-            <span>Tap bar to scrub or type times</span>
-          </div>
+          {/* Visual Readout labels on the right */}
+          <div className="flex-1 ml-4 flex flex-col justify-between h-28 py-0.5 min-w-0">
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                Start ({startDayLabel})
+              </span>
+              <span className="text-sm font-bold text-[var(--color-ink)]">
+                {formatTimeByPreference(start, timeFormat)}
+              </span>
+            </div>
 
-          <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
-              End ({endDayLabel})
-            </span>
-            <span className="text-sm font-bold text-[var(--color-ink)]">
-              {formatTimeByPreference(end, timeFormat)}
-            </span>
+            <div className="flex items-center space-x-1.5 text-[11px] text-[var(--color-ink-soft)] font-medium">
+              <Clock size={12} className="text-[var(--color-accent)]" />
+              <span>Tap bar to scrub or type times</span>
+            </div>
+
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase tracking-wider block">
+                End ({endDayLabel})
+              </span>
+              <span className="text-sm font-bold text-[var(--color-ink)]">
+                {formatTimeByPreference(end, timeFormat)}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Dual Clock Modal Pop-up */}
       {isModalOpen && (

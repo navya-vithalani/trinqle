@@ -272,4 +272,120 @@ describe('Form Engine (Phase 2)', () => {
     ]
     expect(checkOverlappingTimeRanges(midnightOverlap)).toBe(true)
   })
+
+  it('F1: ignores core parts on sub-questions when parent gate is false, and requires them when true', () => {
+    const gatedWithSubSnapshot = {
+      questions: [
+        {
+          id: 'q_sleep',
+          sectionId: 'sec_routine',
+          label: 'Sleep',
+          order: 0,
+          repeats: true,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        {
+          id: 'q_dream',
+          sectionId: 'sec_routine',
+          parentId: 'q_sleep',
+          label: 'Dream',
+          order: 1,
+          repeats: false,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ],
+      parts: [
+        {
+          id: 'p_sleep_gate',
+          questionId: 'q_sleep',
+          kind: 'yesno' as const,
+          label: 'Did you sleep?',
+          order: 0,
+          level: 'core' as const,
+          gate: true,
+          config: {},
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        {
+          id: 'p_sleep_time',
+          questionId: 'q_sleep',
+          kind: 'timerange' as const,
+          label: 'Sleep window',
+          order: 1,
+          level: 'core' as const,
+          config: {},
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        {
+          id: 'p_dream_gate',
+          questionId: 'q_dream',
+          kind: 'yesno' as const,
+          label: 'Remember a dream?',
+          order: 0,
+          level: 'core' as const,
+          gate: true,
+          config: {},
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        {
+          id: 'p_dream_vivid',
+          questionId: 'q_dream',
+          kind: 'scale' as const,
+          label: 'Vividness',
+          order: 1,
+          level: 'core' as const,
+          config: { min: 1, max: 10, step: 1, display: 'slider' },
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ],
+    }
+
+    // 1. Blank gate -> missing p_sleep_gate only (not p_sleep_time, p_dream_gate, p_dream_vivid)
+    const resBlank = checkCompleteness(gatedWithSubSnapshot, '2026-10-15', 'quick', [], false)
+    expect(resBlank.complete).toBe(false)
+    expect(resBlank.missingPartIds).toEqual(['p_sleep_gate'])
+
+    // 2. Parent gate = false -> complete! Sub-question core parts must NOT block submit
+    const gateNo: Answer[] = [
+      { id: 'a1', date: '2026-10-15', questionId: 'q_sleep', partId: 'p_sleep_gate', instance: 0, value: false, createdAt: 0, updatedAt: 0 },
+    ]
+    const resNo = checkCompleteness(gatedWithSubSnapshot, '2026-10-15', 'quick', gateNo, false)
+    expect(resNo.complete).toBe(true)
+    expect(resNo.missingPartIds).toEqual([])
+
+    // 3. Parent gate = true -> p_sleep_time and p_dream_gate are required, p_dream_vivid is gated by p_dream_gate
+    const gateYes: Answer[] = [
+      { id: 'a1', date: '2026-10-15', questionId: 'q_sleep', partId: 'p_sleep_gate', instance: 0, value: true, createdAt: 0, updatedAt: 0 },
+    ]
+    const resYes = checkCompleteness(gatedWithSubSnapshot, '2026-10-15', 'quick', gateYes, false)
+    expect(resYes.complete).toBe(false)
+    expect(resYes.missingPartIds).toContain('p_sleep_time')
+    expect(resYes.missingPartIds).toContain('p_dream_gate')
+    expect(resYes.missingPartIds).not.toContain('p_dream_vivid')
+
+    // 4. Parent gate = true, sleep time filled, sub-question gate = false -> complete!
+    const subGateNo: Answer[] = [
+      ...gateYes,
+      { id: 'a2', date: '2026-10-15', questionId: 'q_sleep', partId: 'p_sleep_time', instance: 0, value: { start: '23:00', end: '07:00', crossesMidnight: true }, createdAt: 0, updatedAt: 0 },
+      { id: 'a3', date: '2026-10-15', questionId: 'q_dream', partId: 'p_dream_gate', instance: 0, value: false, createdAt: 0, updatedAt: 0 },
+    ]
+    const resSubNo = checkCompleteness(gatedWithSubSnapshot, '2026-10-15', 'quick', subGateNo, false)
+    expect(resSubNo.complete).toBe(true)
+
+    // 5. Sub-question gate = true -> p_dream_vivid now required
+    const subGateYes: Answer[] = [
+      ...gateYes,
+      { id: 'a2', date: '2026-10-15', questionId: 'q_sleep', partId: 'p_sleep_time', instance: 0, value: { start: '23:00', end: '07:00', crossesMidnight: true }, createdAt: 0, updatedAt: 0 },
+      { id: 'a3', date: '2026-10-15', questionId: 'q_dream', partId: 'p_dream_gate', instance: 0, value: true, createdAt: 0, updatedAt: 0 },
+    ]
+    const resSubYes = checkCompleteness(gatedWithSubSnapshot, '2026-10-15', 'quick', subGateYes, false)
+    expect(resSubYes.complete).toBe(false)
+    expect(resSubYes.missingPartIds).toEqual(['p_dream_vivid'])
+  })
 })

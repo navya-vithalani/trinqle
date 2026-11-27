@@ -178,10 +178,11 @@ describe('Chapter Freeze: Stability across code updates', () => {
       libraries: [],
     })
 
-    expect(frozen.dashboard).toHaveLength(1)
+    expect(frozen.dashboard).toHaveLength(2)
     expect(frozen.dashboard[0].chartId).toBe('chart_q_mood.p_mood_val.value')
     expect(frozen.dashboard[0].rendererVersion).toBe(1)
     expect(frozen.dashboard[0].type).toBe('line')
+    expect(frozen.dashboard[1].chartId).toBe('chart_derived.memorability')
     expect(frozen.metadata.daysFilled).toBe(2)
     expect((frozen.stats as any)['q_mood.p_mood_val.value'].mean).toBe(8.5)
   })

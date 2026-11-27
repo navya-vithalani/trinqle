@@ -2,18 +2,18 @@
   <!-- Cute Jumping Spider (Octopod) -->
   <!-- Left Legs (4) -->
   <g stroke="#373142" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path id="leg-1" d="M68 95 Q38 75 22 88" />
-    <path id="leg-2" d="M62 108 Q28 98 18 116" />
-    <path id="leg-3" d="M64 122 Q32 124 22 144" />
-    <path id="leg-4" d="M68 136 Q42 152 32 170" />
+    <path id="leg-1" data-origin="100% 50%" d="M68 95 Q38 75 22 88" />
+    <path id="leg-2" data-origin="100% 30%" d="M62 108 Q28 98 18 116" />
+    <path id="leg-3" data-origin="100% 20%" d="M64 122 Q32 124 22 144" />
+    <path id="leg-4" data-origin="100% 10%" d="M68 136 Q42 152 32 170" />
   </g>
 
   <!-- Right Legs (4) -->
   <g stroke="#373142" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path id="leg-5" d="M132 95 Q162 75 178 88" />
-    <path id="leg-6" d="M138 108 Q172 98 182 116" />
-    <path id="leg-7" d="M136 122 Q168 124 178 144" />
-    <path id="leg-8" d="M132 136 Q158 152 168 170" />
+    <path id="leg-5" data-origin="0% 50%" d="M132 95 Q162 75 178 88" />
+    <path id="leg-6" data-origin="0% 30%" d="M138 108 Q172 98 182 116" />
+    <path id="leg-7" data-origin="0% 20%" d="M136 122 Q168 124 178 144" />
+    <path id="leg-8" data-origin="0% 10%" d="M132 136 Q158 152 168 170" />
   </g>
 
   <!-- Abdomen / Body -->

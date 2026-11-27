@@ -11,6 +11,7 @@ import {
 import type { Chapter, Question, Part, CustomPrompt } from '../../data/types'
 import { ChapterRepository, FormRepository } from '../../data/repositories'
 import { compressPhoto, type CompressedPhoto } from '../../core/photoCompression'
+import { LIMITS } from '../../core/limits'
 import { ScaleWidget } from '../widgets/ScaleWidget'
 import { TextWidget } from '../widgets/TextWidget'
 
@@ -221,6 +222,7 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
                 </label>
                 <input
                   type="text"
+                  maxLength={LIMITS.CHAPTER_NAME}
                   value={title}
                   placeholder="e.g. Chapter 1: Fresh Start"
                   onChange={(e) => setTitle(e.target.value)}
@@ -229,11 +231,19 @@ export const ChapterGate: React.FC<ChapterGateProps> = ({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-[var(--color-ink)]">
-                  Chapter Summary
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-[var(--color-ink)]">
+                    Chapter Summary
+                  </label>
+                  {summary.length >= Math.floor(LIMITS.CHAPTER_SUMMARY * 0.85) && (
+                    <span className="text-[10px] text-[var(--color-ink-soft)]">
+                      {summary.length}/{LIMITS.CHAPTER_SUMMARY}
+                    </span>
+                  )}
+                </div>
                 <textarea
                   rows={4}
+                  maxLength={LIMITS.CHAPTER_SUMMARY}
                   value={summary}
                   placeholder="What was this chapter about? Key memories, breakthroughs, or lessons learned..."
                   onChange={(e) => setSummary(e.target.value)}

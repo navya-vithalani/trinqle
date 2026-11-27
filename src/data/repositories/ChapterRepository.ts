@@ -9,7 +9,12 @@ import type {
 } from '../types'
 import { generateUUIDv7 } from '../../core/ids'
 import { addDays } from '../../core/logicalDay'
-import { isPlannedEndDateValid } from '../../core/chapters'
+import {
+  isPlannedEndDateValid,
+  MIN_CHAPTER_DAYS,
+  MAX_CHAPTER_DAYS,
+} from '../../core/chapters'
+import { LIMITS, clampText } from '../../core/limits'
 import { buildFrozenChapter } from '../../core/freeze'
 import { buildDailyMetricsTable } from '../../core/metrics/calculator'
 import { mean, standardDeviation } from '../../core/engine/stats'
@@ -64,7 +69,7 @@ export class ChapterRepository {
 
     const chapter: Chapter = {
       id: generateUUIDv7(now),
-      title: params.title || undefined,
+      title: params.title ? clampText(params.title, LIMITS.CHAPTER_NAME) : undefined,
       startDate: params.startDate,
       plannedEndDate,
       status: 'open',
@@ -83,17 +88,28 @@ export class ChapterRepository {
     if (existing && existing.status === 'closed') {
       throw new Error('Chapter is closed and write-protected')
     }
-    await this.db.chapters.put(chapter)
-    return chapter
+    const sanitized: Chapter = {
+      ...chapter,
+      title: chapter.title !== undefined ? clampText(chapter.title, LIMITS.CHAPTER_NAME) : undefined,
+      summary: chapter.summary !== undefined ? clampText(chapter.summary, LIMITS.CHAPTER_SUMMARY) : undefined,
+    }
+    await this.db.chapters.put(sanitized)
+    return sanitized
   }
 
-  async updatePlannedEndDate(chapterId: string, plannedEndDate: string): Promise<Chapter> {
+  async updatePlannedEndDate(
+    chapterId: string,
+    plannedEndDate: string,
+    todayDate?: string
+  ): Promise<Chapter> {
     const chapter = await this.getChapterById(chapterId)
     if (!chapter) throw new Error(`Chapter ${chapterId} not found`)
     if (chapter.status === 'closed') throw new Error('Chapter is closed and write-protected')
 
-    if (!isPlannedEndDateValid(chapter.startDate, plannedEndDate)) {
-      throw new Error('Planned end date must be up to 45 days from start date')
+    if (!isPlannedEndDateValid(chapter.startDate, plannedEndDate, todayDate)) {
+      throw new Error(
+        `Planned end date must be ${MIN_CHAPTER_DAYS} to ${MAX_CHAPTER_DAYS} days from start date and at least 3 days from today`
+      )
     }
 
     const updated: Chapter = {
@@ -110,10 +126,14 @@ export class ChapterRepository {
     if (!chapter) throw new Error(`Chapter ${chapterId} not found`)
     if (chapter.status === 'closed') throw new Error('Chapter is closed and write-protected')
 
+    const sanitizedPrompt: CustomPrompt = {
+      ...prompt,
+      label: clampText(prompt.label, LIMITS.CUSTOM_PROMPT_LABEL),
+    }
     const currentPrompts = chapter.customPrompts || []
     const updated: Chapter = {
       ...chapter,
-      customPrompts: [...currentPrompts, prompt],
+      customPrompts: [...currentPrompts, sanitizedPrompt],
       updatedAt: Date.now(),
     }
     await this.db.chapters.put(updated)
@@ -127,6 +147,8 @@ export class ChapterRepository {
   ): Promise<ChapterAnswer> {
     await this.assertChapterIsOpen(chapterId)
     const now = Date.now()
+    const sanitizedValue =
+      typeof value === 'string' ? clampText(value, LIMITS.CHAPTER_SUMMARY) : value
 
     const existing = await this.db.chapterAnswers
       .where('[chapterId+promptId]')
@@ -136,7 +158,7 @@ export class ChapterRepository {
     if (existing) {
       const updated: ChapterAnswer = {
         ...existing,
-        value,
+        value: sanitizedValue,
         updatedAt: now,
       }
       await this.db.chapterAnswers.put(updated)
@@ -147,7 +169,7 @@ export class ChapterRepository {
       id: generateUUIDv7(now),
       chapterId,
       promptId,
-      value,
+      value: sanitizedValue,
       createdAt: now,
       updatedAt: now,
     }
@@ -176,10 +198,12 @@ export class ChapterRepository {
     if (chapter.status === 'closed') throw new Error('Chapter is already closed')
 
     const now = Date.now()
+    const cleanTitle = title ? clampText(title, LIMITS.CHAPTER_NAME) : chapter.title
+    const cleanSummary = summary ? clampText(summary, LIMITS.CHAPTER_SUMMARY) : chapter.summary
     const updated: Chapter = {
       ...chapter,
-      title: title || chapter.title,
-      summary: summary || chapter.summary,
+      title: cleanTitle,
+      summary: cleanSummary,
       status: 'closed',
       endDate: endDate || chapter.plannedEndDate,
       photos: photos || chapter.photos,

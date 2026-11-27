@@ -82,7 +82,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (archiveViewingChapter) {
       if (activeTab === 'home') {
-        applyThemeById(archiveViewingChapter.themeId, false)
+        applyThemeById(archiveViewingChapter.themeId, false, false)
       } else {
         applyArchiveTheme(archiveViewingChapter.themeId)
       }

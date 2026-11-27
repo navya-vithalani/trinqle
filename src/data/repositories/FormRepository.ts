@@ -15,6 +15,7 @@ import type {
 } from '../types'
 import { filterActiveItems } from '../../core/effectiveDating'
 import { generateUUIDv7 } from '../../core/ids'
+import { LIMITS, clampText } from '../../core/limits'
 
 export class FormRepository {
   constructor(private db: TrinqleDB = defaultDb) {}
@@ -61,7 +62,10 @@ export class FormRepository {
   }
 
   async saveSection(section: Section): Promise<void> {
-    await this.db.sections.put(section)
+    await this.db.sections.put({
+      ...section,
+      name: clampText(section.name, LIMITS.SECTION_NAME),
+    })
   }
 
   async createSection(params: {
@@ -77,7 +81,7 @@ export class FormRepository {
 
     const section: Section = {
       id: generateUUIDv7(now),
-      name: params.name,
+      name: clampText(params.name, LIMITS.SECTION_NAME),
       icon: params.icon || 'Folder',
       order,
       scope: params.scope || 'daily',
@@ -109,7 +113,10 @@ export class FormRepository {
   }
 
   async saveQuestion(question: Question): Promise<void> {
-    await this.db.questions.put(question)
+    await this.db.questions.put({
+      ...question,
+      label: clampText(question.label, LIMITS.QUESTION_LABEL),
+    })
   }
 
   async createQuestion(params: {
@@ -134,7 +141,7 @@ export class FormRepository {
     const question: Question = {
       id: generateUUIDv7(now),
       sectionId: params.sectionId,
-      label: params.label,
+      label: clampText(params.label, LIMITS.QUESTION_LABEL),
       icon: params.icon,
       order,
       repeats: params.repeats ?? false,
@@ -186,7 +193,10 @@ export class FormRepository {
   }
 
   async savePart(part: Part): Promise<void> {
-    await this.db.parts.put(part)
+    await this.db.parts.put({
+      ...part,
+      label: clampText(part.label, LIMITS.PART_LABEL),
+    })
   }
 
   async createPart(params: {
@@ -211,7 +221,7 @@ export class FormRepository {
       id: generateUUIDv7(now),
       questionId: params.questionId,
       kind: params.kind,
-      label: params.label,
+      label: clampText(params.label, LIMITS.PART_LABEL),
       level: params.level || 'core',
       order,
       gate: params.gate,

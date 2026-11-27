@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, BookOpen, Plus, Check } from 'lucide-react'
 import type { Chapter, Question, Part, CustomPrompt } from '../../data/types'
 import { ChapterRepository, FormRepository } from '../../data/repositories'
+import { LIMITS } from '../../core/limits'
 import { ScaleWidget } from '../widgets/ScaleWidget'
 import { TextWidget } from '../widgets/TextWidget'
 
@@ -207,6 +208,7 @@ export const ReflectionsSheet: React.FC<ReflectionsSheetProps> = ({
               <div className="p-2.5 rounded-[var(--radius-s)] bg-[var(--color-surface)] border border-[var(--color-line)] space-y-2">
                 <input
                   type="text"
+                  maxLength={LIMITS.CUSTOM_PROMPT_LABEL}
                   placeholder="Enter custom prompt question..."
                   value={newPromptLabel}
                   onChange={(e) => setNewPromptLabel(e.target.value)}

@@ -9,15 +9,18 @@ import {
   type ChapterZipPreview,
 } from '../../core/export'
 import { db } from '../../data/db'
+import { ChapterRepository } from '../../data/repositories'
 
 interface ImportDialogProps {
   isOpen: boolean
+  initialFile?: File | null
   onClose: () => void
   onSuccess: () => void
 }
 
 export const ImportDialog: React.FC<ImportDialogProps> = ({
   isOpen,
+  initialFile,
   onClose,
   onSuccess,
 }) => {
@@ -29,8 +32,6 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
   const [errors, setErrors] = useState<string[]>([])
   const [mode, setMode] = useState<'replace' | 'merge'>('replace')
   const [isImporting, setIsImporting] = useState(false)
-
-  if (!isOpen) return null
 
   const resetSelection = () => {
     setErrors([])
@@ -48,7 +49,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
         const buffer = await file.arrayBuffer()
         const bytes = new Uint8Array(buffer)
         const preview = await inspectChapterZip(bytes)
-        const existing = await db.chapters.get(preview.chapter.id)
+        const chapterRepo = new ChapterRepository()
+        const existing = await chapterRepo.getChapterById(preview.chapter.id)
         setZipConflictExists(Boolean(existing && !existing.deletedAt))
         setZipPreview(preview)
         setZipBytes(bytes)
@@ -77,6 +79,16 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
     }
     reader.readAsText(file)
   }
+
+  React.useEffect(() => {
+    if (isOpen && initialFile) {
+      handleFile(initialFile)
+    } else if (!isOpen) {
+      resetSelection()
+    }
+  }, [isOpen, initialFile])
+
+  if (!isOpen) return null
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()

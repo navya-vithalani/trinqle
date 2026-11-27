@@ -52,9 +52,9 @@ describe('Theme System', () => {
     expect(theme.tokens.dark.color.accent).toBe('#00f0ff')
     expect(theme.tokens.dark.color.accent2).toBe('#ff0055')
 
-    // Check tech typography (replacing awkward bubble font)
+    // Check tech typography
     expect(theme.tokens.light.type.fontDisplay).toContain('Orbitron')
-    expect(theme.tokens.light.type.fontBody).toContain('Share Tech Mono')
+    expect(theme.tokens.light.type.fontBody).toContain('Rajdhani')
 
     // Check sharp angular shape tokens
     expect(theme.tokens.light.shape.radiusPill).toBe('4px')

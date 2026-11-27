@@ -105,6 +105,26 @@ describe('Repositories & Closed Chapter Write Protection', () => {
     await expect(dayRepo.deleteDay('2026-09-15')).rejects.toThrow(
       'Chapter is closed and write-protected'
     )
+
+    // F10: Direct Dexie writes bypassing repositories are also blocked by DB hooks
+    await expect(testDb.days.put(dayInClosedChapter)).rejects.toThrow(
+      'Chapter is closed and write-protected'
+    )
+    await expect(
+      testDb.answers.put({
+        id: 'ans_bypass',
+        date: '2026-09-15',
+        questionId: 'q_mood',
+        partId: 'p_mood',
+        instance: 0,
+        value: 5,
+        createdAt: 0,
+        updatedAt: 0,
+      })
+    ).rejects.toThrow('Chapter is closed and write-protected')
+    await expect(
+      testDb.chapters.put({ ...chapter, title: 'Tampered Title' })
+    ).rejects.toThrow('Chapter is closed and write-protected')
   })
 
   it('wipes and resets database cleanly on deleteAllData', async () => {

@@ -1,9 +1,10 @@
 import { addDays } from './logicalDay'
 import type { Chapter } from '../data/types'
 
-export const MIN_CHAPTER_DAYS = 1
+export const MIN_CHAPTER_DAYS = 20
 export const MAX_CHAPTER_DAYS = 45
 export const DEFAULT_CHAPTER_DAYS = 28
+export const MIN_END_DAYS_FROM_TODAY = 3
 
 /**
  * Calculates chapter day count between startDate and plannedEndDate (inclusive).
@@ -17,24 +18,49 @@ export function calculateChapterDuration(startDate: string, endDate: string): nu
 }
 
 /**
- * Validates that plannedEndDate is within 1 to 45 days from startDate.
+ * Gets valid min and max planned end dates for a given start date (and optional today date).
+ * Enforces 20..45 day chapter length and at least today + 3 days so the T-2 lock doesn't trigger immediately.
  */
-export function isPlannedEndDateValid(startDate: string, plannedEndDate: string): boolean {
-  const days = calculateChapterDuration(startDate, plannedEndDate)
-  return days >= MIN_CHAPTER_DAYS && days <= MAX_CHAPTER_DAYS
+export function getPlannedEndBounds(
+  startDate: string,
+  todayDate?: string
+): {
+  minDate: string
+  maxDate: string
+  canExtend: boolean
+} {
+  const minByDuration = addDays(startDate, MIN_CHAPTER_DAYS - 1)
+  const maxDate = addDays(startDate, MAX_CHAPTER_DAYS - 1)
+  const minByToday = todayDate ? addDays(todayDate, MIN_END_DAYS_FROM_TODAY) : minByDuration
+  const minDate = minByToday > minByDuration ? minByToday : minByDuration
+
+  return {
+    minDate,
+    maxDate,
+    canExtend: minDate <= maxDate,
+  }
 }
 
 /**
- * Gets valid min and max planned end dates for a given start date.
+ * Validates that plannedEndDate is within MIN_CHAPTER_DAYS..MAX_CHAPTER_DAYS from startDate
+ * and (when todayDate is provided) at least 3 days after todayDate.
  */
-export function getPlannedEndBounds(startDate: string): {
-  minDate: string
-  maxDate: string
-} {
-  return {
-    minDate: startDate,
-    maxDate: addDays(startDate, MAX_CHAPTER_DAYS - 1),
+export function isPlannedEndDateValid(
+  startDate: string,
+  plannedEndDate: string,
+  todayDate?: string
+): boolean {
+  const days = calculateChapterDuration(startDate, plannedEndDate)
+  if (days < MIN_CHAPTER_DAYS || days > MAX_CHAPTER_DAYS) {
+    return false
   }
+  if (todayDate) {
+    const minByToday = addDays(todayDate, MIN_END_DAYS_FROM_TODAY)
+    if (plannedEndDate < minByToday) {
+      return false
+    }
+  }
+  return true
 }
 
 /**

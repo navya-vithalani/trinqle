@@ -24,7 +24,7 @@ import {
   type SearchSourceKind,
   type DaySearchResult,
 } from '../../core/search'
-import { exportChapterZip, importChapterZip, downloadOrShareFile } from '../../core/export'
+import { exportChapterZip, downloadOrShareFile } from '../../core/export'
 import { ImportDialog } from '../dialogs/ImportDialog'
 
 interface ArchiveScreenProps {
@@ -65,6 +65,7 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
 
   // Import Dialog
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [pendingZipFile, setPendingZipFile] = useState<File | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const showToast = (msg: string) => {
@@ -191,20 +192,12 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
     }
   }
 
-  const handleZipFileDrop = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleZipFileDrop = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      const { chapter } = await importChapterZip(new Uint8Array(arrayBuffer))
-      showToast(`Imported ${chapter.title || 'Chapter'} successfully`)
-      loadData()
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to import zip')
-    } finally {
-      e.target.value = ''
-    }
+    setPendingZipFile(file)
+    setIsImportOpen(true)
   }
 
   return (
@@ -646,9 +639,15 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
       {isImportOpen && (
         <ImportDialog
           isOpen={true}
-          onClose={() => setIsImportOpen(false)}
+          initialFile={pendingZipFile}
+          onClose={() => {
+            setIsImportOpen(false)
+            setPendingZipFile(null)
+          }}
           onSuccess={() => {
             setIsImportOpen(false)
+            setPendingZipFile(null)
+            showToast('Chapter archive imported!')
             loadData()
           }}
         />

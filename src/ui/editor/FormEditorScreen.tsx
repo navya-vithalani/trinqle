@@ -39,7 +39,8 @@ import {
   LibraryRepository,
   ChapterRepository,
 } from '../../data/repositories'
-import { addDays, logicalDate } from '../../core/logicalDay'
+import { addDays, formatDate, logicalDate } from '../../core/logicalDay'
+import { LIMITS } from '../../core/limits'
 import { loadAppSettings } from '../../core/settings'
 import { isActiveOnDate } from '../../core/effectiveDating'
 import { ScopePromptModal, type EditScope } from './ScopePromptModal'
@@ -74,7 +75,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
   const [libraries, setLibraries] = useState<Library[]>([])
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [logicalToday, setLogicalToday] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+    formatDate(new Date())
   )
   const [showRetired, setShowRetired] = useState(false)
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null)
@@ -868,6 +869,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
           <div className="p-3 bg-[var(--color-bg)] border-b border-[var(--color-line)] flex items-center space-x-2">
             <input
               type="text"
+              maxLength={LIMITS.SECTION_NAME}
               placeholder="New section name (e.g. Mind, Nutrition, Creative)..."
               value={newSectionName}
               onChange={(e) => setNewSectionName(e.target.value)}
@@ -899,6 +901,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                 <div className="flex items-center space-x-2 flex-1 mr-2">
                   <input
                     type="text"
+                    maxLength={LIMITS.SECTION_NAME}
                     value={editingSectionName}
                     onChange={(e) => setEditingSectionName(e.target.value)}
                     className="flex-1 p-1 rounded border border-[var(--color-line)] bg-[var(--color-surface)] font-bold text-xs"
@@ -982,6 +985,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                       </label>
                       <input
                         type="text"
+                        maxLength={LIMITS.QUESTION_LABEL}
                         value={editingQuestionLabel}
                         onChange={(e) => setEditingQuestionLabel(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleUpdateQuestion(q.id)}
@@ -1419,6 +1423,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
                     <div className="flex items-center gap-1.5 pt-1">
                       <input
                         type="text"
+                        maxLength={LIMITS.QUESTION_LABEL}
                         placeholder="Sub-question label (e.g. Workout notes, How hard?)..."
                         value={newSubLabel}
                         onChange={(e) => setNewSubLabel(e.target.value)}
@@ -1493,6 +1498,7 @@ export const FormEditorScreen: React.FC<FormEditorScreenProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={LIMITS.QUESTION_LABEL}
                 placeholder="e.g. Did you workout today?, Reading time, Creative writing..."
                 value={newQuestionLabel}
                 onChange={(e) => setNewQuestionLabel(e.target.value)}

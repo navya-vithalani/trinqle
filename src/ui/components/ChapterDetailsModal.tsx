@@ -4,7 +4,11 @@ import {
   getPlannedEndBounds,
   calculateChapterDuration,
   isPlannedEndDateValid,
+  MIN_CHAPTER_DAYS,
+  MAX_CHAPTER_DAYS,
 } from '../../core/chapters'
+import { formatDate } from '../../core/logicalDay'
+import { LIMITS } from '../../core/limits'
 import type { Chapter } from '../../data/types'
 
 interface ChapterDetailsModalProps {
@@ -12,6 +16,7 @@ interface ChapterDetailsModalProps {
   chapter: Chapter
   chapterIndex: number
   daysRemaining: number
+  todayLogicalDate?: string
   isDevMode?: boolean
   onClose: () => void
   onSaveTitle: (newTitle: string) => Promise<void>
@@ -25,6 +30,7 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
   chapter,
   chapterIndex,
   daysRemaining,
+  todayLogicalDate,
   isDevMode = false,
   onClose,
   onSaveTitle,
@@ -53,9 +59,11 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
 
   if (!isOpen) return null
 
-  const bounds = getPlannedEndBounds(chapter.startDate)
+  const effectiveToday = todayLogicalDate || formatDate(new Date())
+  const bounds = getPlannedEndBounds(chapter.startDate, effectiveToday)
   const duration = calculateChapterDuration(chapter.startDate, selectedDate)
-  const isValidDate = isPlannedEndDateValid(chapter.startDate, selectedDate)
+  const isValidDate =
+    bounds.canExtend && isPlannedEndDateValid(chapter.startDate, selectedDate, effectiveToday)
   const canAdjustDate = daysRemaining > 2
 
   const handleTitleSubmit = async () => {
@@ -67,7 +75,9 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
 
   const handleDateConfirm = async () => {
     if (!isValidDate) {
-      setError('Chapter length must be up to 45 days.')
+      setError(
+        `Chapter length must be between ${MIN_CHAPTER_DAYS} and ${MAX_CHAPTER_DAYS} days and at least 3 days after today.`
+      )
       return
     }
     setSavingDate(true)
@@ -90,7 +100,13 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
       workingTitle.trim().length > 0 &&
       workingTitle.trim() !== (chapter.title || `Chapter ${chapterIndex}`)
 
-    if (isNewDate && isValidDate) {
+    if (isNewDate) {
+      if (!isValidDate) {
+        setError(
+          `Chapter length must be between ${MIN_CHAPTER_DAYS} and ${MAX_CHAPTER_DAYS} days and at least 3 days after today.`
+        )
+        return
+      }
       try {
         await onSavePlannedEndDate(selectedDate)
       } catch (err: any) {
@@ -138,6 +154,7 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
           <div className="flex items-center space-x-2">
             <input
               type="text"
+              maxLength={LIMITS.CHAPTER_NAME}
               value={workingTitle}
               onChange={(e) => setWorkingTitle(e.target.value)}
               placeholder="e.g. Health & Habits Reset"
@@ -155,50 +172,58 @@ export const ChapterDetailsModal: React.FC<ChapterDetailsModalProps> = ({
 
         {/* 2. Date Adjustment Controls (Only when > 2 days remain) */}
         {canAdjustDate ? (
-          <div className="space-y-2 pt-2 border-t border-[var(--color-line)]">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-[var(--color-ink)]">
-                Adjust Chapter End Date
-              </label>
-              <span className="text-[10px] text-[var(--color-ink-soft)]">Max 45 days</span>
+          bounds.canExtend ? (
+            <div className="space-y-2 pt-2 border-t border-[var(--color-line)]">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-[var(--color-ink)]">
+                  Adjust Chapter End Date
+                </label>
+                <span className="text-[10px] text-[var(--color-ink-soft)]">
+                  {MIN_CHAPTER_DAYS}–{MAX_CHAPTER_DAYS} days
+                </span>
+              </div>
+              {/* HTML date input with min and max locks dates outside allowed bounds */}
+              <input
+                type="date"
+                value={selectedDate}
+                min={bounds.minDate}
+                max={bounds.maxDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value)
+                  setError(null)
+                }}
+                className="w-full py-2 px-3 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)]"
+              />
+              <div className="flex items-center justify-between text-[11px] text-[var(--color-ink-soft)]">
+                <span>Started: {chapter.startDate}</span>
+                <span>
+                  Planned length: <strong>{duration} days</strong>
+                </span>
+              </div>
+              {error && <p className="text-xs text-rose-600 font-semibold">{error}</p>}
+              <button
+                type="button"
+                disabled={selectedDate === chapter.plannedEndDate || savingDate}
+                onClick={handleDateConfirm}
+                className="w-full py-2 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs font-bold text-[var(--color-ink)] hover:border-[var(--color-accent)] disabled:opacity-40 active:scale-95 flex items-center justify-center space-x-1.5"
+              >
+                {dateSaved ? (
+                  <>
+                    <Check size={14} className="text-emerald-600" />
+                    <span className="text-emerald-600">Saved! Closing...</span>
+                  </>
+                ) : savingDate ? (
+                  <span>Saving...</span>
+                ) : (
+                  <span>Update End Date</span>
+                )}
+              </button>
             </div>
-            {/* HTML date input with min and max locks dates >45 days so they are disabled in UI */}
-            <input
-              type="date"
-              value={selectedDate}
-              min={bounds.minDate}
-              max={bounds.maxDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value)
-                setError(null)
-              }}
-              className="w-full py-2 px-3 rounded-[var(--radius-m)] border-2 border-[var(--color-line)] bg-[var(--color-bg)] text-xs font-semibold text-[var(--color-ink)]"
-            />
-            <div className="flex items-center justify-between text-[11px] text-[var(--color-ink-soft)]">
-              <span>Started: {chapter.startDate}</span>
-              <span>
-                Planned length: <strong>{duration} days</strong>
-              </span>
+          ) : (
+            <div className="p-2.5 rounded-[var(--radius-m)] bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
+              Chapter end date cannot be extended further (today + 3 days exceeds the {MAX_CHAPTER_DAYS}-day maximum).
             </div>
-            {error && <p className="text-xs text-rose-600 font-semibold">{error}</p>}
-            <button
-              type="button"
-              disabled={selectedDate === chapter.plannedEndDate || savingDate}
-              onClick={handleDateConfirm}
-              className="w-full py-2 rounded-[var(--radius-pill)] bg-[var(--color-bg)] border border-[var(--color-line)] text-xs font-bold text-[var(--color-ink)] hover:border-[var(--color-accent)] disabled:opacity-40 active:scale-95 flex items-center justify-center space-x-1.5"
-            >
-              {dateSaved ? (
-                <>
-                  <Check size={14} className="text-emerald-600" />
-                  <span className="text-emerald-600">Saved! Closing...</span>
-                </>
-              ) : savingDate ? (
-                <span>Saving...</span>
-              ) : (
-                <span>Update End Date</span>
-              )}
-            </button>
-          </div>
+          )
         ) : (
           <div className="p-2.5 rounded-[var(--radius-m)] bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
             Final 2 days: Chapter end date is locked to ensure smooth closing preparation.
