@@ -1,5 +1,5 @@
-import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type PushSubscriptionKeys } from './types'
-import { urlBase64ToUint8Array } from './vapid'
+import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs, type PushSubscriptionKeys } from './types.js'
+import { urlBase64ToUint8Array } from './vapid.js'
 
 const ALLOWED_PUSH_HOSTS = new Set([
   'fcm.googleapis.com',

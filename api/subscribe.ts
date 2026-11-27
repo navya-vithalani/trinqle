@@ -1,20 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'http'
-import { subscriptionStore } from './kv'
+import { subscriptionStore } from './kv.js'
 import {
   generateManageToken,
   hashManageToken,
   readJsonBody,
   sendEndpointError,
   sendJson,
-} from './_utils'
+} from './_utils.js'
 import {
   sanitizeNotificationPrefs,
   validatePushEndpoint,
   validatePushKeys,
   validateTimeZone,
-} from '../src/core/notifications/validation'
-import type { NotificationPrefs, StoredSubscription } from '../src/core/notifications/types'
-import { generateUUIDv7 } from '../src/core/ids'
+} from '../src/core/notifications/validation.js'
+import type { NotificationPrefs, StoredSubscription } from '../src/core/notifications/types.js'
+import { generateUUIDv7 } from '../src/core/ids.js'
 
 export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   if (req.method !== 'POST') {

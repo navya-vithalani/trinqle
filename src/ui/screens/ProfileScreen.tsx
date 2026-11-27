@@ -141,6 +141,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [pushPrefs, setPushPrefs] = useState<NotificationPrefs>(loadNotificationPrefs())
   const [isPushLoading, setIsPushLoading] = useState(false)
   const [isTestingPush, setIsTestingPush] = useState(false)
+  const [pushError, setPushError] = useState<string | null>(null)
 
   const settingsRepo = new SettingsRepository()
   const chapterRepo = new ChapterRepository()
@@ -308,9 +309,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Push Notification handlers (TRD Section 10)
   const handleToggleMasterPush = async () => {
     if (!pushSupported) {
-      showToast('Push notifications are not supported in this browser')
+      const msg = 'Push notifications are not supported in this browser'
+      setPushError(msg)
+      showToast(msg)
       return
     }
+    setPushError(null)
     setIsPushLoading(true)
     try {
       if (isPushSubscribed) {
@@ -327,18 +331,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           setPushPermission(getNotificationPermission())
           showToast('Daily reminders enabled')
         } else {
-          showToast(res.error || 'Failed to enable notifications')
+          const msg = res.error || 'Failed to enable notifications'
+          setPushError(msg)
+          showToast(msg)
           setPushPermission(getNotificationPermission())
         }
       }
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error updating notification settings')
+      const msg = err instanceof Error ? err.message : 'Error updating notification settings'
+      setPushError(msg)
+      showToast(msg)
     } finally {
       setIsPushLoading(false)
     }
   }
 
   const handleUpdatePrefs = async (patch: Partial<NotificationPrefs>) => {
+    setPushError(null)
     const updated: NotificationPrefs = {
       ...pushPrefs,
       ...patch,
@@ -349,22 +358,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     if (isPushSubscribed) {
       const syncRes = await syncDevicePrefs(updated)
       if (!syncRes.success) {
-        showToast(syncRes.error || 'Failed to sync reminder preferences')
+        const msg = syncRes.error || 'Failed to sync reminder preferences'
+        setPushError(msg)
+        showToast(msg)
       }
     }
   }
 
   const handleSendTest = async () => {
+    setPushError(null)
     setIsTestingPush(true)
     try {
       const res = await sendTestNotification()
       if (res.success) {
         showToast('Test notification sent!')
       } else {
-        showToast(res.error || 'Could not send test notification')
+        const msg = res.error || 'Could not send test notification'
+        setPushError(msg)
+        showToast(msg)
       }
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to send test notification')
+      const msg = err instanceof Error ? err.message : 'Failed to send test notification'
+      setPushError(msg)
+      showToast(msg)
     } finally {
       setIsTestingPush(false)
     }
@@ -598,6 +614,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <p className="text-xs text-[var(--color-ink-soft)] leading-relaxed">
           Daily gentle reminders at night, weekly insights notices, and chapter wraps. Payloads are strictly generic; zero journal content ever leaves your device.
         </p>
+
+        {pushError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/10 px-3 py-2 text-[11px] leading-relaxed text-[var(--color-danger)] break-words"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="font-bold block">Push notification error</span>
+                <span>{pushError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPushError(null)}
+                className="text-[10px] font-bold uppercase tracking-wider opacity-80 hover:opacity-100 shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Master Push Toggle */}
         <div className="flex items-center justify-between pt-1">

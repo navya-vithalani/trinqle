@@ -1,11 +1,13 @@
 import crypto from 'crypto'
-import type { StoredSubscription, NotificationPrefs } from '../src/core/notifications/types'
+import type { StoredSubscription, NotificationPrefs } from '../src/core/notifications/types.js'
 
 export const MAX_SUBSCRIPTIONS = 500
 
 export class KvUnavailableError extends Error {
   status = 503
-  constructor(message = 'Subscription storage (KV_REST_API_URL / KV_REST_API_TOKEN) is not configured') {
+  constructor(
+    message = 'Subscription storage is not configured on the server: set KV_REST_API_URL + KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN).'
+  ) {
     super(message)
   }
 }
@@ -27,9 +29,9 @@ function isMemoryStoreAllowed(): boolean {
   )
 }
 
-function getKvConfig(): { kvUrl: string; kvToken: string } | null {
-  const kvUrl = process.env.KV_REST_API_URL?.trim()
-  const kvToken = process.env.KV_REST_API_TOKEN?.trim()
+export function getKvConfig(): { kvUrl: string; kvToken: string } | null {
+  const kvUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)?.trim()
+  const kvToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)?.trim()
   if (kvUrl && kvToken) {
     return { kvUrl: kvUrl.replace(/\/+$/, ''), kvToken }
   }

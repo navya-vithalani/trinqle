@@ -1,17 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'http'
-import { subscriptionStore } from './kv'
+import { subscriptionStore } from './kv.js'
 import {
   extractBearerToken,
   readJsonBody,
   sendEndpointError,
   sendJson,
   verifyManageToken,
-} from './_utils'
+} from './_utils.js'
 import {
   sanitizeNotificationPrefs,
   validatePushEndpoint,
   validateTimeZone,
-} from '../src/core/notifications/validation'
+} from '../src/core/notifications/validation.js'
 
 export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   if (req.method !== 'POST') {

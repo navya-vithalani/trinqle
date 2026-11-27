@@ -5,7 +5,7 @@
  */
 
 import crypto from 'crypto'
-import type { PushSubscriptionData, GenericNotificationPayload } from './types'
+import type { PushSubscriptionData, GenericNotificationPayload } from './types.js'
 
 export interface VapidKeys {
   publicKey: string // Base64URL-encoded uncompressed P-256 public key (65 bytes)

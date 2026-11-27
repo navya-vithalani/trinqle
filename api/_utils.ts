@@ -25,6 +25,24 @@ export async function readJsonBody(
   maxBytes: number = MAX_PUSH_BODY_BYTES
 ): Promise<Record<string, unknown>> {
   if (req.body !== undefined) {
+    if (Buffer.isBuffer(req.body)) {
+      if (req.body.length > maxBytes) {
+        throw new HttpRequestError(413, 'Request payload too large')
+      }
+      const rawBuf = req.body.toString('utf8').trim()
+      if (!rawBuf) return {}
+      try {
+        const parsed = JSON.parse(rawBuf)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new HttpRequestError(400, 'JSON body must be an object')
+        }
+        return parsed as Record<string, unknown>
+      } catch (err) {
+        if (err instanceof HttpRequestError) throw err
+        throw new HttpRequestError(400, 'Malformed JSON body')
+      }
+    }
+
     if (typeof req.body === 'string') {
       if (Buffer.byteLength(req.body, 'utf8') > maxBytes) {
         throw new HttpRequestError(413, 'Request payload too large')

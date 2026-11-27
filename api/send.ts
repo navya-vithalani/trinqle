@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http'
-import { subscriptionStore } from './kv'
+import { subscriptionStore } from './kv.js'
 import {
   extractBearerToken,
   readJsonBody,
@@ -7,11 +7,11 @@ import {
   sendJson,
   timingSafeEqualStrings,
   verifyManageToken,
-} from './_utils'
-import { evaluateNotificationDue } from '../src/core/notifications/scheduler'
-import { validatePushEndpoint } from '../src/core/notifications/validation'
-import { sendWebPushNotification, type VapidKeys } from '../src/core/notifications/vapid'
-import type { GenericNotificationPayload } from '../src/core/notifications/types'
+} from './_utils.js'
+import { evaluateNotificationDue } from '../src/core/notifications/scheduler.js'
+import { validatePushEndpoint } from '../src/core/notifications/validation.js'
+import { sendWebPushNotification, type VapidKeys } from '../src/core/notifications/vapid.js'
+import type { GenericNotificationPayload } from '../src/core/notifications/types.js'
 
 function getVapidKeys(): VapidKeys {
   const publicKey = process.env.VAPID_PUBLIC_KEY?.trim()

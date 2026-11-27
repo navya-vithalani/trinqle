@@ -16,7 +16,8 @@ import {
   validateTimeZone,
 } from '../core/notifications/validation'
 import { DEFAULT_NOTIFICATION_PREFS, type StoredSubscription } from '../core/notifications/types'
-import { subscriptionStore } from '../../api/kv'
+import { extractResponseError } from '../core/notifications/client'
+import { subscriptionStore, getKvConfig } from '../../api/kv'
 import subscribeHandler from '../../api/subscribe'
 import prefsHandler from '../../api/prefs'
 import unsubscribeHandler from '../../api/unsubscribe'
@@ -209,17 +210,39 @@ describe('Notifications & Push API Hardening (S1-S5)', () => {
     expect(await subscriptionStore.get(endpoint)).toBeNull()
   })
 
-  it('throws 503 KvUnavailableError when KV env vars are missing outside tests', async () => {
+  it('throws 503 KvUnavailableError when KV env vars are missing and supports Upstash Marketplace env names', async () => {
     process.env.VITEST = ''
     process.env.TRINQLE_TEST_MEMORY_KV = '0'
     delete process.env.KV_REST_API_URL
     delete process.env.KV_REST_API_TOKEN
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
 
     const res = await invokeHandler(sendHandler, {
       headers: { authorization: 'Bearer x' },
       body: { test: true, endpoint: 'https://fcm.googleapis.com/fcm/send/abc' },
     })
     expect(res.status).toBe(503)
+
+    // Verify UPSTASH_REDIS_REST_* Marketplace env vars resolve cleanly
+    process.env.UPSTASH_REDIS_REST_URL = 'https://example-upstash.upstash.io/'
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'upstash-token-123'
+    expect(getKvConfig()).toEqual({
+      kvUrl: 'https://example-upstash.upstash.io',
+      kvToken: 'upstash-token-123',
+    })
+  })
+
+  it('extractResponseError surfaces both JSON errors and non-JSON 500 server crash bodies', async () => {
+    const jsonRes = new Response(JSON.stringify({ error: 'Subscription store is not configured' }), { status: 503 })
+    expect(await extractResponseError(jsonRes)).toBe('HTTP 503: Subscription store is not configured')
+
+    const htmlCrashRes = new Response('<html><body>FUNCTION_INVOCATION_FAILED: Cannot find module api/kv</body></html>', {
+      status: 500,
+    })
+    const formatted = await extractResponseError(htmlCrashRes)
+    expect(formatted).toContain('HTTP 500:')
+    expect(formatted).toContain('FUNCTION_INVOCATION_FAILED')
   })
 
   it('evaluates daily, late cron runs (21:12 -> due once), monday insights, and chapterEndingSoon via plannedEndDate', () => {

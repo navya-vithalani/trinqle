@@ -1,7 +1,7 @@
 import type {
   StoredSubscription,
   GenericNotificationPayload,
-} from './types'
+} from './types.js'
 
 export type DueNotificationType = 'daily' | 'monday_insights' | 'chapter_ending'
 

@@ -1,9 +1,9 @@
 import type {
   NotificationPrefs,
   PushSubscriptionData,
-} from './types'
-import { DEFAULT_NOTIFICATION_PREFS } from './types'
-import { urlBase64ToUint8Array } from './vapid'
+} from './types.js'
+import { DEFAULT_NOTIFICATION_PREFS } from './types.js'
+import { urlBase64ToUint8Array } from './vapid.js'
 
 const PREFS_STORAGE_KEY = 'trinqle_notification_prefs'
 const MANAGE_TOKEN_STORAGE_KEY = 'trinqle_push_manage_token'
@@ -103,19 +103,24 @@ function saveVapidPublicKeyUsed(key: string): void {
   }
 }
 
-async function extractResponseError(res: Response): Promise<string> {
-  const fallback = `Server responded with ${res.status}`
+export async function extractResponseError(res: Response): Promise<string> {
+  const fallback = `Server responded with HTTP ${res.status}`
   try {
-    const raw = await res.text()
+    const raw = (await res.text()).trim()
     if (!raw) return fallback
-    const parsed = JSON.parse(raw) as { error?: unknown; message?: unknown }
-    if (typeof parsed.error === 'string' && parsed.error.trim()) {
-      return parsed.error
+    try {
+      const parsed = JSON.parse(raw) as { error?: unknown; message?: unknown }
+      if (typeof parsed.error === 'string' && parsed.error.trim()) {
+        return `HTTP ${res.status}: ${parsed.error}`
+      }
+      if (typeof parsed.message === 'string' && parsed.message.trim()) {
+        return `HTTP ${res.status}: ${parsed.message}`
+      }
+    } catch {
+      // Non-JSON response body (e.g. Vercel runtime crash page or proxy error)
     }
-    if (typeof parsed.message === 'string' && parsed.message.trim()) {
-      return parsed.message
-    }
-    return raw
+    const compact = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return compact ? `HTTP ${res.status}: ${compact.slice(0, 180)}` : fallback
   } catch {
     return fallback
   }
